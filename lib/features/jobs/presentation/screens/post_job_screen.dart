@@ -53,7 +53,8 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
   bool _learning = false;
   bool _wellness = false;
   bool _autoReject = false;
-  bool _aiScreening = true;
+  bool _aiRanking = false;
+  bool _aiSummary = false;
   String? _educationLevel;
   bool _requiresManagement = false;
   final List<String> _responsibilities = [];
@@ -518,6 +519,10 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
         const SizedBox(height: 19),
         _listEditor(
             'TECHNICAL REQUIREMENTS', _requirement, _requirements, 'Add Point'),
+        const SizedBox(height: 16),
+        _minYearsField(),
+        const SizedBox(height: 14),
+        _educationLevelField(),
       ]));
 
   Widget _minYearsField() =>
@@ -887,11 +892,25 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
         const SizedBox(height: 8),
         _setting('Promote on LinkedIn', true),
         _setting('Auto-reject non-matches', _autoReject,
-            (v) => setState(() => _autoReject = v)),
-        _setting('Enable AI Screening', _aiScreening,
-            (v) => setState(() => _aiScreening = v)),
+            changed: (v) => setState(() => _autoReject = v)),
+        _setting(
+          'AI candidate ranking',
+          _aiRanking,
+          changed: (v) => setState(() => _aiRanking = v),
+          enabled: ref.read(authProvider).user?.hasModule(
+                  ModuleCodes.aiCandidateMatch) ??
+              false,
+        ),
+        _setting(
+          'AI resume summary',
+          _aiSummary,
+          changed: (v) => setState(() => _aiSummary = v),
+          enabled: ref.read(authProvider).user?.hasModule(
+                  ModuleCodes.aiCandidateSummary) ??
+              false,
+        ),
         _setting('Requires management experience', _requiresManagement,
-            (v) => setState(() => _requiresManagement = v)),
+            changed: (v) => setState(() => _requiresManagement = v)),
       ]));
 
   Widget _locationFields() {
@@ -1118,7 +1137,8 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
             onTap: () => setState(() => _customBenefits.remove(benefit)),
             child: const Icon(Icons.close, size: 13, color: BrandColors.orange))
       ]));
-  Widget _setting(String label, bool value, [ValueChanged<bool>? changed]) =>
+  Widget _setting(String label, bool value,
+          {ValueChanged<bool>? changed, bool enabled = true}) =>
       SizedBox(
           height: 34,
           child: Row(children: [
@@ -1127,12 +1147,18 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
                     style: TextStyle(
                         fontSize: 11,
                         color: Colors.white.withValues(alpha: .72)))),
+            if (!enabled)
+              const Padding(
+                padding: EdgeInsets.only(right: 8),
+                child: Icon(Icons.lock_outline,
+                    size: 13, color: BrandColors.muted),
+              ),
             SizedBox(
                 height: 15,
                 child: FittedBox(
                     child: Switch(
-                        value: value,
-                        onChanged: changed,
+                        value: enabled && value,
+                        onChanged: enabled ? changed : null,
                         activeThumbColor: Colors.white,
                         activeTrackColor: BrandColors.orange)))
           ]));
@@ -1455,6 +1481,11 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
           isError: true);
       return false;
     }
+    if (validateForPublish && _requirements.isEmpty) {
+      _showToast('Add at least one technical requirement before publishing.',
+          isError: true);
+      return false;
+    }
     if (!validateForPublish &&
         (_title.text.trim().isEmpty || _overview.text.trim().isEmpty)) {
       _showToast(
@@ -1477,6 +1508,9 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
       minYearsOfExperience: int.tryParse(_minYears.text.trim()),
       educationLevel: _educationLevel,
       requiresManagementExperience: _requiresManagement,
+      applicationDeadline: _deadline,
+      aiRanking: _aiRanking,
+      aiSummary: _aiSummary,
     );
 
     try {
@@ -1510,6 +1544,38 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
 
   Future<void> _publishJob() async {
     if (_pendingAction != null) return;
+    final user = ref.read(authProvider).user;
+    final monthlyLimit = (user?.limits['jobsPerMonth'] as num?)?.toInt();
+    final monthlyPublished =
+        ref.read(jobManagementProvider).summary?.monthlyPublishedCount;
+    if (monthlyLimit != null &&
+        (monthlyPublished == null || monthlyPublished >= monthlyLimit)) {
+      if (monthlyPublished == null) {
+        _showError(
+            'Job posting usage is still loading. Please try again shortly.');
+      } else {
+        showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Job posting limit reached'),
+            content: Text(
+                'Your plan includes $monthlyLimit job postings per month. Upgrade your subscription to post more.'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Not now')),
+              FilledButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    context.go('/payments');
+                  },
+                  child: const Text('View plans')),
+            ],
+          ),
+        );
+      }
+      return;
+    }
     setState(() => _pendingAction = 'publish');
     try {
       final saved = await _saveAll(
