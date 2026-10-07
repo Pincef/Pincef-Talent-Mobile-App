@@ -10,7 +10,7 @@
   """
 
 [build.environment]
-  FLUTTER_VERSION = "3.35.0"   # replace with the output of `flutter --version` on your machine
+  FLUTTER_VERSION = "3.44.6"   # replace with the output of `flutter --version` on your machine
 
 # SPA routing so deep links and refreshes don't 404
 [[redirects]]
