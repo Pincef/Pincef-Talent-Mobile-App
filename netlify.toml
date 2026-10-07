@@ -1,0 +1,19 @@
+[build]
+  publish = "build/web"
+  command = """
+    git clone https://github.com/flutter/flutter.git --depth 1 --branch $FLUTTER_VERSION $HOME/flutter &&
+    export PATH="$HOME/flutter/bin:$PATH" &&
+    flutter config --no-analytics &&
+    flutter precache --web &&
+    flutter pub get &&
+    flutter build web --release --no-wasm-dry-run --dart-define=API_BASE_URL=$API_BASE_URL
+  """
+
+[build.environment]
+  FLUTTER_VERSION = "3.35.0"   # replace with the output of `flutter --version` on your machine
+
+# SPA routing so deep links and refreshes don't 404
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
