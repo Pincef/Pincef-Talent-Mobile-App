@@ -87,6 +87,12 @@ class _HiringPipelineScreenState extends ConsumerState<HiringPipelineScreen> {
       return "Your current plan doesn't support custom hiring pipelines.";
     }
 
+    final pipelineLimit = (user?.limits['pipelines'] as num?)?.toInt();
+    if (pipelineLimit != null && all.length >= pipelineLimit) {
+      return 'Your plan allows up to $pipelineLimit pipelines. '
+          'Delete one or upgrade to add more.';
+    }
+
     final maxCustom =
         (user?.capabilities['maxCustomPipelines'] as num?)?.toInt() ??
             endpointCaps?.maxCustomPipelines;
@@ -147,6 +153,12 @@ class _HiringPipelineScreenState extends ConsumerState<HiringPipelineScreen> {
   }
 
   Future<void> _duplicate(HiringPipeline p) async {
+    final all = ref.read(pipelinesProvider).value ?? const <HiringPipeline>[];
+    final unavailable = _createDisabledReason(all);
+    if (unavailable != null) {
+      _upgrade(unavailable);
+      return;
+    }
     const suffix = ' (Copy)';
     final base = p.name.length > 80 - suffix.length
         ? p.name.substring(0, 80 - suffix.length)
