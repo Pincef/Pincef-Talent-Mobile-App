@@ -65,6 +65,9 @@ class JobDraft {
     this.minYearsOfExperience,
     this.educationLevel,
     this.requiresManagementExperience = false,
+    this.applicationDeadline,
+    this.aiRanking = false,
+    this.aiSummary = false,
   });
 
   final String? id;
@@ -72,10 +75,8 @@ class JobDraft {
   // Basic Information
   final String? title;
   final String? employmentType; // full_time | part_time | contract | internship
-  // NOTE: workplaceType (on_site/hybrid/remote) has no field on IJob yet.
-  // Sent through so the payload round-trips once the schema supports it;
-  // until then job.dto.ts/job.model.ts silently drop it — don't rely on
-  // it persisting.
+  // workplaceType (on_site/hybrid/remote) is collected by the form but is
+  // not sent until the backend DTO and model support it.
   final String? workplaceType;
   final String? location;
   final double? minimumSalary;
@@ -91,6 +92,9 @@ class JobDraft {
   final String?
       educationLevel; // high_school | associate | bachelors | masters | doctorate
   final bool requiresManagementExperience;
+  final DateTime? applicationDeadline;
+  final bool aiRanking;
+  final bool aiSummary;
 
   /// Fields job.service.ts requires before it will allow publishing.
   /// Mirrors REQUIRED_FOR_PUBLISH on the backend — keep in sync.
@@ -102,7 +106,11 @@ class JobDraft {
     }
     if (employmentType == null) missing.add('employmentType');
     if (minYearsOfExperience == null) missing.add('minYearsOfExperience');
+    if (educationLevel == null) missing.add('educationLevel');
     if (requiredSkills.isEmpty) missing.add('requiredSkills');
+    if ((aiRanking || aiSummary) && applicationDeadline == null) {
+      missing.add('applicationDeadline');
+    }
     return missing;
   }
 
@@ -122,6 +130,9 @@ class JobDraft {
     int? minYearsOfExperience,
     String? educationLevel,
     bool? requiresManagementExperience,
+    DateTime? applicationDeadline,
+    bool? aiRanking,
+    bool? aiSummary,
   }) =>
       JobDraft(
         id: id ?? this.id,
@@ -138,16 +149,16 @@ class JobDraft {
         educationLevel: educationLevel ?? this.educationLevel,
         requiresManagementExperience:
             requiresManagementExperience ?? this.requiresManagementExperience,
+        applicationDeadline: applicationDeadline ?? this.applicationDeadline,
+        aiRanking: aiRanking ?? this.aiRanking,
+        aiSummary: aiSummary ?? this.aiSummary,
       );
 
-  /// Payload shape sent to the API — field names match job.service.ts's
-  /// JobInput exactly (this is where the earlier minYearsExperience typo
-  /// would have bitten silently; keep this the single source of truth).
+  /// Payload shape sent to the API — keys match job.service.ts's JobInput.
   Map<String, dynamic> toJson() => {
         if (title != null) 'title': title,
         if (description != null) 'description': description,
         if (employmentType != null) 'employmentType': employmentType,
-        if (workplaceType != null) 'workplaceType': workplaceType,
         if (location != null) 'location': location,
         if (minimumSalary != null) 'minSalary': minimumSalary,
         if (maximumSalary != null) 'maxSalary': maximumSalary,
@@ -157,6 +168,10 @@ class JobDraft {
           'minYearsOfExperience': minYearsOfExperience,
         if (educationLevel != null) 'educationLevel': educationLevel,
         'requiresManagementExperience': requiresManagementExperience,
+        if (applicationDeadline != null)
+          'applicationDeadline': applicationDeadline!.toUtc().toIso8601String(),
+        if (aiRanking || aiSummary)
+          'aiConfig': {'ranking': aiRanking, 'summary': aiSummary},
       };
 }
 
