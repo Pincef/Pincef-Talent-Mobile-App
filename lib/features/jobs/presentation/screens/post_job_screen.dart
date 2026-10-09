@@ -6,6 +6,7 @@ import 'package:talentbridge/core/data/models/location_models.dart';
 import 'package:talentbridge/core/entitlements/module_codes.dart';
 import 'package:talentbridge/core/theme/brand_color.dart';
 import 'package:talentbridge/core/widgets/app_toast.dart';
+import 'package:talentbridge/core/widgets/searchable_fields_widget.dart';
 import 'package:talentbridge/features/auth/application/auth_provider.dart';
 import 'package:talentbridge/features/jobs/application/job_management_provider.dart';
 import 'package:talentbridge/features/jobs/data/models/job_management_model.dart';
@@ -209,9 +210,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
         color: blocked ? const Color(0xFFFFF1F0) : const Color(0xFFFFF8EC),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: blocked
-              ? const Color(0xFFF3C7C3)
-              : const Color(0xFFF2D8AF),
+          color: blocked ? const Color(0xFFF3C7C3) : const Color(0xFFF2D8AF),
         ),
       ),
       child: Row(children: [
@@ -897,16 +896,20 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
           'AI candidate ranking',
           _aiRanking,
           changed: (v) => setState(() => _aiRanking = v),
-          enabled: ref.read(authProvider).user?.hasModule(
-                  ModuleCodes.aiCandidateMatch) ??
+          enabled: ref
+                  .read(authProvider)
+                  .user
+                  ?.hasModule(ModuleCodes.aiCandidateMatch) ??
               false,
         ),
         _setting(
           'AI resume summary',
           _aiSummary,
           changed: (v) => setState(() => _aiSummary = v),
-          enabled: ref.read(authProvider).user?.hasModule(
-                  ModuleCodes.aiCandidateSummary) ??
+          enabled: ref
+                  .read(authProvider)
+                  .user
+                  ?.hasModule(ModuleCodes.aiCandidateSummary) ??
               false,
         ),
         _setting('Requires management experience', _requiresManagement,
@@ -915,42 +918,52 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
 
   Widget _locationFields() {
     final locations = ref.watch(locationsProvider);
-    final country = _locationSelect(
-        _safeValue(_countryCode, locations.countries.map((x) => x.isoCode)),
-        locations.isLoadingCountries ? 'Loading countries...' : 'Country',
-        locations.countries
-            .map((x) =>
-                DropdownMenuItem(value: x.isoCode, child: Text(x.displayLabel)))
-            .toList(),
-        locations.isLoadingCountries
-            ? null
-            : (v) => _onCountryChanged(v, locations.countries));
-    final state = _locationSelect(
-        _safeValue(_stateCode, locations.states.map((x) => x.isoCode)),
-        _countryCode == null
-            ? 'State'
-            : locations.isLoadingStates
-                ? 'Loading states...'
-                : 'State',
-        locations.states
-            .map((x) => DropdownMenuItem(value: x.isoCode, child: Text(x.name)))
-            .toList(),
-        _countryCode == null || locations.isLoadingStates
-            ? null
-            : (v) => _onStateChanged(v, locations.states));
-    final city = _locationSelect(
-        _safeValue(_city, locations.cities.map((x) => x.name)),
-        _stateCode == null
-            ? 'City'
-            : locations.isLoadingCities
-                ? 'Loading cities...'
-                : 'City',
-        locations.cities
-            .map((x) => DropdownMenuItem(value: x.name, child: Text(x.name)))
-            .toList(),
-        _stateCode == null || locations.isLoadingCities
-            ? null
-            : _onCityChanged);
+    final selectedCountry = locations.countries
+        .where((country) => country.isoCode == _countryCode)
+        .firstOrNull;
+    final selectedState = locations.states
+        .where((state) => state.isoCode == _stateCode)
+        .firstOrNull;
+    final selectedCity =
+        locations.cities.where((city) => city.name == _city).firstOrNull;
+    final country = SearchableField<CountryEntry>(
+      key:
+          ValueKey('job-country-${locations.isLoadingCountries}-$_countryCode'),
+      options: locations.countries,
+      displayStringForOption: (country) => country.displayLabel,
+      initialValue: selectedCountry,
+      hintText:
+          locations.isLoadingCountries ? 'Loading countries...' : 'Country',
+      enabled: !locations.isLoadingCountries,
+      onSelected: (country) =>
+          _onCountryChanged(country.isoCode, locations.countries),
+    );
+    final state = SearchableField<StateEntry>(
+      key: ValueKey('job-state-$_countryCode-${locations.isLoadingStates}'),
+      options: locations.states,
+      displayStringForOption: (state) => state.name,
+      initialValue: selectedState,
+      hintText: _countryCode == null
+          ? 'Select a country first'
+          : locations.isLoadingStates
+              ? 'Loading states...'
+              : 'State',
+      enabled: _countryCode != null && !locations.isLoadingStates,
+      onSelected: (state) => _onStateChanged(state.isoCode, locations.states),
+    );
+    final city = SearchableField<CityEntry>(
+      key: ValueKey('job-city-$_stateCode-${locations.isLoadingCities}'),
+      options: locations.cities,
+      displayStringForOption: (city) => city.name,
+      initialValue: selectedCity,
+      hintText: _stateCode == null
+          ? 'Select a state first'
+          : locations.isLoadingCities
+              ? 'Loading cities...'
+              : 'City',
+      enabled: _stateCode != null && !locations.isLoadingCities,
+      onSelected: (city) => _onCityChanged(city.name),
+    );
     return LayoutBuilder(
         builder: (context, box) => box.maxWidth > 430
             ? Row(children: [
@@ -1009,10 +1022,17 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      item,
-                      style: const TextStyle(
-                          fontSize: 11, color: BrandColors.navy),
+                    child: InkWell(
+                      onTap: () => _editListItem(items, item),
+                      borderRadius: BorderRadius.circular(6),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Text(
+                          item,
+                          style: const TextStyle(
+                              fontSize: 11, color: BrandColors.navy),
+                        ),
+                      ),
                     ),
                   ),
                   InkWell(
@@ -1089,17 +1109,6 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
             onChanged: changed,
             decoration: _input(''))
       ]);
-  Widget _locationSelect(
-          String? value,
-          String hint,
-          List<DropdownMenuItem<String>> items,
-          ValueChanged<String?>? changed) =>
-      DropdownButtonFormField<String>(
-          initialValue: value,
-          isExpanded: true,
-          items: items,
-          onChanged: changed,
-          decoration: _input(hint));
   Widget _benefit(String label, bool selected, ValueChanged<bool> onChanged) =>
       InkWell(
           onTap: () => onChanged(!selected),
@@ -1130,9 +1139,14 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
           borderRadius: BorderRadius.circular(11)),
       child: Row(children: [
         Expanded(
-            child: Text(benefit,
-                style: const TextStyle(fontSize: 10, color: BrandColors.navy),
-                overflow: TextOverflow.ellipsis)),
+            child: InkWell(
+                onTap: () => _editCustomBenefit(benefit),
+                child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Text(benefit,
+                        style: const TextStyle(
+                            fontSize: 10, color: BrandColors.navy),
+                        overflow: TextOverflow.ellipsis)))),
         InkWell(
             onTap: () => setState(() => _customBenefits.remove(benefit)),
             child: const Icon(Icons.close, size: 13, color: BrandColors.orange))
@@ -1405,6 +1419,54 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
     if (shouldAdd == true) _addItem(controller, target);
   }
 
+  Future<String?> _editTextValue(String title, String value) async {
+    final controller = TextEditingController(text: value);
+    final updated = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 3,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: _input('Edit value'),
+          onSubmitted: (_) => Navigator.pop(dialogContext, controller.text),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, controller.text),
+              child: const Text('Save')),
+        ],
+      ),
+    );
+    controller.dispose();
+    final trimmed = updated?.trim();
+    return trimmed == null || trimmed.isEmpty ? null : trimmed;
+  }
+
+  Future<void> _editListItem(List<String> items, String item) async {
+    final index = items.indexOf(item);
+    if (index < 0) return;
+    final updated = await _editTextValue(
+      items == _responsibilities ? 'Edit responsibility' : 'Edit requirement',
+      item,
+    );
+    if (!mounted || updated == null) return;
+    setState(() => items[index] = updated);
+  }
+
+  Future<void> _editCustomBenefit(String benefit) async {
+    final index = _customBenefits.indexOf(benefit);
+    if (index < 0) return;
+    final updated = await _editTextValue('Edit benefit', benefit);
+    if (!mounted || updated == null) return;
+    setState(() => _customBenefits[index] = updated);
+  }
+
   Future<void> _showEmailTemplates() => showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
@@ -1499,18 +1561,35 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
       title: _title.text.trim(),
       employmentType: _employmentTypeValues[_employment]!,
       workplaceType: _workplaceTypeValues[_workplace]!,
+      industry: _industry,
+      companyOverview: _companyOverview.text.trim(),
       location: _jobLocation,
       minimumSalary: double.tryParse(_minimum.text),
       maximumSalary: double.tryParse(_maximum.text),
       currency: _currency,
       description: _overview.text.trim(),
       requiredSkills: _requirements,
+      responsibilities: _responsibilities,
+      benefits: [
+        if (_health) 'Health Insurance',
+        if (_equity) 'Equity/RSUs',
+        if (_learning) 'Learning Stipend',
+        if (_wellness) 'Wellness',
+        ..._customBenefits,
+      ],
       minYearsOfExperience: int.tryParse(_minYears.text.trim()),
       educationLevel: _educationLevel,
       requiresManagementExperience: _requiresManagement,
+      autoRejectNonMatches: _autoReject,
       applicationDeadline: _deadline,
       aiRanking: _aiRanking,
       aiSummary: _aiSummary,
+      pipelineTier: _pipelineTier,
+      rankingPlanTier: _planTier,
+      rankingLimit: _rankingLimit.round(),
+      assessmentEmailCount:
+          int.tryParse(_assessmentEmailCount.text.trim()) ?? 15,
+      interviewEmailCount: int.tryParse(_interviewEmailCount.text.trim()) ?? 10,
     );
 
     try {
