@@ -150,6 +150,8 @@ class _LocationPickerDialogState extends ConsumerState<_LocationPickerDialog> {
                             .loadCountries(),
                       )
                     : SearchableField<CountryEntry>(
+                        key: ValueKey(
+                            'location-country-${locations.isLoadingCountries}'),
                         options: locations.countries,
                         displayStringForOption: (c) => c.displayLabel,
                         initialValue: selectedCountry,
@@ -175,7 +177,8 @@ class _LocationPickerDialogState extends ConsumerState<_LocationPickerDialog> {
                 const Text('STATE', style: authLabelStyle),
                 const SizedBox(height: 6),
                 SearchableField<StateEntry>(
-                  key: ValueKey('state-$_countryCode'),
+                  key: ValueKey(
+                      'state-$_countryCode-${locations.isLoadingStates}'),
                   options: locations.states,
                   displayStringForOption: (s) => s.name,
                   initialValue: selectedState,
@@ -201,7 +204,8 @@ class _LocationPickerDialogState extends ConsumerState<_LocationPickerDialog> {
                 const Text('CITY', style: authLabelStyle),
                 const SizedBox(height: 6),
                 SearchableField<String>(
-                  key: ValueKey('city-$_stateCode'),
+                  key:
+                      ValueKey('city-$_stateCode-${locations.isLoadingCities}'),
                   options: cityNames,
                   displayStringForOption: (n) => n,
                   initialValue: (_city != null && cityNames.contains(_city))
