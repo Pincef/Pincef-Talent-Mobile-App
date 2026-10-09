@@ -198,9 +198,10 @@ class _StatusPill extends StatelessWidget {
 class QuickAction {
   final String label;
   final IconData icon;
-  final VoidCallback? onTap;
+  final VoidCallback onTap;
 
-  const QuickAction({required this.label, required this.icon, this.onTap});
+  const QuickAction(
+      {required this.label, required this.icon, required this.onTap});
 }
 
 class QuickActionsCard extends StatelessWidget {
@@ -223,7 +224,7 @@ class QuickActionsCard extends StatelessWidget {
           const Text('Quick Actions', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: BrandColors.navy)),
           const SizedBox(height: 12),
           GridView.count(
-            crossAxisCount: 2,
+            crossAxisCount: actions.length == 1 ? 1 : 2,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             crossAxisSpacing: 10,
