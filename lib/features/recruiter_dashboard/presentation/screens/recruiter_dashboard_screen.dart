@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/widgets/recruiter_dashboard_widgets.dart';
 import '../../../auth/application/auth_provider.dart';
 import '../../application/recruiter_dashboard_provider.dart';
@@ -61,10 +62,11 @@ class _RecruiterDashboardBody extends ConsumerWidget {
     if (summary == null) return const SizedBox.shrink();
 
     final quickActions = [
-      const QuickAction(label: 'Post Job', icon: Icons.post_add),
-      const QuickAction(label: 'Upload CVs', icon: Icons.upload_file_outlined),
-      const QuickAction(label: 'Referral', icon: Icons.person_add_alt),
-      const QuickAction(label: 'AI Audit', icon: Icons.fact_check_outlined),
+      QuickAction(
+        label: 'Post Job',
+        icon: Icons.post_add,
+        onTap: () => context.push('/jobs/new'),
+      ),
     ];
 
     // LayoutBuilder measuring THIS body's own available width (already
