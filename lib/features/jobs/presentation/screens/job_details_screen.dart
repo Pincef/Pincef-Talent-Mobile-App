@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:talentbridge/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/entitlements/module_codes.dart';
 import '../../../../core/theme/brand_color.dart';
 import '../../application/job_management_provider.dart';
 import '../../data/models/job_management_model.dart';
@@ -375,11 +376,28 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
   late final TextEditingController _description;
   late final TextEditingController _minYears;
   late final TextEditingController _skillInput;
+  late final TextEditingController _companyOverview;
+  late final TextEditingController _responsibilityInput;
+  late final TextEditingController _benefitInput;
+  late final TextEditingController _deadlineInput;
+  late final TextEditingController _assessmentEmailCount;
+  late final TextEditingController _interviewEmailCount;
 
   late String _employmentType;
+  late String _workplaceType;
+  late String _industry;
+  late String _pipelineTier;
+  late String _rankingPlanTier;
+  late double _rankingLimit;
   String? _educationLevel;
   late bool _requiresManagement;
+  late bool _autoRejectNonMatches;
+  late bool _aiRanking;
+  late bool _aiSummary;
   late List<String> _skills;
+  late List<String> _responsibilities;
+  late List<String> _benefits;
+  DateTime? _applicationDeadline;
 
   bool _isSaving = false;
   String? _error;
@@ -406,10 +424,48 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
     _minYears =
         TextEditingController(text: job.minYearsOfExperience?.toString() ?? '');
     _skillInput = TextEditingController();
+    _companyOverview = TextEditingController(text: job.companyOverview ?? '');
+    _responsibilityInput = TextEditingController();
+    _benefitInput = TextEditingController();
     _employmentType = job.employmentType ?? 'full_time';
+    _workplaceType =
+        const ['on_site', 'hybrid', 'remote'].contains(job.workplaceType)
+            ? job.workplaceType!
+            : 'on_site';
+    _industry = const [
+      'Technology',
+      'Finance',
+      'Healthcare',
+      'Education',
+      'Retail',
+      'Other',
+    ].contains(job.industry)
+        ? job.industry!
+        : 'Technology';
     _educationLevel = job.educationLevel;
-    _requiresManagement = false;
+    _requiresManagement = job.requiresManagementExperience;
+    _autoRejectNonMatches = job.autoRejectNonMatches;
+    _aiRanking = job.aiRanking;
+    _aiSummary = job.aiSummary;
+    _applicationDeadline = job.applicationDeadline;
+    _deadlineInput =
+        TextEditingController(text: _formatDeadline(_applicationDeadline));
+    _assessmentEmailCount =
+        TextEditingController(text: job.assessmentEmailCount.toString());
+    _interviewEmailCount =
+        TextEditingController(text: job.interviewEmailCount.toString());
+    _pipelineTier =
+        const ['Standard', 'Premium', 'Custom'].contains(job.pipelineTier)
+            ? job.pipelineTier
+            : 'Standard';
+    _rankingPlanTier =
+        const ['Standard', 'Premium', 'Custom'].contains(job.rankingPlanTier)
+            ? job.rankingPlanTier
+            : 'Premium';
+    _rankingLimit = job.rankingLimit.toDouble().clamp(1, 30).toDouble();
     _skills = List.of(job.requiredSkills);
+    _responsibilities = List.of(job.responsibilities);
+    _benefits = List.of(job.benefits);
   }
 
   @override
@@ -422,6 +478,12 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
     _description.dispose();
     _minYears.dispose();
     _skillInput.dispose();
+    _companyOverview.dispose();
+    _responsibilityInput.dispose();
+    _benefitInput.dispose();
+    _deadlineInput.dispose();
+    _assessmentEmailCount.dispose();
+    _interviewEmailCount.dispose();
     super.dispose();
   }
 
@@ -432,6 +494,144 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
       _skills.add(value);
       _skillInput.clear();
     });
+  }
+
+  Future<void> _editListItem(
+      List<String> items, String item, String title) async {
+    final index = items.indexOf(item);
+    if (index < 0) return;
+    final controller = TextEditingController(text: item);
+    final value = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 3,
+          textCapitalization: TextCapitalization.sentences,
+          onSubmitted: (_) => Navigator.pop(ctx, controller.text),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, controller.text),
+              child: const Text('Save')),
+        ],
+      ),
+    );
+    controller.dispose();
+    final updated = value?.trim();
+    if (!mounted || updated == null || updated.isEmpty) return;
+    setState(() => items[index] = updated);
+  }
+
+  void _addToList(TextEditingController controller, List<String> items) {
+    final value = controller.text.trim();
+    if (value.isEmpty) return;
+    setState(() {
+      if (!items.contains(value)) items.add(value);
+      controller.clear();
+    });
+  }
+
+  Widget _editableItemsSection({
+    required String title,
+    required List<String> items,
+    required TextEditingController controller,
+    required String hint,
+  }) =>
+      _SectionCard(
+        title: title,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final item in items)
+                InputChip(
+                  label: Text(item),
+                  onPressed: () =>
+                      _editListItem(items, item, 'Edit $title item'),
+                  onDeleted: () => setState(() => items.remove(item)),
+                ),
+            ],
+          ),
+          Row(children: [
+            Expanded(
+              child: TextField(
+                controller: controller,
+                decoration: InputDecoration(hintText: hint),
+                onSubmitted: (_) => _addToList(controller, items),
+              ),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton(
+              onPressed: () => _addToList(controller, items),
+              child: const Text('Add'),
+            ),
+          ]),
+        ]),
+      );
+
+  Future<void> _pickApplicationDeadline() async {
+    final now = DateTime.now();
+    final initial = _applicationDeadline ?? now;
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial.isBefore(now) ? now : initial,
+      firstDate: DateTime(now.year, now.month, now.day),
+      lastDate: DateTime(now.year + 5),
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: _applicationDeadline == null
+          ? const TimeOfDay(hour: 23, minute: 59)
+          : TimeOfDay.fromDateTime(_applicationDeadline!.toLocal()),
+    );
+    if (time == null || !mounted) return;
+    setState(() {
+      _applicationDeadline =
+          DateTime(date.year, date.month, date.day, time.hour, time.minute);
+      _deadlineInput.text = _formatDeadline(_applicationDeadline);
+    });
+  }
+
+  String _formatDeadline(DateTime? deadline) {
+    if (deadline == null) return '';
+    final local = deadline.toLocal();
+    final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
+    final minute = local.minute.toString().padLeft(2, '0');
+    final period = local.hour >= 12 ? 'PM' : 'AM';
+    return '${local.month}/${local.day}/${local.year}, $hour:$minute $period';
+  }
+
+  bool get _planAutomationAvailable {
+    final user = ref.read(authProvider).user;
+    final explicit = user?.capabilities['allowsPlanAutomation'];
+    if (explicit is bool) return explicit;
+    return user?.hasModule(ModuleCodes.jobsPlanAutomation) ?? false;
+  }
+
+  bool _pipelineTierAvailable(String tier) {
+    final user = ref.read(authProvider).user;
+    if (tier == 'Standard') return true;
+    if (tier == 'Premium') {
+      final explicit = user?.capabilities['allowsPremiumPipeline'];
+      return explicit is bool
+          ? explicit
+          : user?.hasModule(ModuleCodes.jobPipelinePremium) ?? false;
+    }
+    final maxCustom =
+        (user?.capabilities['maxCustomPipelines'] as num?)?.toInt() ?? 0;
+    final hasCustomModule =
+        user?.hasModule(ModuleCodes.jobPipelineCustom) == true ||
+            user?.hasModule(ModuleCodes.hiringPipeline) == true;
+    return hasCustomModule &&
+        user?.capabilities['allowsCustomPipelines'] == true &&
+        maxCustom > 0;
   }
 
   // Same bug as the original post_job_screen.dart minYears field (fixed
@@ -449,6 +649,10 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_skills.isEmpty) {
+      setState(() => _error = 'Add at least one required skill.');
+      return;
+    }
 
     setState(() {
       _isSaving = true;
@@ -460,14 +664,29 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
       title: _title.text.trim(),
       description: _description.text.trim(),
       employmentType: _employmentType,
+      workplaceType: _workplaceType,
+      industry: _industry,
+      companyOverview: _companyOverview.text.trim(),
       location: _location.text.trim(),
       minimumSalary: double.tryParse(_minSalary.text.trim()),
       maximumSalary: double.tryParse(_maxSalary.text.trim()),
       currency: _currency.text.trim().isEmpty ? null : _currency.text.trim(),
       requiredSkills: _skills,
+      responsibilities: _responsibilities,
+      benefits: _benefits,
       minYearsOfExperience: int.tryParse(_minYears.text.trim()),
       educationLevel: _educationLevel,
       requiresManagementExperience: _requiresManagement,
+      autoRejectNonMatches: _autoRejectNonMatches,
+      applicationDeadline: _applicationDeadline,
+      aiRanking: _aiRanking,
+      aiSummary: _aiSummary,
+      pipelineTier: _pipelineTier,
+      rankingPlanTier: _rankingPlanTier,
+      rankingLimit: _rankingLimit.round(),
+      assessmentEmailCount:
+          int.tryParse(_assessmentEmailCount.text.trim()) ?? 15,
+      interviewEmailCount: int.tryParse(_interviewEmailCount.text.trim()) ?? 10,
     );
 
     try {
@@ -615,7 +834,57 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
                           ),
                         ],
                       ),
+                      const SizedBox(height: 14),
+                      Row(children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            initialValue: _workplaceType,
+                            decoration: const InputDecoration(
+                                labelText: 'Workplace policy'),
+                            items: const {
+                              'on_site': 'On-site',
+                              'hybrid': 'Hybrid',
+                              'remote': 'Remote',
+                            }
+                                .entries
+                                .map((e) => DropdownMenuItem(
+                                    value: e.key, child: Text(e.value)))
+                                .toList(),
+                            onChanged: (v) => setState(
+                                () => _workplaceType = v ?? _workplaceType),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            initialValue: _industry,
+                            decoration:
+                                const InputDecoration(labelText: 'Industry'),
+                            items: const [
+                              'Technology',
+                              'Finance',
+                              'Healthcare',
+                              'Education',
+                              'Retail',
+                              'Other',
+                            ]
+                                .map((v) =>
+                                    DropdownMenuItem(value: v, child: Text(v)))
+                                .toList(),
+                            onChanged: (v) =>
+                                setState(() => _industry = v ?? _industry),
+                          ),
+                        ),
+                      ]),
                     ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _SectionCard(
+                  title: 'Company Overview',
+                  child: TextFormField(
+                    controller: _companyOverview,
+                    maxLines: 3,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -692,9 +961,11 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
                         runSpacing: 6,
                         children: [
                           for (final skill in _skills)
-                            Chip(
+                            InputChip(
                               label: Text(skill,
                                   style: const TextStyle(fontSize: 11)),
+                              onPressed: () => _editListItem(
+                                  _skills, skill, 'Edit required skill'),
                               onDeleted: () =>
                                   setState(() => _skills.remove(skill)),
                             ),
@@ -726,6 +997,166 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
                           ),
                         ),
                     ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _editableItemsSection(
+                  title: 'Key Responsibilities',
+                  items: _responsibilities,
+                  controller: _responsibilityInput,
+                  hint: 'Add a responsibility',
+                ),
+                const SizedBox(height: 16),
+                _editableItemsSection(
+                  title: 'Benefits',
+                  items: _benefits,
+                  controller: _benefitInput,
+                  hint: 'Add a benefit',
+                ),
+                const SizedBox(height: 16),
+                _SectionCard(
+                  title: 'Hiring Pipeline',
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _pipelineTier,
+                    decoration:
+                        const InputDecoration(labelText: 'Pipeline tier'),
+                    items: const ['Standard', 'Premium', 'Custom']
+                        .map((v) => DropdownMenuItem(
+                              value: v,
+                              enabled: _pipelineTierAvailable(v) ||
+                                  v == _pipelineTier,
+                              child: Text(v),
+                            ))
+                        .toList(),
+                    onChanged: (v) =>
+                        setState(() => _pipelineTier = v ?? _pipelineTier),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _SectionCard(
+                  title: 'Application Deadline & Settings',
+                  child: Column(
+                    children: [
+                      TextFormField(
+                        readOnly: true,
+                        controller: _deadlineInput,
+                        onTap: _pickApplicationDeadline,
+                        decoration: const InputDecoration(
+                          labelText: 'Application deadline',
+                          hintText: 'Select date and time',
+                        ),
+                        validator: (_) => (_aiRanking || _aiSummary) &&
+                                _applicationDeadline == null
+                            ? 'Select a deadline when AI processing is enabled'
+                            : null,
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Requires management experience'),
+                        value: _requiresManagement,
+                        onChanged: (v) =>
+                            setState(() => _requiresManagement = v),
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Auto-reject non-matches'),
+                        value: _autoRejectNonMatches,
+                        onChanged: (v) =>
+                            setState(() => _autoRejectNonMatches = v),
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('AI candidate ranking'),
+                        value: _aiRanking,
+                        onChanged: (v) {
+                          if (v &&
+                              !(ref.read(authProvider).user?.hasModule(
+                                      ModuleCodes.aiCandidateMatch) ??
+                                  false)) return;
+                          setState(() => _aiRanking = v);
+                        },
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('AI resume summary'),
+                        value: _aiSummary,
+                        onChanged: (v) {
+                          if (v &&
+                              !(ref.read(authProvider).user?.hasModule(
+                                      ModuleCodes.aiCandidateSummary) ??
+                                  false)) return;
+                          setState(() => _aiSummary = v);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _SectionCard(
+                  title: 'Plan Automation & Quotas',
+                  child: AbsorbPointer(
+                    absorbing: !_planAutomationAvailable,
+                    child: Opacity(
+                      opacity: _planAutomationAvailable ? 1 : .5,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (!_planAutomationAvailable)
+                            const Padding(
+                              padding: EdgeInsets.only(bottom: 8),
+                              child: Text(
+                                'Your plan does not include plan automation.',
+                                style: TextStyle(
+                                    fontSize: 11, color: BrandColors.muted),
+                              ),
+                            ),
+                          DropdownButtonFormField<String>(
+                            initialValue: _rankingPlanTier,
+                            decoration: const InputDecoration(
+                                labelText: 'Candidate ranking plan'),
+                            items: const ['Standard', 'Premium', 'Custom']
+                                .map((v) =>
+                                    DropdownMenuItem(value: v, child: Text(v)))
+                                .toList(),
+                            onChanged: (v) => setState(() {
+                              _rankingPlanTier = v ?? _rankingPlanTier;
+                              _rankingLimit = switch (_rankingPlanTier) {
+                                'Standard' => 10,
+                                'Premium' => 20,
+                                _ => 30,
+                              };
+                            }),
+                          ),
+                          Slider(
+                            value: _rankingLimit,
+                            min: 1,
+                            max: 30,
+                            divisions: 29,
+                            label: '${_rankingLimit.round()} rankings',
+                            onChanged: (v) => setState(() => _rankingLimit = v),
+                          ),
+                          Row(children: [
+                            Expanded(
+                              child: TextFormField(
+                                controller: _assessmentEmailCount,
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                    labelText: 'Assessment emails'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TextFormField(
+                                controller: _interviewEmailCount,
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                    labelText: 'Interview emails'),
+                              ),
+                            ),
+                          ]),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ],
