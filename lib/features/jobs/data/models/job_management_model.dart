@@ -68,6 +68,16 @@ class JobDraft {
     this.applicationDeadline,
     this.aiRanking = false,
     this.aiSummary = false,
+    this.pipelineTier = 'Standard',
+    this.rankingPlanTier = 'Premium',
+    this.rankingLimit = 20,
+    this.assessmentEmailCount = 15,
+    this.interviewEmailCount = 10,
+    this.companyOverview,
+    this.industry,
+    this.responsibilities = const [],
+    this.benefits = const [],
+    this.autoRejectNonMatches = false,
   });
 
   final String? id;
@@ -75,9 +85,9 @@ class JobDraft {
   // Basic Information
   final String? title;
   final String? employmentType; // full_time | part_time | contract | internship
-  // workplaceType (on_site/hybrid/remote) is collected by the form but is
-  // not sent until the backend DTO and model support it.
   final String? workplaceType;
+  final String? industry;
+  final String? companyOverview;
   final String? location;
   final double? minimumSalary;
   final double? maximumSalary;
@@ -95,6 +105,14 @@ class JobDraft {
   final DateTime? applicationDeadline;
   final bool aiRanking;
   final bool aiSummary;
+  final String pipelineTier;
+  final String rankingPlanTier;
+  final int rankingLimit;
+  final int assessmentEmailCount;
+  final int interviewEmailCount;
+  final List<String> responsibilities;
+  final List<String> benefits;
+  final bool autoRejectNonMatches;
 
   /// Fields job.service.ts requires before it will allow publishing.
   /// Mirrors REQUIRED_FOR_PUBLISH on the backend — keep in sync.
@@ -133,6 +151,16 @@ class JobDraft {
     DateTime? applicationDeadline,
     bool? aiRanking,
     bool? aiSummary,
+    String? companyOverview,
+    String? industry,
+    List<String>? responsibilities,
+    List<String>? benefits,
+    bool? autoRejectNonMatches,
+    String? pipelineTier,
+    String? rankingPlanTier,
+    int? rankingLimit,
+    int? assessmentEmailCount,
+    int? interviewEmailCount,
   }) =>
       JobDraft(
         id: id ?? this.id,
@@ -152,6 +180,16 @@ class JobDraft {
         applicationDeadline: applicationDeadline ?? this.applicationDeadline,
         aiRanking: aiRanking ?? this.aiRanking,
         aiSummary: aiSummary ?? this.aiSummary,
+        companyOverview: companyOverview ?? this.companyOverview,
+        industry: industry ?? this.industry,
+        responsibilities: responsibilities ?? this.responsibilities,
+        benefits: benefits ?? this.benefits,
+        autoRejectNonMatches: autoRejectNonMatches ?? this.autoRejectNonMatches,
+        pipelineTier: pipelineTier ?? this.pipelineTier,
+        rankingPlanTier: rankingPlanTier ?? this.rankingPlanTier,
+        rankingLimit: rankingLimit ?? this.rankingLimit,
+        assessmentEmailCount: assessmentEmailCount ?? this.assessmentEmailCount,
+        interviewEmailCount: interviewEmailCount ?? this.interviewEmailCount,
       );
 
   /// Payload shape sent to the API — keys match job.service.ts's JobInput.
@@ -159,6 +197,9 @@ class JobDraft {
         if (title != null) 'title': title,
         if (description != null) 'description': description,
         if (employmentType != null) 'employmentType': employmentType,
+        if (workplaceType != null) 'workplaceType': workplaceType,
+        if (industry != null) 'industry': industry,
+        if (companyOverview != null) 'companyOverview': companyOverview,
         if (location != null) 'location': location,
         if (minimumSalary != null) 'minSalary': minimumSalary,
         if (maximumSalary != null) 'maxSalary': maximumSalary,
@@ -168,9 +209,17 @@ class JobDraft {
           'minYearsOfExperience': minYearsOfExperience,
         if (educationLevel != null) 'educationLevel': educationLevel,
         'requiresManagementExperience': requiresManagementExperience,
-        if (applicationDeadline != null)
-          'applicationDeadline': applicationDeadline!.toUtc().toIso8601String(),
-        if (aiRanking || aiSummary)
+        'responsibilities': responsibilities,
+        'benefits': benefits,
+        'autoRejectNonMatches': autoRejectNonMatches,
+        'pipelineTier': pipelineTier,
+        'rankingPlanTier': rankingPlanTier,
+        'rankingLimit': rankingLimit,
+        'assessmentEmailCount': assessmentEmailCount,
+        'interviewEmailCount': interviewEmailCount,
+        if (applicationDeadline != null || id != null)
+          'applicationDeadline': applicationDeadline?.toUtc().toIso8601String(),
+        if (aiRanking || aiSummary || id != null)
           'aiConfig': {'ranking': aiRanking, 'summary': aiSummary},
       };
 }
@@ -596,6 +645,21 @@ class JobDetail {
     this.minSalary,
     this.maxSalary,
     this.currency,
+    this.workplaceType,
+    this.industry,
+    this.companyOverview,
+    this.responsibilities = const [],
+    this.benefits = const [],
+    this.requiresManagementExperience = false,
+    this.autoRejectNonMatches = false,
+    this.applicationDeadline,
+    this.aiRanking = false,
+    this.aiSummary = false,
+    this.pipelineTier = 'Standard',
+    this.rankingPlanTier = 'Premium',
+    this.rankingLimit = 20,
+    this.assessmentEmailCount = 15,
+    this.interviewEmailCount = 10,
   });
 
   final String id;
@@ -611,6 +675,21 @@ class JobDetail {
   final double? minSalary;
   final double? maxSalary;
   final String? currency;
+  final String? workplaceType;
+  final String? industry;
+  final String? companyOverview;
+  final List<String> responsibilities;
+  final List<String> benefits;
+  final bool requiresManagementExperience;
+  final bool autoRejectNonMatches;
+  final DateTime? applicationDeadline;
+  final bool aiRanking;
+  final bool aiSummary;
+  final String pipelineTier;
+  final String rankingPlanTier;
+  final int rankingLimit;
+  final int assessmentEmailCount;
+  final int interviewEmailCount;
 
   static const _employmentTypeLabels = {
     'full_time': 'Full-time',
@@ -682,6 +761,30 @@ class JobDetail {
       minSalary: (json['minSalary'] as num?)?.toDouble(),
       maxSalary: (json['maxSalary'] as num?)?.toDouble(),
       currency: json['currency'] as String?,
+      workplaceType: json['workplaceType'] as String?,
+      industry: json['industry'] as String?,
+      companyOverview: json['companyOverview'] as String?,
+      responsibilities: (json['responsibilities'] as List?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      benefits:
+          (json['benefits'] as List?)?.map((e) => e.toString()).toList() ??
+              const [],
+      requiresManagementExperience:
+          json['requiresManagementExperience'] as bool? ?? false,
+      autoRejectNonMatches: json['autoRejectNonMatches'] as bool? ?? false,
+      applicationDeadline: DateTime.tryParse(
+        (json['applicationDeadline'] ?? '').toString(),
+      ),
+      aiRanking: (json['aiConfig'] as Map?)?['ranking'] as bool? ?? false,
+      aiSummary: (json['aiConfig'] as Map?)?['summary'] as bool? ?? false,
+      pipelineTier: json['pipelineTier'] as String? ?? 'Standard',
+      rankingPlanTier: json['rankingPlanTier'] as String? ?? 'Premium',
+      rankingLimit: (json['rankingLimit'] as num?)?.toInt() ?? 20,
+      assessmentEmailCount:
+          (json['assessmentEmailCount'] as num?)?.toInt() ?? 15,
+      interviewEmailCount: (json['interviewEmailCount'] as num?)?.toInt() ?? 10,
     );
   }
 }
