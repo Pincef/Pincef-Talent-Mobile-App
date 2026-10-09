@@ -150,10 +150,6 @@ class AppShellRoute extends ConsumerWidget {
               ? 'Post New Job'
               : 'Upload CV',
       primaryActionIcon: Icons.add,
-      // Candidate sidebar should show just the single primary action
-      // ("Upload CV") with nothing else below it; recruiter mockup is the
-      // only one with the extra "Upload resume" button.
-      showSecondaryAction: isRecruiter,
       onUploadCv: isAdmin
           ? () => context.go('/admin')
           : isRecruiter
