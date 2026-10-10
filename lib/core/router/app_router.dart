@@ -25,6 +25,7 @@ import '../../features/jobs/presentation/screens/browse_jobs_screen.dart';
 import '../../features/jobs/presentation/screens/job_details_screen.dart';
 import '../../features/jobs/presentation/screens/job_candidates_screen.dart';
 import '../../features/jobs/presentation/screens/candidate_profile_preview_screen.dart';
+import '../../features/jobs/presentation/screens/ai_candidate_ranking_screen.dart';
 import '../../features/jobs/data/models/application_model.dart';
 import '../../features/onboarding/presentation/screens/role_selection_screen.dart';
 import '../../features/profile/presentation/screens/recruiter_profile_screen.dart';
@@ -123,6 +124,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       final location = state.matchedLocation;
+      if (isLoggedIn &&
+          authState.user?.needsCompanySetup == true &&
+          location != '/dashboard' &&
+          location != '/recruiter-company-setup' &&
+          location != '/notification' &&
+          location != '/support' &&
+          location != '/settings') {
+        return '/dashboard';
+      }
       if (isLoggedIn && location.startsWith('/admin') && !_isAdmin(authState)) {
         return '/dashboard';
       }
@@ -237,6 +247,12 @@ final routerProvider = Provider<GoRouter>((ref) {
                 ),
               ),
             ],
+          ),
+          GoRoute(
+            path: '/jobs/:jobId/candidate-ranking',
+            builder: (context, state) => AiCandidateRankingScreen(
+              jobId: state.pathParameters['jobId']!,
+            ),
           ),
           GoRoute(
             path: '/profile',
