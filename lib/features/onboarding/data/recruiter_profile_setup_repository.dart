@@ -6,18 +6,8 @@ import '../../../core/network/api_exception.dart';
 
 /// Talks to the company-profile backend (`POST /companies`).
 ///
-/// company.service.ts's CompanyInput only has `name` / `industry` /
-/// `website` — no `companySize`, no logo field, and the route has no
-/// multer middleware, so this can only be a JSON request, not
-/// multipart. Two things collected by the setup screen currently have
-/// nowhere to go on the backend:
-///   - companySize: no field on CompanyInput at all
-///   - logoBytes: no upload handling anywhere on the company routes
-/// Both are silently dropped here (not sent) rather than sent to an
-/// endpoint that can't use them. Once the backend adds support for
-/// either, wire it back in — logo will likely need its own
-/// multipart/multer route the same way CV upload does, since mixing
-/// binary + JSON on one endpoint would require adding multer here too.
+/// Sends the company profile as multipart when a logo is selected, so the
+/// image is uploaded in the same request as the company fields.
 class RecruiterProfileSetupRepository {
   RecruiterProfileSetupRepository(this._dio);
   final Dio _dio;
@@ -31,12 +21,25 @@ class RecruiterProfileSetupRepository {
     String? logoFilename,
   }) async {
     try {
-      await _dio.post('/companies', data: {
+      final fields = <String, dynamic>{
         'name': companyName,
         if (industry != null) 'industry': industry,
         if (companyWebsite != null && companyWebsite.isNotEmpty)
           'website': companyWebsite,
-      });
+      };
+      if (logoBytes != null) {
+        fields['logo'] = MultipartFile.fromBytes(
+          logoBytes,
+          filename: logoFilename ?? 'company-logo.png',
+        );
+      }
+      await _dio.post(
+        '/companies',
+        data: logoBytes == null ? fields : FormData.fromMap(fields),
+        options: logoBytes == null
+            ? null
+            : Options(contentType: 'multipart/form-data'),
+      );
     } on DioException catch (e) {
       throw ApiException.fromDioError(e);
     }
