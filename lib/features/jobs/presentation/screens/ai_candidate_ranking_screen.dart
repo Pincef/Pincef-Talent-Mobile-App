@@ -68,12 +68,18 @@ class AiCandidateRankingScreen extends ConsumerWidget {
                   child: Center(child: CircularProgressIndicator()),
                 ),
                 error: (e, _) => _RankingError(
-                  message: '$e',
                   onRetry: () =>
                       ref.invalidate(candidateRankingProvider(jobId)),
                 ),
-                data: (result) =>
-                    _RankingBody(jobId: jobId, isWide: isWide, result: result),
+                data: (result) => result.entries.isEmpty
+                    ? _NoRankingsFound(
+                        onRetry: () =>
+                            ref.invalidate(candidateRankingProvider(jobId)),
+                        onViewCandidates: () =>
+                            context.go('/jobs/$jobId/candidates'),
+                      )
+                    : _RankingBody(
+                        jobId: jobId, isWide: isWide, result: result),
               ),
             ],
           ),
@@ -957,8 +963,7 @@ class _WorkflowStep extends StatelessWidget {
 }
 
 class _RankingError extends StatelessWidget {
-  const _RankingError({required this.message, required this.onRetry});
-  final String message;
+  const _RankingError({required this.onRetry});
   final VoidCallback onRetry;
 
   @override
@@ -972,13 +977,15 @@ class _RankingError extends StatelessWidget {
         ),
         child: Column(
           children: [
-            const Icon(Icons.error_outline, size: 30, color: Color(0xFFDC2626)),
+            const Icon(Icons.cloud_off_outlined,
+                size: 32, color: BrandColors.muted),
             const SizedBox(height: 10),
-            const Text("Couldn't run candidate ranking",
+            const Text('Rankings are unavailable right now',
                 style: TextStyle(
                     fontWeight: FontWeight.w700, color: BrandColors.navy)),
             const SizedBox(height: 4),
-            Text(message,
+            const Text(
+                'We couldn’t load AI rankings. Please try again in a moment.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 12, color: BrandColors.muted)),
             const SizedBox(height: 14),
@@ -988,6 +995,64 @@ class _RankingError extends StatelessWidget {
                   backgroundColor: BrandColors.navy,
                   foregroundColor: Colors.white),
               child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+}
+
+class _NoRankingsFound extends StatelessWidget {
+  const _NoRankingsFound({
+    required this.onRetry,
+    required this.onViewCandidates,
+  });
+
+  final VoidCallback onRetry;
+  final VoidCallback onViewCandidates;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: BrandColors.border),
+        ),
+        child: Column(
+          children: [
+            const Icon(Icons.query_stats_outlined,
+                size: 34, color: BrandColors.orange),
+            const SizedBox(height: 12),
+            const Text('No rankings found yet',
+                style: TextStyle(
+                    fontWeight: FontWeight.w700, color: BrandColors.navy)),
+            const SizedBox(height: 6),
+            const Text(
+              'There are no ranked applicants for this job yet. Check back after candidates apply, or review the candidate list.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 12, color: BrandColors.muted, height: 1.5),
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 10,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: [
+                OutlinedButton(
+                  onPressed: onViewCandidates,
+                  child: const Text('View candidates'),
+                ),
+                ElevatedButton(
+                  onPressed: onRetry,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: BrandColors.navy,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Try ranking again'),
+                ),
+              ],
             ),
           ],
         ),
