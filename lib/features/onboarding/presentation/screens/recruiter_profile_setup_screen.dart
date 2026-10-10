@@ -10,6 +10,7 @@ import '../../../../core/theme/auth_form_style.dart';
 import '../../../../core/theme/brand_color.dart';
 import '../../../../core/widgets/brand_footer.dart';
 import '../../../../core/widgets/brand_header.dart';
+import '../../../auth/application/auth_provider.dart';
 import '../../application/recruiter_profile_setup_provider.dart';
 
 class RecruiterProfileSetupScreen extends ConsumerStatefulWidget {
@@ -51,6 +52,7 @@ class _RecruiterProfileSetupScreenState
   String? _industry;
   String? _companySize;
   Uint8List? _logoBytes;
+  String? _logoFilename;
 
   @override
   void dispose() {
@@ -71,11 +73,13 @@ class _RecruiterProfileSetupScreenState
     final bytes = await picked.readAsBytes();
     if (!mounted) return;
     setState(() => _logoBytes = bytes);
+    _logoFilename = picked.name;
     ref.read(recruiterProfileSetupProvider.notifier).updateLogo(bytes);
   }
 
   void _removeLogo() {
     setState(() => _logoBytes = null);
+    _logoFilename = null;
     ref.read(recruiterProfileSetupProvider.notifier).removeLogo();
   }
 
@@ -97,17 +101,15 @@ class _RecruiterProfileSetupScreenState
               industry: _industry,
               companySize: _companySize,
               companyWebsite: _websiteController.text.trim(),
+              logoFilename: _logoFilename,
             );
 
     if (!mounted) return;
 
     if (success) {
-      // ASSUMPTION: no further recruiter-onboarding screen exists yet
-      // despite the button reading "Next Step" — nothing else was shared,
-      // so this goes straight to the dashboard. Easy to redirect
-      // elsewhere once a next step exists.
       AppToast.success(context, 'Company profile saved.');
-      context.go('/dashboard');
+      await ref.read(authProvider.notifier).logout();
+      if (mounted) context.go('/login');
     } else {
       final error = ref.read(recruiterProfileSetupProvider).saveError;
       AppToast.error(
@@ -115,8 +117,102 @@ class _RecruiterProfileSetupScreenState
     }
   }
 
+  Widget _companyNameField() => _LabeledField(
+        label: 'COMPANY NAME',
+        child: TextFormField(
+          controller: _companyNameController,
+          decoration: authInputDecoration(
+            hint: 'e.g. Acme Corporation',
+            icon: Icons.business_outlined,
+          ),
+          style: const TextStyle(color: BrandColors.navy),
+          validator: (value) => (value == null || value.trim().isEmpty)
+              ? 'Company name is required'
+              : null,
+        ),
+      );
+
+  Widget _industryField() => _LabeledField(
+        label: 'INDUSTRY',
+        child: DropdownButtonFormField<String>(
+          initialValue: _industry,
+          isExpanded: true,
+          dropdownColor: Colors.white,
+          decoration: authInputDecoration(
+            hint: 'Select industry',
+            icon: Icons.apartment_outlined,
+          ),
+          style: const TextStyle(color: BrandColors.navy, fontSize: 13.5),
+          items: _industries
+              .map((i) => DropdownMenuItem(value: i, child: Text(i)))
+              .toList(),
+          onChanged: (v) => setState(() => _industry = v),
+        ),
+      );
+
+  Widget _companySizeField() => _LabeledField(
+        label: 'COMPANY SIZE',
+        child: DropdownButtonFormField<String>(
+          initialValue: _companySize,
+          isExpanded: true,
+          dropdownColor: Colors.white,
+          decoration: authInputDecoration(
+            hint: 'Select size',
+            icon: Icons.groups_outlined,
+          ),
+          style: const TextStyle(color: BrandColors.navy, fontSize: 13.5),
+          items: _companySizes
+              .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+              .toList(),
+          onChanged: (v) => setState(() => _companySize = v),
+        ),
+      );
+
+  Widget _websiteField() => _LabeledField(
+        label: 'COMPANY WEBSITE',
+        child: TextFormField(
+          controller: _websiteController,
+          keyboardType: TextInputType.url,
+          decoration: authInputDecoration(
+            hint: 'https://www.acme.com',
+            icon: Icons.language_outlined,
+          ),
+          style: const TextStyle(color: BrandColors.navy),
+          validator: _websiteValidator,
+        ),
+      );
+
+  Widget _submitButton(bool isSaving) => ElevatedButton(
+        onPressed: isSaving ? null : _submit,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: BrandColors.orange,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(vertical: 15),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        child: isSaving
+            ? const SizedBox(
+                height: 18,
+                width: 18,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white),
+              )
+            : const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Next Step',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  SizedBox(width: 8),
+                  Icon(Icons.arrow_forward, size: 18),
+                ],
+              ),
+      );
+
   @override
   Widget build(BuildContext context) {
+    final isCompact = MediaQuery.sizeOf(context).width < 600;
     final isSaving =
         ref.watch(recruiterProfileSetupProvider.select((s) => s.isSaving));
 
@@ -125,13 +221,16 @@ class _RecruiterProfileSetupScreenState
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            padding: EdgeInsets.symmetric(
+              horizontal: isCompact ? 16 : 24,
+              vertical: isCompact ? 20 : 32,
+            ),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 760),
               child: Column(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(32),
+                    padding: EdgeInsets.all(isCompact ? 20 : 32),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
@@ -159,158 +258,84 @@ class _RecruiterProfileSetupScreenState
                             onRemove: _logoBytes != null ? _removeLogo : null,
                           ),
                           const SizedBox(height: 28),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: _LabeledField(
-                                  label: 'COMPANY NAME',
-                                  child: TextFormField(
-                                    controller: _companyNameController,
-                                    decoration: authInputDecoration(
-                                      hint: 'e.g. Acme Corporation',
-                                      icon: Icons.business_outlined,
-                                    ),
-                                    style: const TextStyle(
-                                        color: BrandColors.navy),
-                                    validator: (value) =>
-                                        (value == null || value.trim().isEmpty)
-                                            ? 'Company name is required'
-                                            : null,
-                                  ),
+                          isCompact
+                              ? Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    _companyNameField(),
+                                    const SizedBox(height: 20),
+                                    _industryField(),
+                                  ],
+                                )
+                              : Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(child: _companyNameField()),
+                                    const SizedBox(width: 20),
+                                    Expanded(child: _industryField()),
+                                  ],
                                 ),
-                              ),
-                              const SizedBox(width: 20),
-                              Expanded(
-                                child: _LabeledField(
-                                  label: 'INDUSTRY',
-                                  child: DropdownButtonFormField<String>(
-                                    initialValue: _industry,
-                                    dropdownColor: Colors.white,
-                                    decoration: authInputDecoration(
-                                      hint: 'Select industry',
-                                      icon: Icons.apartment_outlined,
-                                    ),
-                                    style: const TextStyle(
-                                        color: BrandColors.navy,
-                                        fontSize: 13.5),
-                                    items: _industries
-                                        .map((i) => DropdownMenuItem(
-                                            value: i, child: Text(i)))
-                                        .toList(),
-                                    onChanged: (v) =>
-                                        setState(() => _industry = v),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
                           const SizedBox(height: 20),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: _LabeledField(
-                                  label: 'COMPANY SIZE',
-                                  child: DropdownButtonFormField<String>(
-                                    initialValue: _companySize,
-                                    dropdownColor: Colors.white,
-                                    decoration: authInputDecoration(
-                                      hint: 'Select size',
-                                      icon: Icons.groups_outlined,
-                                    ),
-                                    style: const TextStyle(
-                                        color: BrandColors.navy,
-                                        fontSize: 13.5),
-                                    items: _companySizes
-                                        .map((s) => DropdownMenuItem(
-                                            value: s, child: Text(s)))
-                                        .toList(),
-                                    onChanged: (v) =>
-                                        setState(() => _companySize = v),
-                                  ),
+                          isCompact
+                              ? Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    _companySizeField(),
+                                    const SizedBox(height: 20),
+                                    _websiteField(),
+                                  ],
+                                )
+                              : Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(child: _companySizeField()),
+                                    const SizedBox(width: 20),
+                                    Expanded(child: _websiteField()),
+                                  ],
                                 ),
-                              ),
-                              const SizedBox(width: 20),
-                              Expanded(
-                                child: _LabeledField(
-                                  label: 'COMPANY WEBSITE',
-                                  child: TextFormField(
-                                    controller: _websiteController,
-                                    keyboardType: TextInputType.url,
-                                    decoration: authInputDecoration(
-                                      hint: 'https://www.acme.com',
-                                      icon: Icons.language_outlined,
-                                    ),
-                                    style: const TextStyle(
-                                        color: BrandColors.navy),
-                                    validator: _websiteValidator,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
                           const SizedBox(height: 28),
                           const Divider(color: BrandColors.border),
                           const SizedBox(height: 18),
-                          Row(
-                            children: [
-                              TextButton(
-                                onPressed: isSaving
-                                    ? null
-                                    : () => context.go('/dashboard'),
-                                style: TextButton.styleFrom(
-                                  padding: EdgeInsets.zero,
-                                ),
-                                child: const Text(
-                                  'Skip for now',
-                                  style: TextStyle(
-                                    color: BrandColors.muted,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                              const Spacer(),
-                              SizedBox(
-                                width: 170,
-                                child: ElevatedButton(
-                                  onPressed: isSaving ? null : _submit,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: BrandColors.orange,
-                                    foregroundColor: Colors.white,
-                                    elevation: 0,
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 15),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
+                          isCompact
+                              ? Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    TextButton(
+                                      onPressed: isSaving
+                                          ? null
+                                          : () => context.go('/dashboard'),
+                                      child: const Text('Skip for now'),
                                     ),
-                                  ),
-                                  child: isSaving
-                                      ? const SizedBox(
-                                          height: 18,
-                                          width: 18,
-                                          child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color: Colors.white),
-                                        )
-                                      : const Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Text(
-                                              'Next Step',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                            SizedBox(width: 8),
-                                            Icon(Icons.arrow_forward, size: 18),
-                                          ],
+                                    const SizedBox(height: 8),
+                                    _submitButton(isSaving),
+                                  ],
+                                )
+                              : Row(
+                                  children: [
+                                    TextButton(
+                                      onPressed: isSaving
+                                          ? null
+                                          : () => context.go('/dashboard'),
+                                      style: TextButton.styleFrom(
+                                        padding: EdgeInsets.zero,
+                                      ),
+                                      child: const Text(
+                                        'Skip for now',
+                                        style: TextStyle(
+                                          color: BrandColors.muted,
+                                          fontWeight: FontWeight.w500,
                                         ),
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    SizedBox(
+                                        width: 170,
+                                        child: _submitButton(isSaving)),
+                                  ],
                                 ),
-                              ),
-                            ],
-                          ),
                         ],
                       ),
                     ),
