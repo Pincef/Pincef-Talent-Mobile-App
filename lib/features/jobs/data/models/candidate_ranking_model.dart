@@ -83,6 +83,16 @@ class CandidateRankingEntry {
 /// since candidates can apply to the job at any moment and a cached
 /// ranking would go stale immediately.
 class CandidateRankingResult {
+  const CandidateRankingResult.empty()
+      : totalRanked = 0,
+        topTierCount = 0,
+        avgMatchScore = 0,
+        topSkillLabel = '—',
+        topSkillOverlapPercent = 0,
+        marketReasoning = const [],
+        skillGapReasoning = const [],
+        entries = const [];
+
   const CandidateRankingResult({
     required this.totalRanked,
     required this.topTierCount,
