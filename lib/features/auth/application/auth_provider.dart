@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talentbridge/core/network/api_loading_interceptor.dart';
 import '../../../core/network/dio_client.dart';
+import '../../../core/network/session_expired_event.dart';
 import '../../../core/storage/secure_storage_service.dart';
 import '../data/auth_repository.dart';
 import '../data/models/user_model.dart';
@@ -57,9 +60,22 @@ class AuthState {
 }
 
 class AuthNotifier extends StateNotifier<AuthState> {
-  AuthNotifier(this._repository) : super(const AuthState());
+  AuthNotifier(this._repository) : super(const AuthState()) {
+    _sessionExpiredSubscription =
+        SessionExpiredEvent.instance.stream.listen((_) {
+      // Clearing the user causes GoRouter's auth refresh to redirect to login.
+      state = const AuthState();
+    });
+  }
 
   final AuthRepository _repository;
+  late final StreamSubscription<void> _sessionExpiredSubscription;
+
+  @override
+  void dispose() {
+    _sessionExpiredSubscription.cancel();
+    super.dispose();
+  }
 
   Future<void> signUp(
       {required String firstName,
