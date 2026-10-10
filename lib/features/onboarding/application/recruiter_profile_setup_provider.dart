@@ -5,7 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../auth/application/auth_provider.dart' show dioProvider;
 import '../data/recruiter_profile_setup_repository.dart';
 
-final recruiterProfileSetupRepositoryProvider = Provider<RecruiterProfileSetupRepository>((ref) {
+final recruiterProfileSetupRepositoryProvider =
+    Provider<RecruiterProfileSetupRepository>((ref) {
   return RecruiterProfileSetupRepository(ref.watch(dioProvider));
 });
 
@@ -51,8 +52,10 @@ class RecruiterProfileSetupState {
   }
 }
 
-class RecruiterProfileSetupNotifier extends StateNotifier<RecruiterProfileSetupState> {
-  RecruiterProfileSetupNotifier(this._repository) : super(const RecruiterProfileSetupState());
+class RecruiterProfileSetupNotifier
+    extends StateNotifier<RecruiterProfileSetupState> {
+  RecruiterProfileSetupNotifier(this._repository)
+      : super(const RecruiterProfileSetupState());
 
   final RecruiterProfileSetupRepository _repository;
 
@@ -70,6 +73,7 @@ class RecruiterProfileSetupNotifier extends StateNotifier<RecruiterProfileSetupS
     String? industry,
     String? companySize,
     required String companyWebsite,
+    String? logoFilename,
   }) async {
     state = state.copyWith(
       companyName: companyName,
@@ -87,7 +91,7 @@ class RecruiterProfileSetupNotifier extends StateNotifier<RecruiterProfileSetupS
         companySize: companySize,
         companyWebsite: companyWebsite,
         logoBytes: state.logoBytes,
-        logoFilename: 'company-logo.png',
+        logoFilename: logoFilename ?? 'company-logo.png',
       );
       state = state.copyWith(isSaving: false);
       return true;
@@ -98,7 +102,8 @@ class RecruiterProfileSetupNotifier extends StateNotifier<RecruiterProfileSetupS
   }
 }
 
-final recruiterProfileSetupProvider =
-    StateNotifierProvider<RecruiterProfileSetupNotifier, RecruiterProfileSetupState>((ref) {
-  return RecruiterProfileSetupNotifier(ref.watch(recruiterProfileSetupRepositoryProvider));
+final recruiterProfileSetupProvider = StateNotifierProvider<
+    RecruiterProfileSetupNotifier, RecruiterProfileSetupState>((ref) {
+  return RecruiterProfileSetupNotifier(
+      ref.watch(recruiterProfileSetupRepositoryProvider));
 });
