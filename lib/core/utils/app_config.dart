@@ -8,6 +8,7 @@ class ApiConfig {
   //   flutter run --dart-define=API_BASE_URL=http://localhost:4000/api
   static String get baseUrl => const String.fromEnvironment(
         'API_BASE_URL',
-        defaultValue: 'https://pincef-talent-backend.onrender.com/api',
+        // defaultValue: 'https://pincef-talent-backend.onrender.com/api',
+        defaultValue: 'http://localhost:4000/api',
       );
 }
