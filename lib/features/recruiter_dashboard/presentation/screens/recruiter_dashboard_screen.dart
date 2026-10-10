@@ -19,6 +19,7 @@ class RecruiterDashboardScreen extends ConsumerWidget {
     return _RecruiterDashboardBody(
       state: state,
       firstName: user?.firstName ?? 'there',
+      needsCompanySetup: user?.needsCompanySetup ?? false,
       onRetry: () => ref.read(recruiterDashboardProvider.notifier).load(),
     );
   }
@@ -28,6 +29,7 @@ class _RecruiterDashboardBody extends ConsumerWidget {
   const _RecruiterDashboardBody({
     required this.state,
     required this.firstName,
+    required this.needsCompanySetup,
     required this.onRetry,
   });
 
@@ -37,6 +39,7 @@ class _RecruiterDashboardBody extends ConsumerWidget {
   // responsible for stats (activeJobs, newApplicants, etc.), not who
   // the user is.
   final String firstName;
+  final bool needsCompanySetup;
   final VoidCallback onRetry;
 
   @override
@@ -83,6 +86,12 @@ class _RecruiterDashboardBody extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (needsCompanySetup) ...[
+                _CompanySetupBanner(
+                  onComplete: () => context.push('/recruiter-company-setup'),
+                ),
+                const SizedBox(height: 20),
+              ],
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -121,63 +130,65 @@ class _RecruiterDashboardBody extends ConsumerWidget {
                 ],
               ),
               const SizedBox(height: 20),
-              isWide
-                  ? Row(
-                      children: [
-                        Expanded(
-                          child: StatCard(
-                            label: 'Active Jobs',
-                            value: '${summary.activeJobs}',
-                            note: summary.activeJobsNote,
-                            icon: Icons.work_outline,
-                          ),
+              needsCompanySetup
+                  ? const _CompanySetupRequiredCard()
+                  : isWide
+                      ? Row(
+                          children: [
+                            Expanded(
+                              child: StatCard(
+                                label: 'Active Jobs',
+                                value: '${summary.activeJobs}',
+                                note: summary.activeJobsNote,
+                                icon: Icons.work_outline,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: StatCard(
+                                label: 'New Applicants',
+                                value: '${summary.newApplicants}',
+                                note: summary.newApplicantsNote,
+                                icon: Icons.person_add_alt_1_outlined,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: StatCard(
+                                label: 'Hired this Month',
+                                value: '${summary.hiredThisMonth}',
+                                note: summary.hiredThisMonthNote,
+                                icon: Icons.emoji_events_outlined,
+                                dark: true,
+                              ),
+                            ),
+                          ],
+                        )
+                      : Column(
+                          children: [
+                            StatCard(
+                              label: 'Active Jobs',
+                              value: '${summary.activeJobs}',
+                              note: summary.activeJobsNote,
+                              icon: Icons.work_outline,
+                            ),
+                            const SizedBox(height: 12),
+                            StatCard(
+                              label: 'New Applicants',
+                              value: '${summary.newApplicants}',
+                              note: summary.newApplicantsNote,
+                              icon: Icons.person_add_alt_1_outlined,
+                            ),
+                            const SizedBox(height: 12),
+                            StatCard(
+                              label: 'Hired this Month',
+                              value: '${summary.hiredThisMonth}',
+                              note: summary.hiredThisMonthNote,
+                              icon: Icons.emoji_events_outlined,
+                              dark: true,
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: StatCard(
-                            label: 'New Applicants',
-                            value: '${summary.newApplicants}',
-                            note: summary.newApplicantsNote,
-                            icon: Icons.person_add_alt_1_outlined,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: StatCard(
-                            label: 'Hired this Month',
-                            value: '${summary.hiredThisMonth}',
-                            note: summary.hiredThisMonthNote,
-                            icon: Icons.emoji_events_outlined,
-                            dark: true,
-                          ),
-                        ),
-                      ],
-                    )
-                  : Column(
-                      children: [
-                        StatCard(
-                          label: 'Active Jobs',
-                          value: '${summary.activeJobs}',
-                          note: summary.activeJobsNote,
-                          icon: Icons.work_outline,
-                        ),
-                        const SizedBox(height: 12),
-                        StatCard(
-                          label: 'New Applicants',
-                          value: '${summary.newApplicants}',
-                          note: summary.newApplicantsNote,
-                          icon: Icons.person_add_alt_1_outlined,
-                        ),
-                        const SizedBox(height: 12),
-                        StatCard(
-                          label: 'Hired this Month',
-                          value: '${summary.hiredThisMonth}',
-                          note: summary.hiredThisMonthNote,
-                          icon: Icons.emoji_events_outlined,
-                          dark: true,
-                        ),
-                      ],
-                    ),
               const SizedBox(height: 20),
               isWide
                   ? Row(
@@ -221,4 +232,58 @@ class _RecruiterDashboardBody extends ConsumerWidget {
       },
     );
   }
+}
+
+class _CompanySetupBanner extends StatelessWidget {
+  const _CompanySetupBanner({required this.onComplete});
+  final VoidCallback onComplete;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF4E5),
+          border: Border.all(color: const Color(0xFFF2C078)),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(children: [
+          const Icon(Icons.business_outlined, color: Color(0xFF9A5B00)),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              'Complete your company profile to start using recruiter tools.',
+              style: TextStyle(
+                  color: Color(0xFF704300), fontWeight: FontWeight.w600),
+            ),
+          ),
+          TextButton(
+              onPressed: onComplete, child: const Text('Complete profile')),
+        ]),
+      );
+}
+
+class _CompanySetupRequiredCard extends StatelessWidget {
+  const _CompanySetupRequiredCard();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: const Color(0xFFE7E9EF)),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Column(
+          children: [
+            Icon(Icons.lock_outline, size: 30, color: Color(0xFF6B7280)),
+            SizedBox(height: 12),
+            Text('Recruiter tools are locked until you register your company.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontWeight: FontWeight.w600, color: Color(0xFF1B2A4E))),
+          ],
+        ),
+      );
 }
