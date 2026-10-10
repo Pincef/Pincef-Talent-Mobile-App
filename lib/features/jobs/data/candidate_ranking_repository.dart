@@ -22,6 +22,7 @@ class CandidateRankingRepository {
     try {
       final res = await _dio.post(_endpointFor(jobId));
       final body = res.data;
+      if (body == null) return const CandidateRankingResult.empty();
       final data = body is Map<String, dynamic> ? (body['data'] ?? body) : body;
       return CandidateRankingResult.fromApiJson(data as Map<String, dynamic>);
     } on DioException catch (e) {
