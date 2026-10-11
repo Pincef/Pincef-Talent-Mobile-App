@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:talentbridge/core/theme/brand_color.dart';
 import '../theme/app_theme.dart';
@@ -977,12 +979,105 @@ class _MobileShell extends StatelessWidget {
         ],
       ),
       body: body,
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AppColors.orange,
-        onPressed: onUploadCv,
-        icon: Icon(primaryActionIcon),
-        label: Text(primaryActionLabel),
-      ),
+      floatingActionButton: primaryActionLabel == 'Post New Job'
+          ? _MovablePostJobButton(onPressed: onUploadCv)
+          : FloatingActionButton.extended(
+              backgroundColor: AppColors.orange,
+              onPressed: onUploadCv,
+              icon: Icon(primaryActionIcon),
+              label: Text(primaryActionLabel),
+            ),
     );
   }
+}
+
+class _MovablePostJobButton extends StatefulWidget {
+  const _MovablePostJobButton({required this.onPressed});
+
+  final VoidCallback? onPressed;
+
+  @override
+  State<_MovablePostJobButton> createState() => _MovablePostJobButtonState();
+}
+
+class _MovablePostJobButtonState extends State<_MovablePostJobButton> {
+  static const _collapseDelay = Duration(seconds: 4);
+
+  Timer? _collapseTimer;
+  bool _isCollapsed = false;
+  Offset _offset = Offset.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleCollapse();
+  }
+
+  @override
+  void dispose() {
+    _collapseTimer?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleCollapse() {
+    _collapseTimer?.cancel();
+    _collapseTimer = Timer(_collapseDelay, () {
+      if (mounted) setState(() => _isCollapsed = true);
+    });
+  }
+
+  void _handleTap() {
+    if (_isCollapsed) {
+      setState(() => _isCollapsed = false);
+      _scheduleCollapse();
+      return;
+    }
+    widget.onPressed?.call();
+  }
+
+  void _handleDrag(DragUpdateDetails details) {
+    final size = MediaQuery.sizeOf(context);
+    setState(() {
+      _offset = Offset(
+        (_offset.dx + details.delta.dx)
+            .clamp(-(size.width - 72), 0)
+            .toDouble(),
+        (_offset.dy + details.delta.dy)
+            .clamp(-(size.height - 160), 0)
+            .toDouble(),
+      );
+      _isCollapsed = false;
+    });
+    _scheduleCollapse();
+  }
+
+  @override
+  Widget build(BuildContext context) => Transform.translate(
+        offset: _offset,
+        child: GestureDetector(
+          onPanUpdate: _handleDrag,
+          onPanEnd: (_) => _scheduleCollapse(),
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+            child: _isCollapsed
+                ? FloatingActionButton.small(
+                    heroTag: 'mobile-post-job-action',
+                    tooltip: 'Show Post New Job button',
+                    backgroundColor: AppColors.orange,
+                    foregroundColor: Colors.white,
+                    onPressed: _handleTap,
+                    child: const Icon(Icons.add),
+                  )
+                : FloatingActionButton.extended(
+                    heroTag: 'mobile-post-job-action',
+                    backgroundColor: AppColors.orange,
+                    foregroundColor: Colors.white,
+                    onPressed: _handleTap,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Post New Job'),
+                  ),
+          ),
+        ),
+      );
 }
