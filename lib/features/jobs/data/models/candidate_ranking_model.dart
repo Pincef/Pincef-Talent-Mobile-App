@@ -1,13 +1,10 @@
-/// Backs the AI Candidate Ranking screen. Deliberately parsed defensively
-/// (lots of `as? / ??`) — this model is written ahead of the actual
-/// ranking endpoint's contract, which isn't built yet. Tighten the nullable
-/// fields once that contract is confirmed.
+/// Backs the AI Candidate Ranking screen and parses the backend ranking API.
 library;
 
 enum RankingFitLevel { high, medium, low }
 
 RankingFitLevel _fitLevelFromScore(int score) {
-  if (score >= 85) return RankingFitLevel.high;
+  if (score >= 90) return RankingFitLevel.high;
   if (score >= 65) return RankingFitLevel.medium;
   return RankingFitLevel.low;
 }
@@ -77,11 +74,7 @@ class CandidateRankingEntry {
   }
 }
 
-/// The full ranking result for a job — aggregate stats, the "reasoning"
-/// callouts, and the ranked list itself. Nothing here is saved to the
-/// database: it's recomputed fresh every time the screen asks for it,
-/// since candidates can apply to the job at any moment and a cached
-/// ranking would go stale immediately.
+/// Aggregate statistics and ranked candidates returned by the backend.
 class CandidateRankingResult {
   const CandidateRankingResult.empty()
       : totalRanked = 0,
@@ -91,7 +84,8 @@ class CandidateRankingResult {
         topSkillOverlapPercent = 0,
         marketReasoning = const [],
         skillGapReasoning = const [],
-        entries = const [];
+        entries = const [],
+        isLocked = false;
 
   const CandidateRankingResult({
     required this.totalRanked,
@@ -102,6 +96,7 @@ class CandidateRankingResult {
     required this.marketReasoning,
     required this.skillGapReasoning,
     required this.entries,
+    this.isLocked = false,
   });
 
   final int totalRanked;
@@ -112,6 +107,7 @@ class CandidateRankingResult {
   final List<String> marketReasoning;
   final List<String> skillGapReasoning;
   final List<CandidateRankingEntry> entries;
+  final bool isLocked;
 
   factory CandidateRankingResult.fromApiJson(Map<String, dynamic> json) {
     final rawEntries =
@@ -137,6 +133,7 @@ class CandidateRankingResult {
       skillGapReasoning:
           (json['skillGapReasoning'] as List?)?.cast<String>() ?? const [],
       entries: entries,
+      isLocked: json['locked'] == true,
     );
   }
 }
