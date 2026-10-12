@@ -10,6 +10,12 @@ import '../../data/models/application_model.dart';
 import '../../data/models/candidate_profile_model.dart';
 import '../../data/models/candidate_analysis_model.dart';
 import 'package:talentbridge/features/auth/data/models/user_model.dart';
+import 'package:talentbridge/features/auth/application/auth_provider.dart';
+import 'package:talentbridge/features/messages/application/messages_provider.dart'
+    show
+        messagesRepositoryProvider,
+        messageThreadsProvider,
+        selectedMessageThreadProvider;
 
 extension EducationEntryDisplay on EducationEntry {
   String get displayTitle {
@@ -59,6 +65,35 @@ class CandidateProfilePreviewScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final args = (candidateId: candidateId, jobId: jobId);
     final result = ref.watch(candidateProfileViewProvider(args));
+    final canMessage = ref
+                .watch(authProvider)
+                .user
+                ?.capabilities['allowsCandidateMessaging'] ==
+            true ||
+        ref.watch(authProvider).user?.hasModule('hiring.candidate.messaging') ==
+            true;
+
+    Future<void> startMessage() async {
+      final applicationId = applicant?.id;
+      if (applicationId == null || applicationId.isEmpty) {
+        AppToast.info(context,
+            'Open this candidate from a job application to start a conversation.');
+        return;
+      }
+      try {
+        final conversationId = await ref
+            .read(messagesRepositoryProvider)
+            .startConversationForApplication(applicationId);
+        if (!context.mounted) return;
+        ref.invalidate(messageThreadsProvider);
+        ref.read(selectedMessageThreadProvider.notifier).state = conversationId;
+        context.go('/messages');
+      } catch (e) {
+        if (context.mounted) {
+          AppToast.error(context, "Couldn't start a conversation: $e");
+        }
+      }
+    }
 
     return result.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -81,7 +116,15 @@ class CandidateProfilePreviewScreen extends ConsumerWidget {
                   label: const Text('Back to candidates'),
                 ),
                 const SizedBox(height: 6),
-                _ProfileHeader(data: data, applicant: applicant),
+                _ProfileHeader(
+                  data: data,
+                  applicant: applicant,
+                  canMessage: canMessage,
+                  onMessage: canMessage
+                      ? startMessage
+                      : () => AppToast.info(context,
+                          'Candidate messaging is available on Pro and Business plans.'),
+                ),
                 const SizedBox(height: 18),
                 if (wide)
                   Row(
@@ -143,9 +186,15 @@ class _ErrorState extends StatelessWidget {
 }
 
 class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader({required this.data, this.applicant});
+  const _ProfileHeader(
+      {required this.data,
+      this.applicant,
+      required this.canMessage,
+      required this.onMessage});
   final CandidateProfileViewData data;
   final JobApplicantSummary? applicant;
+  final bool canMessage;
+  final VoidCallback onMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -204,16 +253,15 @@ class _ProfileHeader extends StatelessWidget {
           const SizedBox(width: 4),
           DownloadCvButton(url: cvUrl, fileName: '${user.fullName}_CV'),
           ElevatedButton.icon(
-            // No messaging feature/endpoint exists yet — left as a stub
-            // rather than wiring it to something that doesn't exist.
-            onPressed: () =>
-                AppToast.info(context, 'Messaging isn\'t available yet.'),
+            onPressed: onMessage,
             style: ElevatedButton.styleFrom(
               backgroundColor: BrandColors.orange,
               foregroundColor: Colors.white,
               elevation: 0,
             ),
-            icon: const Icon(Icons.chat_bubble_outline, size: 15),
+            icon: Icon(
+                canMessage ? Icons.chat_bubble_outline : Icons.lock_outline,
+                size: 15),
             label: const Text('Message'),
           ),
         ],
