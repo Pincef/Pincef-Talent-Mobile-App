@@ -8,6 +8,7 @@ import 'package:talentbridge/features/messages/application/messages_provider.dar
         messagesRepositoryProvider,
         selectedMessageThreadProvider,
         messageThreadsProvider;
+import 'package:talentbridge/features/auth/application/auth_provider.dart';
 import '../../application/job_management_provider.dart';
 import '../../application/candidate_ranking_provider.dart';
 import '../../data/models/candidate_ranking_model.dart';
@@ -27,17 +28,8 @@ class AiCandidateRankingScreen extends ConsumerWidget {
 
   final String jobId;
 
-  // PLAN GATE: flip this (or read it from the company's PlanType) once
-  // billing exists. Nothing else in this screen needs to change — every
-  // call site below already guards on this single flag.
-  static const bool _featureUnlocked = true;
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (!_featureUnlocked) {
-      return const _UpgradeRequired();
-    }
-
     final jobAsync = ref.watch(jobDetailProvider(jobId));
     final jobTitle =
         jobAsync.maybeWhen(data: (job) => job.title, orElse: () => 'this role');
@@ -71,15 +63,17 @@ class AiCandidateRankingScreen extends ConsumerWidget {
                   onRetry: () =>
                       ref.invalidate(candidateRankingProvider(jobId)),
                 ),
-                data: (result) => result.entries.isEmpty
-                    ? _NoRankingsFound(
-                        onRetry: () =>
-                            ref.invalidate(candidateRankingProvider(jobId)),
-                        onViewCandidates: () =>
-                            context.go('/jobs/$jobId/candidates'),
-                      )
-                    : _RankingBody(
-                        jobId: jobId, isWide: isWide, result: result),
+                data: (result) => result.isLocked
+                    ? const _UpgradeRequired()
+                    : result.entries.isEmpty
+                        ? _NoRankingsFound(
+                            onRetry: () =>
+                                ref.invalidate(candidateRankingProvider(jobId)),
+                            onViewCandidates: () =>
+                                context.go('/jobs/$jobId/candidates'),
+                          )
+                        : _RankingBody(
+                            jobId: jobId, isWide: isWide, result: result),
               ),
             ],
           ),
@@ -145,7 +139,7 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final subtitle = candidateCount == null
-        ? 'Processing candidates against role requirements using TalentBridge AI...'
+        ? 'AI rankings are generated after this role’s application deadline.'
         : 'Processed $candidateCount candidates against role requirements using TalentBridge AI';
 
     return Wrap(
@@ -383,7 +377,18 @@ class _RankingListState extends ConsumerState<_RankingList> {
   static const _pageSize = 10;
   int _page = 0;
 
+  bool get _canMessage =>
+      ref.read(authProvider).user?.capabilities['allowsCandidateMessaging'] ==
+          true ||
+      ref.read(authProvider).user?.hasModule('hiring.candidate.messaging') ==
+          true;
+
   Future<void> _message(CandidateRankingEntry entry) async {
+    if (!_canMessage) {
+      AppToast.info(context,
+          'Candidate messaging is available on Pro and Business plans.');
+      return;
+    }
     try {
       final conversationId = await ref
           .read(messagesRepositoryProvider)
@@ -571,6 +576,7 @@ class _RankingListState extends ConsumerState<_RankingList> {
                 onReview: () => context.push(
                     '/jobs/${widget.jobId}/candidates/${entry.candidateId}'),
                 onMessage: () => _message(entry),
+                canMessage: _canMessage,
               ),
             ),
           ],
@@ -639,6 +645,7 @@ class _RankingListState extends ConsumerState<_RankingList> {
               onReview: () => context.push(
                   '/jobs/${widget.jobId}/candidates/${entry.candidateId}'),
               onMessage: () => _message(entry),
+              canMessage: _canMessage,
               expand: true,
             ),
           ],
@@ -654,9 +661,13 @@ class _RankingListState extends ConsumerState<_RankingList> {
 
 class _RowActions extends StatelessWidget {
   const _RowActions(
-      {required this.onReview, required this.onMessage, this.expand = false});
+      {required this.onReview,
+      required this.onMessage,
+      required this.canMessage,
+      this.expand = false});
   final VoidCallback onReview;
   final VoidCallback onMessage;
+  final bool canMessage;
   final bool expand;
 
   @override
@@ -686,7 +697,8 @@ class _RowActions extends StatelessWidget {
           side: const BorderSide(color: BrandColors.border),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         ),
-        child: const Icon(Icons.chat_bubble_outline, size: 14),
+        child: Icon(canMessage ? Icons.chat_bubble_outline : Icons.lock_outline,
+            size: 14),
       ),
     );
 
@@ -987,7 +999,7 @@ class _RankingError extends StatelessWidget {
             const Text(
                 'We couldn’t load AI rankings. Please try again in a moment.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 12, color: BrandColors.muted)),
+                style: TextStyle(fontSize: 12, color: BrandColors.muted)),
             const SizedBox(height: 14),
             ElevatedButton(
               onPressed: onRetry,
@@ -1050,7 +1062,7 @@ class _NoRankingsFound extends StatelessWidget {
                     backgroundColor: BrandColors.navy,
                     foregroundColor: Colors.white,
                   ),
-                  child: const Text('Try ranking again'),
+                  child: const Text('Refresh rankings'),
                 ),
               ],
             ),
