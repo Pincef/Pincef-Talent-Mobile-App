@@ -20,11 +20,11 @@ import '../widgets/send_invite_widget.dart';
 import 'package:talentbridge/features/jobs/data/candidate_profile_repository.dart';
 import 'package:talentbridge/core/network/dio_provider.dart'; // adjust to wherever dioProvider actually lives
 import 'package:talentbridge/core/widgets/app_toast.dart';
+import 'package:talentbridge/features/auth/application/auth_provider.dart'
+    hide dioProvider;
 // "Message" button — reuses the same socket-backed messaging repository/
 // providers as the Messages screens, so a thread started here shows up
 // there (and in the candidate's inbox) with no separate code path.
-import 'package:talentbridge/features/messages/data/messages_repository.dart'
-    show MessagesRepository;
 import 'package:talentbridge/features/messages/application/messages_provider.dart'
     show
         messagesRepositoryProvider,
@@ -192,6 +192,14 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
       orElse: () => 'this role',
     );
     final applicantsState = ref.watch(jobApplicantsProvider(widget.jobId));
+    final user = ref.watch(authProvider).user;
+    final canMessageCandidates =
+        user?.capabilities['allowsCandidateMessaging'] == true ||
+            user?.hasModule('hiring.candidate.messaging') == true;
+    final canScheduleInterviews = user?.hasModule('hiring.stage.interview') ==
+            true &&
+        (((user?.limits['interviewInvitesPerJob'] as num?)?.toInt() ?? 0) > 0 ||
+            user?.limits['interviewInvitesPerJob'] == -1);
     final notifier = ref.read(jobApplicantsProvider(widget.jobId).notifier);
 
     final query = _search.trim().toLowerCase();
@@ -236,7 +244,8 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
                 const SizedBox(height: 14),
                 _aiToolsBar(applicantsState),
                 const SizedBox(height: 18),
-                _body(applicantsState, visible, columns, notifier),
+                _body(applicantsState, visible, columns, notifier,
+                    canMessageCandidates, canScheduleInterviews),
                 const SizedBox(height: 24),
               ],
             ),
@@ -290,6 +299,8 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
     List<JobApplicantSummary> visible,
     int columns,
     JobApplicantsNotifier notifier,
+    bool canMessageCandidates,
+    bool canScheduleInterviews,
   ) {
     if (state.isLoading && state.applications.isEmpty) {
       return const Padding(
@@ -339,6 +350,11 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
                 extra: visible[index],
               ),
               onSendInvite: () async {
+                if (!canScheduleInterviews) {
+                  AppToast.info(context,
+                      'Interview scheduling is available on Pro and Business plans.');
+                  return;
+                }
                 final sent = await showSendInterviewInviteDialog(
                   context,
                   applicant: visible[index],
@@ -355,6 +371,8 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
                 }
               },
               onMessage: () => _startMessage(visible[index]),
+              canMessage: canMessageCandidates,
+              canInvite: canScheduleInterviews,
             );
           },
         ),
@@ -992,6 +1010,8 @@ class _CandidateCard extends StatelessWidget {
     required this.onViewProfile,
     required this.onSendInvite,
     required this.onMessage,
+    required this.canMessage,
+    required this.canInvite,
   });
   final JobApplicantSummary applicant;
   final Color avatarColor;
@@ -1000,6 +1020,8 @@ class _CandidateCard extends StatelessWidget {
   final VoidCallback onViewProfile;
   final VoidCallback onSendInvite;
   final VoidCallback onMessage;
+  final bool canMessage;
+  final bool canInvite;
 
   Color get _stageColor => switch (applicant.status) {
         ApplicationBackendStatus.submitted => const Color(0xFF2F6FED),
@@ -1135,7 +1157,8 @@ class _CandidateCard extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8)),
               ),
-              child: const Icon(Icons.mail_outline, size: 16),
+              child: Icon(canInvite ? Icons.mail_outline : Icons.lock_outline,
+                  size: 16),
             ),
           ),
           const SizedBox(width: 8),
@@ -1146,7 +1169,10 @@ class _CandidateCard extends StatelessWidget {
               // Opens/reopens a direct conversation with this candidate —
               // distinct from onSendInvite's compose dialog above, which
               // only ever sends the one interview-invite email.
-              onPressed: onMessage,
+              onPressed: canMessage
+                  ? onMessage
+                  : () => AppToast.info(context,
+                      'Candidate messaging is available on Pro and Business plans.'),
               style: OutlinedButton.styleFrom(
                 padding: EdgeInsets.zero,
                 foregroundColor: BrandColors.navy,
@@ -1154,7 +1180,9 @@ class _CandidateCard extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8)),
               ),
-              child: const Icon(Icons.chat_bubble_outline, size: 15),
+              child: Icon(
+                  canMessage ? Icons.chat_bubble_outline : Icons.lock_outline,
+                  size: 15),
             ),
           ),
         ]),
