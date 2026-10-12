@@ -392,6 +392,7 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
   String? _educationLevel;
   late bool _requiresManagement;
   late bool _autoRejectNonMatches;
+  late double _autoRejectBelowScore;
   late bool _aiRanking;
   late bool _aiSummary;
   late List<String> _skills;
@@ -445,6 +446,7 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
     _educationLevel = job.educationLevel;
     _requiresManagement = job.requiresManagementExperience;
     _autoRejectNonMatches = job.autoRejectNonMatches;
+    _autoRejectBelowScore = job.autoRejectBelowScore.toDouble();
     _aiRanking = job.aiRanking;
     _aiSummary = job.aiSummary;
     _applicationDeadline = job.applicationDeadline;
@@ -615,6 +617,14 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
     return user?.hasModule(ModuleCodes.jobsPlanAutomation) ?? false;
   }
 
+  int _planQuota(String module, String limitKey, int requested) {
+    final user = ref.read(authProvider).user;
+    if (user?.hasModule(module) != true) return 0;
+    final ceiling = (user?.limits[limitKey] as num?)?.toInt() ?? 0;
+    if (ceiling == 0) return 0;
+    return ceiling == -1 ? requested : requested.clamp(0, ceiling).toInt();
+  }
+
   bool _pipelineTierAvailable(String tier) {
     final user = ref.read(authProvider).user;
     if (tier == 'Standard') return true;
@@ -678,15 +688,29 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
       educationLevel: _educationLevel,
       requiresManagementExperience: _requiresManagement,
       autoRejectNonMatches: _autoRejectNonMatches,
+      autoRejectBelowScore: _autoRejectBelowScore.round(),
       applicationDeadline: _applicationDeadline,
       aiRanking: _aiRanking,
       aiSummary: _aiSummary,
       pipelineTier: _pipelineTier,
       rankingPlanTier: _rankingPlanTier,
-      rankingLimit: _rankingLimit.round(),
+      rankingLimit: _planQuota(
+        ModuleCodes.aiCandidateMatch,
+        'rankingsPerJob',
+        _rankingLimit.round(),
+      ),
       assessmentEmailCount:
-          int.tryParse(_assessmentEmailCount.text.trim()) ?? 15,
-      interviewEmailCount: int.tryParse(_interviewEmailCount.text.trim()) ?? 10,
+          _planQuota(
+            ModuleCodes.hiringStageAssessment,
+            'assessmentEmailsPerJob',
+            int.tryParse(_assessmentEmailCount.text.trim()) ?? 15,
+          ),
+      interviewEmailCount:
+          _planQuota(
+            ModuleCodes.hiringStageInterview,
+            'interviewInvitesPerJob',
+            int.tryParse(_interviewEmailCount.text.trim()) ?? 10,
+          ),
     );
 
     try {
@@ -954,6 +978,17 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
                         onChanged: (v) =>
                             setState(() => _requiresManagement = v),
                       ),
+                      if (_autoRejectNonMatches) ...[
+                        Text('Reject applicants scoring below ${_autoRejectBelowScore.round()}%'),
+                        Slider(
+                          value: _autoRejectBelowScore,
+                          min: 0,
+                          max: 100,
+                          divisions: 20,
+                          label: '${_autoRejectBelowScore.round()}%',
+                          onChanged: (value) => setState(() => _autoRejectBelowScore = value),
+                        ),
+                      ],
                       const SizedBox(height: 6),
                       const _FieldLabel('Required Skills'),
                       Wrap(
@@ -1061,8 +1096,18 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Auto-reject non-matches'),
                         value: _autoRejectNonMatches,
-                        onChanged: (v) =>
-                            setState(() => _autoRejectNonMatches = v),
+                        onChanged: (v) {
+                          if (v &&
+                              !(ref.read(authProvider).user?.hasModule(
+                                      ModuleCodes.aiCandidateMatch) ??
+                                  false)) {
+                            return;
+                          }
+                          setState(() {
+                            _autoRejectNonMatches = v;
+                            if (v) _aiRanking = true;
+                          });
+                        },
                       ),
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
@@ -1072,8 +1117,13 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
                           if (v &&
                               !(ref.read(authProvider).user?.hasModule(
                                       ModuleCodes.aiCandidateMatch) ??
-                                  false)) return;
-                          setState(() => _aiRanking = v);
+                                  false)) {
+                            return;
+                          }
+                          setState(() {
+                            _aiRanking = v;
+                            if (!v) _autoRejectNonMatches = false;
+                          });
                         },
                       ),
                       SwitchListTile(
@@ -1084,7 +1134,9 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
                           if (v &&
                               !(ref.read(authProvider).user?.hasModule(
                                       ModuleCodes.aiCandidateSummary) ??
-                                  false)) return;
+                                  false)) {
+                            return;
+                          }
                           setState(() => _aiSummary = v);
                         },
                       ),
