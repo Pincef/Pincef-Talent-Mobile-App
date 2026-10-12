@@ -978,9 +978,11 @@ class _MobileShell extends StatelessWidget {
           const SizedBox(width: 8),
         ],
       ),
-      body: body,
+      body: primaryActionLabel == 'Post New Job'
+          ? _MobileActionLayer(body: body, onPressed: onUploadCv)
+          : body,
       floatingActionButton: primaryActionLabel == 'Post New Job'
-          ? _MovablePostJobButton(onPressed: onUploadCv)
+          ? null
           : FloatingActionButton.extended(
               backgroundColor: AppColors.orange,
               onPressed: onUploadCv,
@@ -991,21 +993,23 @@ class _MobileShell extends StatelessWidget {
   }
 }
 
-class _MovablePostJobButton extends StatefulWidget {
-  const _MovablePostJobButton({required this.onPressed});
+class _MobileActionLayer extends StatefulWidget {
+  const _MobileActionLayer({required this.body, required this.onPressed});
 
+  final Widget body;
   final VoidCallback? onPressed;
 
   @override
-  State<_MovablePostJobButton> createState() => _MovablePostJobButtonState();
+  State<_MobileActionLayer> createState() => _MobileActionLayerState();
 }
 
-class _MovablePostJobButtonState extends State<_MovablePostJobButton> {
+class _MobileActionLayerState extends State<_MobileActionLayer> {
   static const _collapseDelay = Duration(seconds: 4);
+  static const _buttonHeight = 56.0;
 
   Timer? _collapseTimer;
   bool _isCollapsed = false;
-  Offset _offset = Offset.zero;
+  Offset? _position;
 
   @override
   void initState() {
@@ -1035,49 +1039,110 @@ class _MovablePostJobButtonState extends State<_MovablePostJobButton> {
     widget.onPressed?.call();
   }
 
-  void _handleDrag(DragUpdateDetails details) {
-    final size = MediaQuery.sizeOf(context);
+  void _handleDrag(DragUpdateDetails details, BoxConstraints constraints) {
+    final buttonWidth = _isCollapsed ? _buttonHeight : 168.0;
+    final maxLeft = (constraints.maxWidth - buttonWidth)
+        .clamp(0.0, double.infinity)
+        .toDouble();
+    final maxTop = (constraints.maxHeight - _buttonHeight)
+        .clamp(0.0, double.infinity)
+        .toDouble();
+    final current = _position ?? Offset(maxLeft - 16, maxTop - 16);
     setState(() {
-      _offset = Offset(
-        (_offset.dx + details.delta.dx)
-            .clamp(-(size.width - 72), 0)
-            .toDouble(),
-        (_offset.dy + details.delta.dy)
-            .clamp(-(size.height - 160), 0)
-            .toDouble(),
+      _position = Offset(
+        (current.dx + details.delta.dx).clamp(0.0, maxLeft).toDouble(),
+        (current.dy + details.delta.dy).clamp(0.0, maxTop).toDouble(),
       );
-      _isCollapsed = false;
     });
+  }
+
+  void _resetPosition() {
+    setState(() => _position = null);
     _scheduleCollapse();
   }
 
   @override
-  Widget build(BuildContext context) => Transform.translate(
-        offset: _offset,
-        child: GestureDetector(
-          onPanUpdate: _handleDrag,
-          onPanEnd: (_) => _scheduleCollapse(),
-          child: AnimatedSize(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOut,
-            child: _isCollapsed
-                ? FloatingActionButton.small(
-                    heroTag: 'mobile-post-job-action',
-                    tooltip: 'Show Post New Job button',
-                    backgroundColor: AppColors.orange,
-                    foregroundColor: Colors.white,
-                    onPressed: _handleTap,
-                    child: const Icon(Icons.add),
-                  )
-                : FloatingActionButton.extended(
-                    heroTag: 'mobile-post-job-action',
-                    backgroundColor: AppColors.orange,
-                    foregroundColor: Colors.white,
-                    onPressed: _handleTap,
-                    icon: const Icon(Icons.add),
-                    label: const Text('Post New Job'),
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) {
+          final buttonWidth = _isCollapsed ? _buttonHeight : 168.0;
+          final maxLeft = (constraints.maxWidth - buttonWidth)
+              .clamp(0.0, double.infinity)
+              .toDouble();
+          final maxTop = (constraints.maxHeight - _buttonHeight)
+              .clamp(0.0, double.infinity)
+              .toDouble();
+          final defaultPosition = Offset(
+            (maxLeft - 16).clamp(0.0, maxLeft).toDouble(),
+            (maxTop - 16).clamp(0.0, maxTop).toDouble(),
+          );
+          final position = Offset(
+            (_position?.dx ?? defaultPosition.dx)
+                .clamp(0.0, maxLeft)
+                .toDouble(),
+            (_position?.dy ?? defaultPosition.dy).clamp(0.0, maxTop).toDouble(),
+          );
+
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              widget.body,
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                left: position.dx,
+                top: position.dy,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _handleTap,
+                  onLongPress: _resetPosition,
+                  onPanStart: (_) => _collapseTimer?.cancel(),
+                  onPanUpdate: (details) => _handleDrag(details, constraints),
+                  onPanEnd: (_) => _scheduleCollapse(),
+                  onPanCancel: _scheduleCollapse,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOut,
+                    width: buttonWidth,
+                    height: _buttonHeight,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: AppColors.orange,
+                      borderRadius: BorderRadius.circular(28),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x33000000),
+                          blurRadius: 10,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.add, color: Colors.white),
+                        if (!_isCollapsed) ...[
+                          const SizedBox(width: 8),
+                          const Flexible(
+                            child: Text(
+                              'Post New Job',
+                              maxLines: 1,
+                              overflow: TextOverflow.fade,
+                              softWrap: false,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
-          ),
-        ),
+                ),
+              ),
+            ],
+          );
+        },
       );
 }
