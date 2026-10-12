@@ -78,6 +78,7 @@ class JobDraft {
     this.responsibilities = const [],
     this.benefits = const [],
     this.autoRejectNonMatches = false,
+    this.autoRejectBelowScore = 65,
   });
 
   final String? id;
@@ -113,6 +114,7 @@ class JobDraft {
   final List<String> responsibilities;
   final List<String> benefits;
   final bool autoRejectNonMatches;
+  final int autoRejectBelowScore;
 
   /// Fields job.service.ts requires before it will allow publishing.
   /// Mirrors REQUIRED_FOR_PUBLISH on the backend — keep in sync.
@@ -126,9 +128,10 @@ class JobDraft {
     if (minYearsOfExperience == null) missing.add('minYearsOfExperience');
     if (educationLevel == null) missing.add('educationLevel');
     if (requiredSkills.isEmpty) missing.add('requiredSkills');
-    if ((aiRanking || aiSummary) && applicationDeadline == null) {
+    if ((aiRanking || aiSummary || autoRejectNonMatches) && applicationDeadline == null) {
       missing.add('applicationDeadline');
     }
+    if (autoRejectNonMatches && !aiRanking) missing.add('aiRanking');
     return missing;
   }
 
@@ -156,6 +159,7 @@ class JobDraft {
     List<String>? responsibilities,
     List<String>? benefits,
     bool? autoRejectNonMatches,
+    int? autoRejectBelowScore,
     String? pipelineTier,
     String? rankingPlanTier,
     int? rankingLimit,
@@ -185,6 +189,7 @@ class JobDraft {
         responsibilities: responsibilities ?? this.responsibilities,
         benefits: benefits ?? this.benefits,
         autoRejectNonMatches: autoRejectNonMatches ?? this.autoRejectNonMatches,
+        autoRejectBelowScore: autoRejectBelowScore ?? this.autoRejectBelowScore,
         pipelineTier: pipelineTier ?? this.pipelineTier,
         rankingPlanTier: rankingPlanTier ?? this.rankingPlanTier,
         rankingLimit: rankingLimit ?? this.rankingLimit,
@@ -212,11 +217,13 @@ class JobDraft {
         'responsibilities': responsibilities,
         'benefits': benefits,
         'autoRejectNonMatches': autoRejectNonMatches,
-        'pipelineTier': pipelineTier,
-        'rankingPlanTier': rankingPlanTier,
-        'rankingLimit': rankingLimit,
-        'assessmentEmailCount': assessmentEmailCount,
-        'interviewEmailCount': interviewEmailCount,
+        'autoRejectBelowScore': autoRejectBelowScore,
+        if (rankingLimit > 0 || assessmentEmailCount > 0 || interviewEmailCount > 0)
+          'automation': {
+          if (rankingLimit > 0) 'rankingLimit': rankingLimit,
+          if (assessmentEmailCount > 0) 'assessmentEmails': assessmentEmailCount,
+          if (interviewEmailCount > 0) 'interviewInvites': interviewEmailCount,
+          },
         if (applicationDeadline != null || id != null)
           'applicationDeadline': applicationDeadline?.toUtc().toIso8601String(),
         if (aiRanking || aiSummary || id != null)
@@ -229,7 +236,7 @@ class JobPosting {
     required this.id,
     required this.title,
     required this.location,
-    required this.department,
+    required this.industry,
     required this.workMode,
     required this.status,
     this.applicantCount, // null -> shown as "–"
@@ -245,7 +252,7 @@ class JobPosting {
 
   final String title;
   final String location;
-  final String department;
+  final String industry;
   final String workMode;
   final JobPipelineStatus status;
   final int? applicantCount;
@@ -262,10 +269,8 @@ class JobPosting {
   /// listMyCompanyJobs, wrapping job.service.ts's JobWithStats) into the
   /// shape this screen renders.
   ///
-  /// `department` and `workMode` still have no backing field on IJob
-  /// (workMode is the workplaceType gap noted on JobDraft; department
-  /// doesn't exist on the schema at all) — both stay placeholdered rather
-  /// than guessed. `applicantCount`/`avgMatchQuality` now come from
+  /// `industry` and `workMode` map persisted job fields.
+  /// `applicantCount`/`avgMatchQuality` come from
   /// job.service.ts's per-job Application aggregation, so they're read
   /// straight off the response instead of being hardcoded null.
   factory JobPosting.fromApiJson(Map<String, dynamic> json) {
@@ -275,8 +280,13 @@ class JobPosting {
       id: (json['_id'] ?? json['id'] ?? '') as String,
       title: json['title'] as String? ?? 'Untitled role',
       location: json['location'] as String? ?? 'Not specified',
-      department: '—', // TODO: no field on IJob yet
-      workMode: '—', // TODO: workplaceType isn't persisted yet — see JobDraft
+      industry: json['industry'] as String? ?? '—',
+      workMode: switch (json['workplaceType']) {
+        'remote' => 'Remote',
+        'hybrid' => 'Hybrid',
+        'on_site' => 'On-site',
+        _ => '—',
+      },
       status: pipelineStatusFrom(backendStatus),
       applicantCount: (json['applicantCount'] as num?)?.toInt(),
       matchQuality: (json['avgMatchQuality'] as num?)?.toInt(),
@@ -652,6 +662,7 @@ class JobDetail {
     this.benefits = const [],
     this.requiresManagementExperience = false,
     this.autoRejectNonMatches = false,
+    this.autoRejectBelowScore = 65,
     this.applicationDeadline,
     this.aiRanking = false,
     this.aiSummary = false,
@@ -682,6 +693,7 @@ class JobDetail {
   final List<String> benefits;
   final bool requiresManagementExperience;
   final bool autoRejectNonMatches;
+  final int autoRejectBelowScore;
   final DateTime? applicationDeadline;
   final bool aiRanking;
   final bool aiSummary;
@@ -739,6 +751,7 @@ class JobDetail {
   /// .populate('companyId')) into the shape this screen renders.
   factory JobDetail.fromApiJson(Map<String, dynamic> json) {
     final company = json['companyId'];
+    final automation = json['automation'] as Map?;
     final companyName = company is Map<String, dynamic>
         ? (company['name'] as String? ?? 'Unknown company')
         : 'Unknown company';
@@ -774,6 +787,7 @@ class JobDetail {
       requiresManagementExperience:
           json['requiresManagementExperience'] as bool? ?? false,
       autoRejectNonMatches: json['autoRejectNonMatches'] as bool? ?? false,
+      autoRejectBelowScore: (json['autoRejectBelowScore'] as num?)?.toInt() ?? 65,
       applicationDeadline: DateTime.tryParse(
         (json['applicationDeadline'] ?? '').toString(),
       ),
@@ -781,10 +795,11 @@ class JobDetail {
       aiSummary: (json['aiConfig'] as Map?)?['summary'] as bool? ?? false,
       pipelineTier: json['pipelineTier'] as String? ?? 'Standard',
       rankingPlanTier: json['rankingPlanTier'] as String? ?? 'Premium',
-      rankingLimit: (json['rankingLimit'] as num?)?.toInt() ?? 20,
+      rankingLimit: (automation?['rankingLimit'] as num?)?.toInt() ?? 20,
       assessmentEmailCount:
-          (json['assessmentEmailCount'] as num?)?.toInt() ?? 15,
-      interviewEmailCount: (json['interviewEmailCount'] as num?)?.toInt() ?? 10,
+          (automation?['assessmentEmails'] as num?)?.toInt() ?? 15,
+      interviewEmailCount:
+          (automation?['interviewInvites'] as num?)?.toInt() ?? 10,
     );
   }
 }
