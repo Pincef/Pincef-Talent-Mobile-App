@@ -7,11 +7,9 @@ final candidateRankingRepositoryProvider = Provider<CandidateRankingRepository>(
   (ref) => CandidateRankingRepository(ref.watch(dioProvider)),
 );
 
-/// autoDispose: this is an expensive, non-cached AI computation — don't
-/// keep it warm in memory once the recruiter navigates away, and re-run it
-/// fresh the next time they open this screen (matching the "never
-/// persisted, always current" behavior on the backend side).
+/// Discard the read when the recruiter leaves the screen. The backend keeps
+/// completed deadline-run results and serves the current persisted ranking.
 final candidateRankingProvider = FutureProvider.autoDispose
     .family<CandidateRankingResult, String>((ref, jobId) {
-  return ref.watch(candidateRankingRepositoryProvider).rankAllCandidates(jobId);
+  return ref.watch(candidateRankingRepositoryProvider).loadJobRankings(jobId);
 });
