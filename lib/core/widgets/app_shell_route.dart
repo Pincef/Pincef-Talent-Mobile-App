@@ -56,14 +56,23 @@ void _invalidateDataFor(WidgetRef ref, String route) {
 /// Recruiter vs candidate is decided here, once, from authProvider — the
 /// same _isRecruiter-style check app_router.dart already uses for the
 /// /dashboard route.
-class AppShellRoute extends ConsumerWidget {
+class AppShellRoute extends ConsumerStatefulWidget {
   const AppShellRoute({super.key, required this.state, required this.child});
 
   final GoRouterState state;
   final Widget child;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AppShellRoute> createState() => _AppShellRouteState();
+}
+
+class _AppShellRouteState extends ConsumerState<AppShellRoute> {
+  String? _manualSelectionLocation;
+  int? _manualTopIndex;
+  int? _manualSubIndex;
+
+  @override
+  Widget build(BuildContext context) {
     final user = ref.watch(authProvider).user;
     final isRecruiter = user?.role == UserRole.recruiter;
     final isAdmin = user?.role == UserRole.admin;
@@ -73,7 +82,13 @@ class AppShellRoute extends ConsumerWidget {
         : isRecruiter
             ? kRecruiterNavItems
             : kCandidateNavItems;
-    final (topIndex, subIndex) = _resolveIndex(navItems, state.matchedLocation);
+    final location = widget.state.matchedLocation;
+    final manualSelection = _manualSelectionLocation == location &&
+            _manualTopIndex != null
+        ? (_manualTopIndex!, _manualSubIndex)
+        : null;
+    final (topIndex, subIndex) =
+        manualSelection ?? _resolveIndex(navItems, location);
 
     void navigate(String? route) {
       if (route == null) return; // no screen wired up for this item yet
@@ -85,22 +100,33 @@ class AppShellRoute extends ConsumerWidget {
       currentIndex: topIndex,
       currentSubIndex: subIndex,
       navItems: navItems,
-      body: child,
-      onNavTap: (index) => navigate(navItems[index].route),
+      body: widget.child,
+      onNavTap: (index) {
+        _clearManualSelection();
+        navigate(navItems[index].route);
+      },
       onSubItemTap: (topLevelIndex, subIdx) {
         final tapped = navItems[topLevelIndex].children[subIdx];
         // No dedicated route yet for this child (e.g. "Competense base
         // assessment") -> fall back to the parent's route, same as the
         // manual /jobs fallback job_management_screen and post_job_screen
         // had before this was centralized.
-        navigate(tapped.route ?? navItems[topLevelIndex].route);
+        final destination = tapped.route ?? navItems[topLevelIndex].route;
+        if (destination != null) {
+          setState(() {
+            _manualSelectionLocation = destination;
+            _manualTopIndex = topLevelIndex;
+            _manualSubIndex = subIdx;
+          });
+        }
+        navigate(destination);
       },
       onNotifications: () => context.push('/notification'),
       onSupport: isAdmin ? null : () => context.go('/support'),
       // Only meaningful on the candidate Browse Jobs screen right now —
       // there's nothing else this shared top-bar search should drive
       // (recruiter screens have no equivalent provider wired to it yet).
-      onSearch: (isCandidate && state.matchedLocation == '/jobs')
+      onSearch: (isCandidate && location == '/jobs')
           ? (query) =>
               ref.read(browseJobsProvider.notifier).setSearchText(query)
           : null,
@@ -156,6 +182,15 @@ class AppShellRoute extends ConsumerWidget {
               ? () => context.push('/jobs/new')
               : () => showCandidateCvUploadModal(context, ref),
     );
+  }
+
+  void _clearManualSelection() {
+    if (_manualTopIndex == null) return;
+    setState(() {
+      _manualSelectionLocation = null;
+      _manualTopIndex = null;
+      _manualSubIndex = null;
+    });
   }
 
   /// Matches the current location against navItems (and their children) to
