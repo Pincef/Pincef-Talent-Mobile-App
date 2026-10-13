@@ -33,6 +33,14 @@ String? _skillName(Object? s) => s is String
         ? (s['name'] ?? s['skill'] ?? s['label'])?.toString()
         : null;
 
+/// Candidate endpoints may return either a URL string or the full upload
+/// object ({url, publicId}), depending on which projection populated it.
+String? _imageUrl(Object? value) {
+  if (value is String) return value;
+  if (value is Map) return value['url']?.toString();
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Interview (InterviewView)
 // ---------------------------------------------------------------------------
@@ -53,7 +61,7 @@ class InterviewPerson {
         id: j['id'] as String,
         name: (j['name'] as String?) ?? 'Unknown',
         email: (j['email'] as String?) ?? '',
-        profileImage: j['profileImage'] as String?,
+        profileImage: _imageUrl(j['profileImage']),
       );
 }
 
@@ -201,7 +209,7 @@ class SchedulableCandidate {
         id: j['id'] as String,
         name: (j['name'] as String?) ?? 'Unknown',
         email: (j['email'] as String?) ?? '',
-        profileImage: j['profileImage'] as String?,
+        profileImage: _imageUrl(j['profileImage']),
         skills: ((j['skills'] as List?) ?? [])
             .map(_skillName)
             .whereType<String>()
