@@ -82,7 +82,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       required String lastName,
       required String email,
       required String password,
-      required UserRole role}) async {
+      required UserRole role,
+      String country = 'NG'}) async {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
@@ -91,7 +92,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
           lastName: lastName,
           email: email,
           password: password,
-          role: role);
+          role: role,
+          country: country);
       state = AuthState(user: registeredUser);
     } catch (e) {
       state = AuthState(isLoading: false, error: e.toString());
@@ -119,6 +121,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// photo) — the token/session is untouched, so this is just a state
   /// update, not a re-login.
   void setUser(UserModel user) {
+    state = state.copyWith(user: user);
+  }
+
+  Future<void> refreshSession() async {
+    final user = await _repository.refreshSession();
     state = state.copyWith(user: user);
   }
 }
