@@ -24,9 +24,10 @@ const _durations = [30, 45, 60, 90];
 /// Phones get a bottom sheet, tablets/desktop get a dialog.
 /// Pass [existing] to reschedule / edit instead of creating.
 Future<void> showScheduleInterview(BuildContext context,
-    {Interview? existing}) {
+    {Interview? existing, String? applicationId}) {
   final narrow = MediaQuery.sizeOf(context).width < 760;
-  final panel = ScheduleInterviewPanel(existing: existing);
+  final panel = ScheduleInterviewPanel(
+      existing: existing, preselectedApplicationId: applicationId);
   if (narrow) {
     return showModalBottomSheet<void>(
       context: context,
@@ -64,8 +65,10 @@ class _Cand {
 }
 
 class ScheduleInterviewPanel extends ConsumerStatefulWidget {
-  const ScheduleInterviewPanel({super.key, this.existing});
+  const ScheduleInterviewPanel(
+      {super.key, this.existing, this.preselectedApplicationId});
   final Interview? existing;
+  final String? preselectedApplicationId;
 
   @override
   ConsumerState<ScheduleInterviewPanel> createState() => _PanelState();
@@ -214,8 +217,9 @@ class _PanelState extends ConsumerState<ScheduleInterviewPanel> {
         err = 'Meeting link must be a valid http(s) URL.';
       }
     }
-    if (err == null && notes.length > 1000)
+    if (err == null && notes.length > 1000) {
       err = 'Notes can be at most 1000 characters.';
+    }
     if (err != null) {
       setState(() => _error = err);
       return;
@@ -268,8 +272,9 @@ class _PanelState extends ConsumerState<ScheduleInterviewPanel> {
         _error = errorMessage(e);
         if (e is InterviewException && e.isConflict) _slot = null;
       });
-      if (e is InterviewException && e.isConflict)
+      if (e is InterviewException && e.isConflict) {
         ref.invalidate(slotsProvider);
+      }
     }
   }
 
@@ -409,24 +414,50 @@ class _PanelState extends ConsumerState<ScheduleInterviewPanel> {
               onPressed: () => ref.invalidate(schedulableProvider),
               child: const Text('Retry')),
         ])),
-        data: (list) => list.isEmpty
-            ? const _Box(
+        data: (list) {
+          final requestedId = widget.preselectedApplicationId;
+          if (requestedId != null) {
+            SchedulableApplication? requested;
+            for (final application in list) {
+              if (application.applicationId == requestedId) {
+                requested = application;
+                break;
+              }
+            }
+            if (requested == null) {
+              return const _Box(
+                  child: Text('This candidate is not ready to be scheduled.',
+                      style: TextStyle(color: ivMuted)));
+            }
+            if (_app?.applicationId != requested.applicationId) {
+              final selectedApplication = requested;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) setState(() => _app = selectedApplication);
+              });
+              return const _Box(child: Text('Loading selected candidate…'));
+            }
+          }
+          if (list.isEmpty) {
+            return const _Box(
                 child: Text('No candidates are ready to be scheduled yet.',
-                    style: TextStyle(color: ivMuted)))
-            : InkWell(
-                onTap: () => _pickCandidate(list),
-                borderRadius: BorderRadius.circular(10),
-                child: _Box(
-                    child: Row(children: const [
-                  Icon(Icons.person_search_outlined, color: ivMuted),
-                  SizedBox(width: 10),
-                  Expanded(
-                      child: Text('Select a candidate',
-                          style: TextStyle(
-                              color: ivNavy, fontWeight: FontWeight.w600))),
-                  Icon(Icons.keyboard_arrow_down, color: ivMuted),
-                ])),
-              ),
+                    style: TextStyle(color: ivMuted)));
+          }
+          return InkWell(
+            onTap: () => _pickCandidate(list),
+            borderRadius: BorderRadius.circular(10),
+            child: const _Box(
+              child: Row(children: [
+                Icon(Icons.person_search_outlined, color: ivMuted),
+                SizedBox(width: 10),
+                Expanded(
+                    child: Text('Select a candidate',
+                        style: TextStyle(
+                            color: ivNavy, fontWeight: FontWeight.w600))),
+                Icon(Icons.keyboard_arrow_down, color: ivMuted),
+              ]),
+            ),
+          );
+        },
       );
     } else {
       candidateCard = InkWell(
