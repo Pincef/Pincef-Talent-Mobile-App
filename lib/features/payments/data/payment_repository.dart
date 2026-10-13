@@ -1,55 +1,125 @@
-/// Temporary source for subscription plans.
-///
-/// Keep API integration here when billing is connected; the presentation layer
-/// only depends on the shape returned by this repository.
+import 'package:dio/dio.dart';
+
 class PaymentRepository {
-  Future<List<SubscriptionPlan>> getPlans() async => const [
-        SubscriptionPlan(
-          id: 'free',
-          name: 'FREE PLAN',
-          description: 'Basic access for occasional lightweight hiring needs.',
-          monthlyPrice: 0,
-          features: ['2 active jobs', 'Standard job posting', 'Candidate management', 'No AI-powered tools'],
-        ),
-        SubscriptionPlan(
-          id: 'starter',
-          name: 'STARTER',
-          description: 'For small businesses just starting structured recruitment.',
-          monthlyPrice: 15000,
-          features: ['5 active jobs', 'CV screening', 'AI CV parsing & resume summaries', 'Basic matching scoring', 'No competency assessments'],
-        ),
-        SubscriptionPlan(
-          id: 'professional',
-          name: 'PROFESSIONAL',
-          description: 'For growing agencies and growing organisations.',
-          monthlyPrice: 35000,
-          featured: true,
-          features: ['10–15 active jobs', '500 CVs / month', 'Shortlist features', 'AI CV-to-job matching', 'Candidate ranking', 'Competency assessment', 'Candidate comparison', 'Recruitment reports'],
-        ),
-        SubscriptionPlan(
-          id: 'business',
-          name: 'BUSINESS',
-          description: 'For agencies and high-volume enterprise recruitment.',
-          monthlyPrice: 75000,
-          features: ['Unlimited active jobs', '1,500+ CVs/month', 'AI resume parsing', 'Automated screening & pipelines', 'Team users & API integration', 'Priority 24/7 support'],
-        ),
-      ];
+  PaymentRepository(this._dio);
+  final Dio _dio;
+
+  Future<List<SubscriptionPlan>> getPlans() async {
+    final response = await _dio.get('/payment/plans');
+    final body = Map<String, dynamic>.from(response.data as Map);
+    final rows = body['data'] as List? ?? const [];
+    return rows
+        .map((row) =>
+            SubscriptionPlan.fromJson(Map<String, dynamic>.from(row as Map)))
+        .toList();
+  }
+
+  Future<CurrentSubscription?> getCurrentSubscription() async {
+    final response = await _dio.get('/payment/subscription');
+    final body = Map<String, dynamic>.from(response.data as Map);
+    final data = Map<String, dynamic>.from(body['data'] as Map);
+    final subscription = data['subscription'];
+    return subscription is Map
+        ? CurrentSubscription.fromJson(Map<String, dynamic>.from(subscription))
+        : null;
+  }
+
+  Future<Uri> createCheckout(SubscriptionPlan plan) async {
+    final response = await _dio.post('/payment/checkout', data: {
+      'planId': plan.id,
+      'subscriberType': 'company',
+    });
+    final body = Map<String, dynamic>.from(response.data as Map);
+    final data = Map<String, dynamic>.from(body['data'] as Map);
+    final uri = Uri.tryParse(data['url']?.toString() ?? '');
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+      throw const FormatException(
+          'The server returned an invalid checkout URL.');
+    }
+    return uri;
+  }
+
+  Future<Uri> createManagementLink() async {
+    final response = await _dio.post('/payment/manage');
+    final body = Map<String, dynamic>.from(response.data as Map);
+    final data = Map<String, dynamic>.from(body['data'] as Map);
+    final uri = Uri.tryParse(data['url']?.toString() ?? '');
+    if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
+      throw const FormatException(
+          'The server returned an invalid billing URL.');
+    }
+    return uri;
+  }
 }
 
 class SubscriptionPlan {
-  final String id;
-  final String name;
-  final String description;
-  final int monthlyPrice;
-  final List<String> features;
-  final bool featured;
-
   const SubscriptionPlan({
     required this.id,
+    required this.code,
     required this.name,
     required this.description,
-    required this.monthlyPrice,
+    required this.amountMinor,
+    required this.currency,
+    required this.interval,
     required this.features,
-    this.featured = false,
+    required this.checkoutAvailable,
+    required this.featured,
   });
+
+  final String id;
+  final String code;
+  final String name;
+  final String description;
+  final int amountMinor;
+  final String currency;
+  final String interval;
+  final List<String> features;
+  final bool checkoutAvailable;
+  final bool featured;
+
+  factory SubscriptionPlan.fromJson(Map<String, dynamic> json) =>
+      SubscriptionPlan(
+        id: json['id'] as String,
+        code: (json['code'] ?? '').toString(),
+        name: (json['name'] ?? 'Plan').toString(),
+        description: (json['description'] ?? '').toString(),
+        amountMinor: (json['amountMinor'] as num?)?.toInt() ?? 0,
+        currency: (json['currency'] ?? 'NGN').toString().toUpperCase(),
+        interval: (json['interval'] ?? 'monthly').toString(),
+        features: (json['features'] as List? ?? const [])
+            .map((item) => item.toString())
+            .toList(),
+        checkoutAvailable: json['checkoutAvailable'] == true,
+        featured: json['featured'] == true,
+      );
+
+  bool get isFree => amountMinor == 0 || code.toLowerCase() == 'free';
+}
+
+class CurrentSubscription {
+  const CurrentSubscription({
+    required this.status,
+    required this.provider,
+    required this.currentPeriodEnd,
+    required this.planCode,
+    required this.planName,
+  });
+
+  final String status;
+  final String provider;
+  final DateTime? currentPeriodEnd;
+  final String planCode;
+  final String planName;
+
+  factory CurrentSubscription.fromJson(Map<String, dynamic> json) {
+    final plan = Map<String, dynamic>.from(json['plan'] as Map? ?? const {});
+    return CurrentSubscription(
+      status: (json['status'] ?? 'unknown').toString(),
+      provider: (json['provider'] ?? '').toString(),
+      currentPeriodEnd:
+          DateTime.tryParse((json['currentPeriodEnd'] ?? '').toString()),
+      planCode: (plan['code'] ?? '').toString(),
+      planName: (plan['name'] ?? 'Free').toString(),
+    );
+  }
 }
