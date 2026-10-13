@@ -1,78 +1,217 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../auth/application/auth_provider.dart';
 import '../../application/payment_provider.dart';
 import '../../data/payment_repository.dart';
 
-class PaymentScreen extends ConsumerWidget {
+class PaymentScreen extends ConsumerStatefulWidget {
   const PaymentScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PaymentScreen> createState() => _PaymentScreenState();
+}
+
+class _PaymentScreenState extends ConsumerState<PaymentScreen> {
+  String? _checkoutPlanId;
+
+  Future<void> _refreshSubscription() async {
+    try {
+      await ref.read(authProvider.notifier).refreshSession();
+      ref.invalidate(currentSubscriptionProvider);
+      ref.invalidate(subscriptionPlansProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Subscription status refreshed.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not refresh subscription: $error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _checkout(SubscriptionPlan plan) async {
+    if (!plan.checkoutAvailable || plan.isFree || _checkoutPlanId != null) {
+      return;
+    }
+    setState(() => _checkoutPlanId = plan.id);
+    try {
+      final uri =
+          await ref.read(paymentRepositoryProvider).createCheckout(plan);
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Could not open the secure checkout page.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not start checkout: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _checkoutPlanId = null);
+    }
+  }
+
+  Future<void> _manageSubscription() async {
+    try {
+      final uri =
+          await ref.read(paymentRepositoryProvider).createManagementLink();
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open the billing portal.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Could not open subscription management: $error')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final plans = ref.watch(subscriptionPlansProvider);
+    final current = ref.watch(currentSubscriptionProvider);
     final view = ref.watch(paymentViewProvider);
     return plans.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => Center(child: Text('Unable to load plans: $error')),
-      data: (items) => LayoutBuilder(
-        builder: (context, constraints) {
-          final wide = constraints.maxWidth >= 860;
-          return SingleChildScrollView(
-            padding:
-                EdgeInsets.fromLTRB(wide ? 44 : 20, 30, wide ? 44 : 20, 48),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1120),
-                child: Column(
-                  children: [
-                    const Text('More than a job board.',
-                        style: TextStyle(
-                            fontSize: 21,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.textPrimary)),
-                    const Text('An AI-powered recruitment workspace.',
-                        style: TextStyle(
-                            fontSize: 21,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.textPrimary)),
-                    const SizedBox(height: 8),
-                    const Text(
-                        'Select the tier that aligns with your hiring velocity. Upgrade seamlessly as your',
-                        style: TextStyle(
-                            fontSize: 11, color: AppColors.textSecondary)),
-                    const Text('team scales.',
-                        style: TextStyle(
-                            fontSize: 11, color: AppColors.textSecondary)),
-                    const SizedBox(height: 18),
-                    _BillingToggle(
-                        isAnnual: view.isAnnual,
-                        onChanged:
-                            ref.read(paymentViewProvider.notifier).setAnnual),
-                    const SizedBox(height: 24),
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: wide ? 2 : 1,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 16,
-                        mainAxisExtent: wide ? 390 : 365,
-                      ),
-                      itemCount: items.length,
-                      itemBuilder: (_, index) => _PlanCard(
-                        plan: items[index],
-                        annual: view.isAnnual,
-                        selected: items[index].id == view.selectedPlan,
-                        onSelect: () => ref
-                            .read(paymentViewProvider.notifier)
-                            .selectPlan(items[index].id),
-                      ),
+      error: (error, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text('Unable to load billing plans: $error'),
+        ),
+      ),
+      data: (allItems) => current.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) =>
+            Center(child: Text('Unable to load subscription: $error')),
+        data: (subscription) {
+          final items = allItems
+              .where((plan) =>
+                  plan.interval == (view.isAnnual ? 'yearly' : 'monthly'))
+              .toList();
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final wide = constraints.maxWidth >= 860;
+              return SingleChildScrollView(
+                padding:
+                    EdgeInsets.fromLTRB(wide ? 44 : 20, 30, wide ? 44 : 20, 48),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1120),
+                    child: Column(
+                      children: [
+                        const Text('More than a job board.',
+                            style: TextStyle(
+                                fontSize: 21,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textPrimary)),
+                        const Text('An AI-powered recruitment workspace.',
+                            style: TextStyle(
+                                fontSize: 21,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textPrimary)),
+                        const SizedBox(height: 8),
+                        const Text(
+                            'Select the tier that aligns with your hiring velocity. Upgrade seamlessly as your',
+                            style: TextStyle(
+                                fontSize: 11, color: AppColors.textSecondary)),
+                        const Text('team scales.',
+                            style: TextStyle(
+                                fontSize: 11, color: AppColors.textSecondary)),
+                        const SizedBox(height: 18),
+                        _BillingToggle(
+                            isAnnual: view.isAnnual,
+                            onChanged: (value) {
+                              ref
+                                  .read(paymentViewProvider.notifier)
+                                  .setAnnual(value);
+                            }),
+                        if (subscription != null) ...[
+                          const SizedBox(height: 14),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF0F8F4),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Current plan: ${subscription.planName} · ${subscription.status}',
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.textPrimary),
+                                ),
+                                TextButton(
+                                  onPressed: _manageSubscription,
+                                  child: const Text('Manage billing'),
+                                ),
+                                IconButton(
+                                  tooltip: 'Refresh subscription status',
+                                  onPressed: _refreshSubscription,
+                                  icon: const Icon(Icons.refresh, size: 17),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 24),
+                        if (items.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.all(24),
+                            child: Text(
+                                'No plans are configured for this billing interval yet.'),
+                          )
+                        else
+                          GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: wide ? 2 : 1,
+                              crossAxisSpacing: 16,
+                              mainAxisSpacing: 16,
+                              mainAxisExtent: wide ? 390 : 365,
+                            ),
+                            itemCount: items.length,
+                            itemBuilder: (_, index) {
+                              final plan = items[index];
+                              final isCurrent =
+                                  plan.code == subscription?.planCode ||
+                                      (subscription == null && plan.isFree);
+                              return _PlanCard(
+                                plan: plan,
+                                annual: view.isAnnual,
+                                selected: isCurrent,
+                                hasActiveSubscription: subscription != null,
+                                isLoading: _checkoutPlanId == plan.id,
+                                onSelect: () => _checkout(plan),
+                              );
+                            },
+                          ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
           );
         },
       ),
@@ -114,19 +253,23 @@ class _PlanCard extends StatelessWidget {
       {required this.plan,
       required this.annual,
       required this.selected,
+      this.hasActiveSubscription = false,
+      this.isLoading = false,
       required this.onSelect});
   final SubscriptionPlan plan;
   final bool annual;
   final bool selected;
+  final bool hasActiveSubscription;
+  final bool isLoading;
   final VoidCallback onSelect;
   @override
   Widget build(BuildContext context) {
-    final amount =
-        annual ? (plan.monthlyPrice * .8).round() : plan.monthlyPrice;
-    final price = plan.monthlyPrice == 0
-        ? '₦0'
-        : NumberFormat.currency(locale: 'en_NG', symbol: '₦', decimalDigits: 0)
-            .format(amount);
+    final total = plan.amountMinor / 100;
+    final monthlyEquivalent = annual ? total / 12 : total;
+    final price = NumberFormat.simpleCurrency(
+      name: plan.currency,
+      decimalDigits: plan.currency == 'NGN' ? 0 : 2,
+    ).format(monthlyEquivalent);
     return Container(
       decoration: BoxDecoration(
           color: Colors.white,
@@ -183,7 +326,10 @@ class _PlanCard extends StatelessWidget {
               style: TextStyle(fontSize: 9, color: AppColors.textSecondary))
         ])),
         const SizedBox(height: 3),
-        Text(annual ? 'Billed annually' : 'Billed monthly',
+        Text(
+            annual
+                ? 'Billed ${NumberFormat.simpleCurrency(name: plan.currency, decimalDigits: plan.currency == 'NGN' ? 0 : 2).format(total)} annually'
+                : 'Billed monthly',
             style:
                 const TextStyle(fontSize: 8.5, color: AppColors.textSecondary)),
         const SizedBox(height: 15),
@@ -208,7 +354,13 @@ class _PlanCard extends StatelessWidget {
             width: double.infinity,
             height: 32,
             child: OutlinedButton(
-                onPressed: onSelect,
+                onPressed: (selected ||
+                        !plan.checkoutAvailable ||
+                        plan.isFree ||
+                        (hasActiveSubscription && !selected) ||
+                        isLoading)
+                    ? null
+                    : onSelect,
                 style: OutlinedButton.styleFrom(
                     backgroundColor: selected ? AppColors.orange : Colors.white,
                     foregroundColor:
@@ -218,11 +370,17 @@ class _PlanCard extends StatelessWidget {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(4))),
                 child: Text(
-                    selected
-                        ? 'Selected'
-                        : plan.monthlyPrice == 0
-                            ? 'Create Free Account'
-                            : 'Choose ${plan.name[0]}${plan.name.substring(1).toLowerCase()}',
+                    isLoading
+                        ? 'Opening secure checkout…'
+                        : selected
+                            ? 'Current plan'
+                            : plan.isFree
+                                ? 'Free plan'
+                                : hasActiveSubscription
+                                    ? 'Manage current plan first'
+                                    : !plan.checkoutAvailable
+                                        ? 'Payment setup pending'
+                                        : 'Continue to checkout',
                     style: const TextStyle(
                         fontSize: 9, fontWeight: FontWeight.w600)))),
       ]),
