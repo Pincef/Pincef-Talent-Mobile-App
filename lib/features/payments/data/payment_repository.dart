@@ -60,8 +60,10 @@ class SubscriptionPlan {
     required this.description,
     required this.amountMinor,
     required this.currency,
+    required this.provider,
     required this.interval,
     required this.features,
+    required this.excludedFeatures,
     required this.checkoutAvailable,
     required this.featured,
   });
@@ -72,8 +74,10 @@ class SubscriptionPlan {
   final String description;
   final int amountMinor;
   final String currency;
+  final String? provider;
   final String interval;
   final List<String> features;
+  final List<String> excludedFeatures;
   final bool checkoutAvailable;
   final bool featured;
 
@@ -85,8 +89,12 @@ class SubscriptionPlan {
         description: (json['description'] ?? '').toString(),
         amountMinor: (json['amountMinor'] as num?)?.toInt() ?? 0,
         currency: (json['currency'] ?? 'NGN').toString().toUpperCase(),
+        provider: json['provider']?.toString(),
         interval: (json['interval'] ?? 'monthly').toString(),
         features: (json['features'] as List? ?? const [])
+            .map((item) => item.toString())
+            .toList(),
+        excludedFeatures: (json['excludedFeatures'] as List? ?? const [])
             .map((item) => item.toString())
             .toList(),
         checkoutAvailable: json['checkoutAvailable'] == true,
