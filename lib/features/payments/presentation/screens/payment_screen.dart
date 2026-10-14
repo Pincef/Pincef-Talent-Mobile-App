@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:dio/dio.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../auth/application/auth_provider.dart';
@@ -16,6 +17,22 @@ class PaymentScreen extends ConsumerStatefulWidget {
 
 class _PaymentScreenState extends ConsumerState<PaymentScreen> {
   String? _checkoutPlanId;
+
+  String _loadErrorMessage(Object error, String resource) {
+    if (error is DioException) {
+      final status = error.response?.statusCode;
+      if (status == 404) {
+        return 'The backend does not currently provide the $resource endpoint. Deploy the backend billing update, then reload this page.';
+      }
+      if (status == 401 || status == 403) {
+        return 'Your session cannot access billing. Sign in again with a recruiter account.';
+      }
+      if (error.response == null) {
+        return 'Could not reach the billing server. Check the API URL and, when running Flutter web locally, the backend CORS settings.';
+      }
+    }
+    return 'Unable to load $resource: $error';
+  }
 
   Future<void> _refreshSubscription() async {
     try {
@@ -36,15 +53,65 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
     }
   }
 
-  Future<void> _checkout(SubscriptionPlan plan) async {
+  Future<void> _confirmAndCheckout(SubscriptionPlan plan) async {
     if (!plan.checkoutAvailable || plan.isFree || _checkoutPlanId != null) {
       return;
     }
+
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Text('Subscribe to ${plan.name}?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${NumberFormat.simpleCurrency(
+                name: plan.currency,
+                decimalDigits: plan.currency == 'NGN' ? 0 : 2,
+              ).format(plan.amountMinor / 100)} per job · billed ${plan.interval == 'yearly' ? 'annually' : 'monthly'}',
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'You’ll continue to ${_providerLabel(plan.provider)}’s secure checkout to complete payment. You’ll return to TalentBridge when checkout is finished.',
+              style: const TextStyle(
+                fontSize: 13,
+                height: 1.45,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Not now'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.orange),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Continue to payment'),
+          ),
+        ],
+      ),
+    );
+    if (accepted != true || !mounted) return;
+
     setState(() => _checkoutPlanId = plan.id);
     try {
       final uri =
           await ref.read(paymentRepositoryProvider).createCheckout(plan);
-      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      // Stripe Checkout and Paystack both provide hosted checkout pages.
+      // Use the platform's normal navigation (same tab on web, browser on
+      // native) so their success/cancel return URLs bring the user back here.
+      final opened = await launchUrl(uri, mode: LaunchMode.platformDefault);
       if (!opened && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -60,6 +127,21 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
     } finally {
       if (mounted) setState(() => _checkoutPlanId = null);
     }
+  }
+
+  String _providerLabel(String? provider) => switch (provider?.toLowerCase()) {
+        'paystack' => 'Paystack',
+        'stripe' => 'Stripe',
+        _ => 'our payment provider',
+      };
+
+  int _planOrder(SubscriptionPlan plan) {
+    final code = plan.code.toLowerCase();
+    if (code == 'free') return 0;
+    if (code.contains('starter')) return 1;
+    if (code.contains('professional') || code.contains('pro')) return 2;
+    if (code.contains('business')) return 3;
+    return 4;
   }
 
   Future<void> _manageSubscription() async {
@@ -92,18 +174,20 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
       error: (error, _) => Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text('Unable to load billing plans: $error'),
+          child: Text(_loadErrorMessage(error, 'billing plans')),
         ),
       ),
       data: (allItems) => current.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) =>
-            Center(child: Text('Unable to load subscription: $error')),
+        error: (error, _) => Center(
+          child: Text(_loadErrorMessage(error, 'your subscription')),
+        ),
         data: (subscription) {
           final items = allItems
               .where((plan) =>
                   plan.interval == (view.isAnnual ? 'yearly' : 'monthly'))
               .toList();
+          items.sort((a, b) => _planOrder(a).compareTo(_planOrder(b)));
           return LayoutBuilder(
             builder: (context, constraints) {
               final wide = constraints.maxWidth >= 860;
@@ -115,24 +199,25 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                     constraints: const BoxConstraints(maxWidth: 1120),
                     child: Column(
                       children: [
-                        const Text('More than a job board.',
-                            style: TextStyle(
-                                fontSize: 21,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.textPrimary)),
-                        const Text('An AI-powered recruitment workspace.',
-                            style: TextStyle(
-                                fontSize: 21,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.textPrimary)),
-                        const SizedBox(height: 8),
+                        Text(
+                          'More than a job board.\nAn AI-powered recruitment workspace.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: wide ? 29 : 22,
+                            height: 1.2,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
                         const Text(
-                            'Select the tier that aligns with your hiring velocity. Upgrade seamlessly as your',
-                            style: TextStyle(
-                                fontSize: 11, color: AppColors.textSecondary)),
-                        const Text('team scales.',
-                            style: TextStyle(
-                                fontSize: 11, color: AppColors.textSecondary)),
+                          'Select the tier that aligns with your hiring velocity. Upgrade seamlessly as your team scales.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
                         const SizedBox(height: 18),
                         _BillingToggle(
                             isAnnual: view.isAnnual,
@@ -188,7 +273,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                               crossAxisCount: wide ? 2 : 1,
                               crossAxisSpacing: 16,
                               mainAxisSpacing: 16,
-                              mainAxisExtent: wide ? 390 : 365,
+                              mainAxisExtent: wide ? 500 : 440,
                             ),
                             itemCount: items.length,
                             itemBuilder: (_, index) {
@@ -202,7 +287,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                                 selected: isCurrent,
                                 hasActiveSubscription: subscription != null,
                                 isLoading: _checkoutPlanId == plan.id,
-                                onSelect: () => _checkout(plan),
+                                onSelect: () => _confirmAndCheckout(plan),
                               );
                             },
                           ),
@@ -228,8 +313,9 @@ class _BillingToggle extends StatelessWidget {
       Row(mainAxisSize: MainAxisSize.min, children: [
         Text('Monthly',
             style: TextStyle(
-                fontSize: 10,
-                fontWeight: isAnnual ? FontWeight.w400 : FontWeight.w700)),
+                fontSize: 13,
+                fontWeight: isAnnual ? FontWeight.w400 : FontWeight.w700,
+                color: AppColors.textPrimary)),
         Switch(
             value: isAnnual,
             onChanged: onChanged,
@@ -237,14 +323,22 @@ class _BillingToggle extends StatelessWidget {
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
         Text('Annually',
             style: TextStyle(
-                fontSize: 10,
-                fontWeight: isAnnual ? FontWeight.w700 : FontWeight.w400)),
+                fontSize: 13,
+                fontWeight: isAnnual ? FontWeight.w700 : FontWeight.w400,
+                color: AppColors.textPrimary)),
         const SizedBox(width: 8),
-        const Text('20%',
-            style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-                color: AppColors.orange)),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF0E8),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Text('−20%',
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.orange)),
+        ),
       ]);
 }
 
@@ -270,10 +364,12 @@ class _PlanCard extends StatelessWidget {
       name: plan.currency,
       decimalDigits: plan.currency == 'NGN' ? 0 : 2,
     ).format(monthlyEquivalent);
+    final includedFeatures = plan.features;
+    final excludedFeatures = plan.excludedFeatures;
     return Container(
       decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
+          color: plan.featured ? const Color(0xFFF3F4F7) : Colors.white,
+          borderRadius: BorderRadius.circular(13),
           border: Border.all(
               color: plan.featured ? AppColors.orange : AppColors.divider,
               width: plan.featured ? 1.5 : 1),
@@ -281,78 +377,114 @@ class _PlanCard extends StatelessWidget {
             BoxShadow(
                 color: Color(0x0D101828), blurRadius: 12, offset: Offset(0, 3))
           ]),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 22),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         if (plan.featured)
-          Transform.translate(
-              offset: const Offset(0, -32),
-              child: Align(
-                  alignment: Alignment.center,
-                  child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 3),
-                      decoration: BoxDecoration(
-                          color: AppColors.orange,
-                          borderRadius: BorderRadius.circular(6)),
-                      child: const Text('MOST POPULAR',
-                          style: TextStyle(
-                              fontSize: 8,
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800))))),
-        Text(plan.name,
+          Align(
+            alignment: Alignment.topCenter,
+            child: Container(
+              margin: const EdgeInsets.only(top: -24, bottom: 9),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              decoration: BoxDecoration(
+                color: AppColors.orange,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Text('MOST POPULAR',
+                  style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800)),
+            ),
+          ),
+        Text(plan.name.toUpperCase(),
             style: const TextStyle(
-                fontSize: 15,
+                fontSize: 22,
                 fontWeight: FontWeight.w800,
                 color: AppColors.textPrimary)),
-        const SizedBox(height: 7),
-        SizedBox(
-            height: 29,
-            child: Text(plan.description,
-                style: const TextStyle(
-                    fontSize: 9.5,
-                    height: 1.35,
-                    color: AppColors.textSecondary))),
-        const SizedBox(height: 12),
-        RichText(
-            text: TextSpan(children: [
-          TextSpan(
-              text: price,
-              style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary)),
-          const TextSpan(
-              text: ' /mo',
-              style: TextStyle(fontSize: 9, color: AppColors.textSecondary))
-        ])),
-        const SizedBox(height: 3),
+        const SizedBox(height: 8),
+        Text(plan.description,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+                fontSize: 14, height: 1.4, color: AppColors.textSecondary)),
+        const SizedBox(height: 18),
+        Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(price,
+                      style: const TextStyle(
+                          fontSize: 34,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textPrimary)),
+                ),
+              ),
+              if (!plan.isFree) ...[
+                const SizedBox(width: 8),
+                const Text('/Job',
+                    style: TextStyle(
+                        fontSize: 14, color: AppColors.textSecondary)),
+              ],
+            ]),
+        const SizedBox(height: 6),
         Text(
-            annual
-                ? 'Billed ${NumberFormat.simpleCurrency(name: plan.currency, decimalDigits: plan.currency == 'NGN' ? 0 : 2).format(total)} annually'
-                : 'Billed monthly',
-            style:
-                const TextStyle(fontSize: 8.5, color: AppColors.textSecondary)),
-        const SizedBox(height: 15),
+          plan.isFree
+              ? 'Forever free'
+              : annual
+                  ? 'BILLED ANNUALLY · ${NumberFormat.simpleCurrency(name: plan.currency, decimalDigits: plan.currency == 'NGN' ? 0 : 2).format(total)}'
+                  : 'BILLED MONTHLY',
+          style: const TextStyle(
+              fontSize: 11, letterSpacing: 0.4, color: AppColors.textSecondary),
+        ),
+        const Padding(
+          padding: EdgeInsets.only(top: 18, bottom: 6),
+          child: Divider(height: 1, color: AppColors.divider),
+        ),
         Expanded(
             child: ListView.separated(
                 physics: const NeverScrollableScrollPhysics(),
-                itemCount: plan.features.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 6),
-                itemBuilder: (_, i) => Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(Icons.check_circle,
-                              color: AppColors.navy, size: 11),
-                          const SizedBox(width: 7),
-                          Expanded(
-                              child: Text(plan.features[i],
-                                  style: const TextStyle(
-                                      fontSize: 9.5,
-                                      color: AppColors.textPrimary)))
-                        ]))),
+                itemCount: includedFeatures.length + excludedFeatures.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (_, i) {
+                  final isIncluded = i < includedFeatures.length;
+                  final label = isIncluded
+                      ? includedFeatures[i]
+                      : excludedFeatures[i - includedFeatures.length];
+                  final featureColor = isIncluded
+                      ? (plan.featured
+                          ? const Color(0xFF290075)
+                          : AppColors.navy)
+                      : const Color(0xFFB7BBC5);
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        isIncluded ? Icons.check_circle : Icons.highlight_off,
+                        color: featureColor,
+                        size: 17,
+                      ),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isIncluded
+                                ? AppColors.textPrimary
+                                : const Color(0xFFB7BBC5),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                })),
         SizedBox(
             width: double.infinity,
-            height: 32,
+            height: 46,
             child: OutlinedButton(
                 onPressed: (selected ||
                         !plan.checkoutAvailable ||
@@ -362,27 +494,33 @@ class _PlanCard extends StatelessWidget {
                     ? null
                     : onSelect,
                 style: OutlinedButton.styleFrom(
-                    backgroundColor: selected ? AppColors.orange : Colors.white,
-                    foregroundColor:
-                        selected ? Colors.white : AppColors.textPrimary,
+                    backgroundColor:
+                        plan.featured ? AppColors.orange : Colors.white,
+                    foregroundColor: plan.featured || selected
+                        ? Colors.white
+                        : AppColors.textPrimary,
                     side: BorderSide(
-                        color: selected ? AppColors.orange : AppColors.navy),
+                        color:
+                            plan.featured ? AppColors.orange : AppColors.navy,
+                        width: 1.5),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(4))),
+                        borderRadius: BorderRadius.circular(7))),
                 child: Text(
                     isLoading
                         ? 'Opening secure checkout…'
                         : selected
                             ? 'Current plan'
                             : plan.isFree
-                                ? 'Free plan'
+                                ? 'Create Free Account'
                                 : hasActiveSubscription
                                     ? 'Manage current plan first'
                                     : !plan.checkoutAvailable
                                         ? 'Payment setup pending'
-                                        : 'Continue to checkout',
+                                        : plan.featured
+                                            ? 'Subscribe ${plan.name}'
+                                            : 'Choose ${plan.name}',
                     style: const TextStyle(
-                        fontSize: 9, fontWeight: FontWeight.w600)))),
+                        fontSize: 13, fontWeight: FontWeight.w700)))),
       ]),
     );
   }
