@@ -112,6 +112,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  Future<void> completeGoogleOAuth(String handoffCode) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final user = await _repository.completeGoogleOAuth(handoffCode);
+      state = AuthState(user: user);
+    } catch (e) {
+      state = AuthState(isLoading: false, error: e.toString());
+      rethrow;
+    }
+  }
+
   Future<void> logout() async {
     await _repository.logout();
     state = AuthState(user: state.user, hasJustLoggedOut: true);

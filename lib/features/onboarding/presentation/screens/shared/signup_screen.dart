@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../../core/theme/brand_color.dart';
 import '../../../../../core/theme/auth_form_style.dart';
@@ -87,6 +88,18 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  Future<void> _continueWithGoogle() async {
+    final role = ref.read(selectedRoleProvider);
+    if (role == null) {
+      setState(() => _errorText = 'Please choose a role before continuing with Google.');
+      return;
+    }
+    final uri = ref.read(authRepositoryProvider).googleOAuthUrl(role: role, country: _country);
+    if (!await launchUrl(uri, mode: LaunchMode.platformDefault) && mounted) {
+      AppToast.error(context, 'Could not open Google sign-in.');
     }
   }
 
@@ -303,9 +316,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                       ),
                       const SizedBox(height: 18),
                       OutlinedButton.icon(
-                        onPressed: () {
-                          // TODO: wire Google sign-up once you have an OAuth flow
-                        },
+                        onPressed: _continueWithGoogle,
                         icon: const Icon(Icons.g_mobiledata, size: 22),
                         label: const Text('Continue with Google'),
                         style: OutlinedButton.styleFrom(

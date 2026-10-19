@@ -3,10 +3,8 @@ import 'package:flutter/foundation.dart';
 
 import '../data/models/hiring_pipeline_model.dart';
 
-/// The backend DTO (zod, non-strict) currently DROPS everything except
-/// `name` and `stages[].type/name`. Flip this to `true` once the backend
-/// accepts description / status / stage `required` / stage `config`.
-const bool kSendExtendedPipelineFields = false;
+/// The backend persists optional stage details and assessment configuration.
+const bool kSendExtendedPipelineFields = true;
 
 class PipelineApiException implements Exception {
   PipelineApiException(this.message, [this.statusCode]);

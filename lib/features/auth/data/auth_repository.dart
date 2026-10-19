@@ -9,6 +9,32 @@ class AuthRepository {
   final Dio _dio;
   final SecureStorageService _storage;
 
+  Uri googleOAuthUrl({UserRole? role, String? country}) {
+    final query = <String, String>{};
+    if (role != null) query['role'] = role.name;
+    if (country != null) query['country'] = country;
+    return Uri.parse('${_dio.options.baseUrl}/v1/oauth/google')
+        .replace(queryParameters: query.isEmpty ? null : query);
+  }
+
+  Future<UserModel> completeGoogleOAuth(String handoffCode) async {
+    try {
+      final response = await _dio.post('/v1/oauth/exchange', data: {'code': handoffCode});
+      final loginData = _sessionData(response.data);
+      final accessToken = loginData['accessToken'] as String?;
+      final refreshToken = loginData['refreshToken'] as String?;
+      if (accessToken == null || refreshToken == null) {
+        throw const FormatException('The server returned an incomplete OAuth session.');
+      }
+      await _storage.saveTokens(accessToken: accessToken, refreshToken: refreshToken);
+      final me = await _dio.get('/auth/me');
+      return UserModel.fromJson({...loginData, ..._sessionData(me.data)});
+    } on DioException catch (e) {
+      try { await _storage.clearTokens(); } catch (_) {}
+      throw ApiException.fromDioError(e);
+    }
+  }
+
   /// Registers the account, then immediately logs in with the same
   /// credentials to obtain and store real tokens.
   ///
