@@ -115,7 +115,6 @@ class _AssessmentCreateScreenState
       'deliveryChannel': _channel,
       'durationMinutes': int.tryParse(_duration.text) ?? 60,
       'passingScore': int.tryParse(_passing.text) ?? 75,
-      'pipelineStageName': _stageName,
       'questions': _kind == 'internal'
           ? _questions
               .where((q) => q['accepted'] != false)
@@ -125,9 +124,12 @@ class _AssessmentCreateScreenState
       'autoInviteShortlisted': _mode == 'full_ai' && _autoInviteShortlisted,
       'autoGenerateAfterDeadline': _mode == 'full_ai' && _autoGenerateAfterDeadline,
     };
+    if (_stageName != null && _stageName!.trim().isNotEmpty) {
+      payload['pipelineStageName'] = _stageName!.trim();
+    }
     if (!forUpdate) {
       payload['jobId'] = _jobId;
-      payload['pipelineId'] = _pipelineId;
+      if (_pipelineId != null) payload['pipelineId'] = _pipelineId;
       payload['questionsPerSkill'] = 2;
       if (_testId != null) payload['testId'] = _testId;
     }
@@ -165,16 +167,22 @@ class _AssessmentCreateScreenState
         },
       };
 
-  Future<void> _generate() async {
+  Future<void> _generate({bool append = false}) async {
     if (!_validateBasics()) return;
     setState(() => _busy = true);
     try {
-      final payload = _payload();
+      final payload = _payload()..['appendQuestions'] = append;
       final generated =
           await ref.read(assessmentRepositoryProvider).generate(payload);
+      final existingAcceptance = {
+        for (final question in _questions)
+          if (question['questionId'] != null)
+            question['questionId'].toString(): question['accepted'] ?? true,
+      };
       final questions = (generated['questions'] as List? ?? const []).map((q) {
         final item = Map<String, dynamic>.from(q as Map);
-        item['accepted'] = _mode != 'ai_assisted';
+        item['accepted'] = existingAcceptance[item['questionId']?.toString()] ??
+            _mode != 'ai_assisted';
         return item;
       }).toList();
       setState(() {
@@ -763,14 +771,18 @@ class _AssessmentCreateScreenState
           final action = FilledButton.icon(
             onPressed: _busy
                 ? null
-                : () {
+                      : () {
                     if (_mode == 'manual') {
                       setState(() => _mode = 'ai_assisted');
                     }
-                    _generate();
+                    _generate(append: _questions.isNotEmpty);
                   },
             icon: const Icon(Icons.auto_awesome, size: 18),
-            label: Text(_busy ? 'Generating…' : 'Generate questions with AI'),
+            label: Text(_busy
+                ? 'Generating…'
+                : _questions.isEmpty
+                    ? 'Generate questions with AI'
+                    : 'Generate more questions'),
             style: FilledButton.styleFrom(
               backgroundColor: BrandColors.orange,
               foregroundColor: Colors.white,
@@ -846,11 +858,13 @@ class _AssessmentCreateScreenState
                     ])),
                 if (_mode != 'manual')
                   OutlinedButton.icon(
-                      onPressed: _busy ? null : _generate,
+                      onPressed: _busy
+                          ? null
+                          : () => _generate(append: _questions.isNotEmpty),
                       icon: const Icon(Icons.auto_awesome),
                       label: Text(_questions.isEmpty
                           ? 'Generate questions'
-                          : 'Retry generation')),
+                          : 'Generate more')),
                 if (_mode == 'ai_assisted' && _questions.any((q) => q['accepted'] == false))
                   TextButton.icon(
                     onPressed: _busy ? null : () => setState(() {
