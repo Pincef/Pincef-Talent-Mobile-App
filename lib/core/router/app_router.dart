@@ -30,6 +30,7 @@ import '../../features/jobs/presentation/screens/job_candidates_screen.dart';
 import '../../features/jobs/presentation/screens/candidate_profile_preview_screen.dart';
 import '../../features/jobs/presentation/screens/ai_candidate_ranking_screen.dart';
 import '../../features/jobs/presentation/screens/candidate_comparison_jobs_screen.dart';
+import '../../features/jobs/presentation/screens/candidate_comparison_detail_screen.dart';
 import '../../features/jobs/data/models/application_model.dart';
 import '../../features/onboarding/presentation/screens/role_selection_screen.dart';
 import '../../features/profile/presentation/screens/recruiter_profile_screen.dart';
@@ -62,18 +63,6 @@ const _postSignupRoutes = {
   '/candidate-profile-setup',
   '/profile-setup-complete',
 };
-
-UserRole _userRoleFromString(String value) {
-  switch (value.toLowerCase()) {
-    case 'recruiter':
-      return UserRole.recruiter;
-    case 'admin':
-      return UserRole.admin;
-    case 'candidate':
-    default:
-      return UserRole.candidate;
-  }
-}
 
 bool _isRecruiter(AuthState authState) {
   return authState.user?.role == UserRole.recruiter;
@@ -304,6 +293,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/candidate-comparison',
             builder: (context, state) => const CandidateComparisonJobsScreen(),
+          ),
+          GoRoute(
+            path: '/candidate-comparison/:jobId',
+            builder: (context, state) => CandidateComparisonDetailScreen(
+              jobId: state.pathParameters['jobId']!,
+            ),
           ),
           GoRoute(
             path: '/profile',

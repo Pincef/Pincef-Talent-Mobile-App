@@ -210,9 +210,10 @@ class QuickActionsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (actions.isEmpty) return const SizedBox.shrink();
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
@@ -221,15 +222,11 @@ class QuickActionsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Quick Actions', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: BrandColors.navy)),
-          const SizedBox(height: 12),
-          GridView.count(
-            crossAxisCount: actions.length == 1 ? 1 : 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
-            childAspectRatio: 1.3,
+          const Text('Quick Actions', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: BrandColors.navy)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: actions.map((a) => _QuickActionTile(action: a)).toList(),
           ),
         ],
@@ -244,27 +241,18 @@ class _QuickActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: action.onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFCE8DB),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(action.icon, size: 18, color: BrandColors.orange),
-            const SizedBox(height: 8),
-            Text(
-              action.label,
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: BrandColors.navy),
-            ),
-          ],
-        ),
+    return OutlinedButton.icon(
+      onPressed: action.onTap,
+      icon: Icon(action.icon, size: 16),
+      label: Text(action.label),
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 40),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        foregroundColor: BrandColors.navy,
+        backgroundColor: const Color(0xFFFFF7F2),
+        side: const BorderSide(color: Color(0xFFF4D5C5)),
+        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
       ),
     );
   }
