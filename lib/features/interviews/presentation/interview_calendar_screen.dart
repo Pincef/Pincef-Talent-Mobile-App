@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../auth/application/auth_provider.dart';
 import 'package:intl/intl.dart';
 
 import '../data/models/interview_model.dart';
@@ -89,24 +88,7 @@ class InterviewCalendarScreen extends ConsumerWidget {
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _Header(
-                          wide: wide,
-                          canSchedule: ref.watch(authProvider).user?.hasModule(
-                                        'hiring.stage.interview',
-                                      ) ==
-                                  true &&
-                              ((((ref.watch(authProvider).user?.limits[
-                                                      'interviewInvitesPerJob']
-                                                  as num?)
-                                              ?.toInt() ??
-                                          0) >
-                                      0) ||
-                                  ref
-                                          .watch(authProvider)
-                                          .user
-                                          ?.limits['interviewInvitesPerJob'] ==
-                                      -1),
-                        ),
+                        _Header(wide: wide),
                         const SizedBox(height: 16),
                         _StatsRow(wide: wide),
                         const SizedBox(height: 14),
@@ -141,9 +123,8 @@ class InterviewCalendarScreen extends ConsumerWidget {
 // Header + stats
 // ---------------------------------------------------------------------------
 class _Header extends StatelessWidget {
-  const _Header({required this.wide, required this.canSchedule});
+  const _Header({required this.wide});
   final bool wide;
-  final bool canSchedule;
 
   @override
   Widget build(BuildContext context) {
@@ -158,17 +139,9 @@ class _Header extends StatelessWidget {
           style: TextStyle(color: ivMuted, fontSize: 13)),
     ]);
     final button = FilledButton.icon(
-      onPressed: canSchedule
-          ? () => showScheduleInterview(context)
-          : () => ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'Interview scheduling is available on Pro and Business plans.',
-                  ),
-                ),
-              ),
-      icon: Icon(canSchedule ? Icons.add : Icons.lock_outline, size: 18),
-      label: Text(canSchedule ? 'Schedule Interview' : 'Upgrade to Schedule'),
+      onPressed: () => showScheduleInterview(context),
+      icon: const Icon(Icons.add, size: 18),
+      label: const Text('Schedule Interview'),
       style: FilledButton.styleFrom(
           backgroundColor: ivOrange,
           foregroundColor: Colors.white,
