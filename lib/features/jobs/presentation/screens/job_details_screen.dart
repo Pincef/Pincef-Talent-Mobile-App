@@ -244,7 +244,11 @@ class _Header extends StatelessWidget {
               if (job.educationLevelLabel != null)
                 _MetaItem(
                     icon: Icons.school_outlined,
-                    label: job.educationLevelLabel!),
+                    label: [
+                      job.educationLevelLabel!,
+                      if (job.fieldOfStudy?.isNotEmpty ?? false)
+                        job.fieldOfStudy!,
+                    ].join(' • ')),
               if (job.salaryRangeLabel != null)
                 _MetaItem(
                     icon: Icons.payments_outlined,
@@ -382,6 +386,7 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
   late final TextEditingController _currency;
   late final TextEditingController _description;
   late final TextEditingController _minYears;
+  late final TextEditingController _fieldOfStudy;
   late final TextEditingController _skillInput;
   late final TextEditingController _companyOverview;
   late final TextEditingController _responsibilityInput;
@@ -431,6 +436,7 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
     _description = TextEditingController(text: job.description);
     _minYears =
         TextEditingController(text: job.minYearsOfExperience?.toString() ?? '');
+    _fieldOfStudy = TextEditingController(text: job.fieldOfStudy ?? '');
     _skillInput = TextEditingController();
     _companyOverview = TextEditingController(text: job.companyOverview ?? '');
     _responsibilityInput = TextEditingController();
@@ -486,6 +492,7 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
     _currency.dispose();
     _description.dispose();
     _minYears.dispose();
+    _fieldOfStudy.dispose();
     _skillInput.dispose();
     _companyOverview.dispose();
     _responsibilityInput.dispose();
@@ -760,6 +767,7 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
       benefits: _benefits,
       minYearsOfExperience: int.tryParse(_minYears.text.trim()),
       educationLevel: _educationLevel,
+      fieldOfStudy: _fieldOfStudy.text.trim(),
       requiresManagementExperience: _requiresManagement,
       autoRejectNonMatches: _autoRejectNonMatches,
       autoRejectBelowScore: _autoRejectBelowScore.round(),
@@ -1061,6 +1069,15 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 10),
+                      const _FieldLabel('FIELD OF STUDY'),
+                      TextFormField(
+                        controller: _fieldOfStudy,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: const InputDecoration(
+                          hintText: 'e.g. Genetics, Biochemistry',
+                        ),
                       ),
                       const SizedBox(height: 10),
                       const SizedBox(height: 6),
