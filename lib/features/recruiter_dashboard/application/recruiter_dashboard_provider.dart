@@ -1,8 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/network/dio_provider.dart';
 import '../data/recruiter_dashboard_repository.dart';
 import '../data/model/recruiter_dashboard_models.dart';
 
-final recruiterDashboardRepositoryProvider = Provider((ref) => RecruiterDashboardRepository());
+final recruiterDashboardRepositoryProvider = Provider((ref) =>
+    RecruiterDashboardRepository(ref.watch(dioProvider)));
 
 class RecruiterDashboardState {
   final RecruiterDashboardSummary? summary;
