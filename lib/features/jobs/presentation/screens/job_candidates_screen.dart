@@ -177,9 +177,9 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
       if (!mounted) return;
       await ref.read(jobApplicantsProvider(widget.jobId).notifier).refresh();
       if (!mounted) return;
-      if (isReject && !emailSent) {
+      if (status != ApplicationBackendStatus.submitted && !emailSent) {
         AppToast.info(context,
-            'Candidate rejected. The email could not be delivered; try again later.');
+            'Status updated. The email could not be delivered; try again later.');
       } else {
         AppToast.success(
             context,
@@ -230,7 +230,9 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
         final emailSent =
             await repository.updateApplicationStatus(applicant.id, status);
         succeeded++;
-        if (rejecting && !emailSent) emailFailures++;
+        if (status != ApplicationBackendStatus.submitted && !emailSent) {
+          emailFailures++;
+        }
       } catch (_) {
         failures++;
       }
@@ -301,10 +303,7 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
     final canMessageCandidates =
         user?.capabilities['allowsCandidateMessaging'] == true ||
             user?.hasModule('hiring.candidate.messaging') == true;
-    final canScheduleInterviews = user?.hasModule('hiring.stage.interview') ==
-            true &&
-        (((user?.limits['interviewInvitesPerJob'] as num?)?.toInt() ?? 0) > 0 ||
-            user?.limits['interviewInvitesPerJob'] == -1);
+    const canScheduleInterviews = true;
     final notifier = ref.read(jobApplicantsProvider(widget.jobId).notifier);
 
     final query = _search.trim().toLowerCase();
@@ -455,11 +454,6 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
                 extra: visible[index],
               ),
               onSendInvite: () async {
-                if (!canScheduleInterviews) {
-                  AppToast.info(context,
-                      'Interview scheduling is available on Pro and Business plans.');
-                  return;
-                }
                 await showScheduleInterview(
                   context,
                   applicationId: visible[index].id,
