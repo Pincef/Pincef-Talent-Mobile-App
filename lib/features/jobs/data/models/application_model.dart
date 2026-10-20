@@ -191,6 +191,9 @@ class ApplicantInfo {
     required this.email,
     this.skills = const [],
     this.profileImageUrl,
+    this.yearsOfExperience,
+    this.education = const [],
+    this.location,
   });
 
   final String id;
@@ -220,6 +223,9 @@ class ApplicantInfo {
   /// — see candidateProfile.model.ts's IProfileImage). Null/missing/empty
   /// all mean "no photo" — the UI falls back to the initials avatar.
   final String? profileImageUrl;
+  final int? yearsOfExperience;
+  final List<String> education;
+  final String? location;
 
   String get fullName => '$firstName $lastName'.trim();
 
@@ -231,6 +237,27 @@ class ApplicantInfo {
   }
 
   factory ApplicantInfo.fromApiJson(Map<String, dynamic> json) {
+    final rawLocation = json['location'];
+    final location = rawLocation is Map
+        ? [rawLocation['city'], rawLocation['countryName']]
+            .whereType<String>()
+            .where((part) => part.trim().isNotEmpty)
+            .join(', ')
+        : null;
+    final education = (json['education'] as List? ?? const [])
+        .whereType<Map>()
+        .map((item) {
+          final degree = item['degree']?.toString().trim() ?? '';
+          final field = item['fieldOfStudy']?.toString().trim() ?? '';
+          final school = item['institution']?.toString().trim() ?? '';
+          final qualification =
+              [degree, field].where((part) => part.isNotEmpty).join(' · ');
+          return [qualification, school]
+              .where((part) => part.isNotEmpty)
+              .join(' — ');
+        })
+        .where((line) => line.isNotEmpty)
+        .toList(growable: false);
     return ApplicantInfo(
       id: (json['_id'] ?? json['id'] ?? '') as String,
       firstName: json['firstName'] as String? ?? '',
@@ -238,6 +265,9 @@ class ApplicantInfo {
       email: json['email'] as String? ?? '',
       skills: (json['skills'] as List?)?.cast<String>() ?? const [],
       profileImageUrl: _extractProfileImageUrl(json),
+      yearsOfExperience: (json['yearsOfExperience'] as num?)?.toInt(),
+      education: education,
+      location: location?.isEmpty == true ? null : location,
     );
   }
 
@@ -318,7 +348,7 @@ class JobApplicantSummary {
       appliedAt: DateTime.tryParse(json['appliedAt'] as String? ?? '') ??
           DateTime.now(),
       cvUrl: json['cvUrl'] as String?,
-      aiScore: json['aiScore'] as int?,
+      aiScore: (json['aiScore'] as num?)?.toInt(),
     );
   }
 }
