@@ -37,6 +37,11 @@ flutter:
   assets:
     - lib/assets/images/logo.jpeg
     - lib/assets/images/white-logo.jpg
+    - lib/assets/fonts/OFL-Manrope.txt
+  fonts:
+    - family: Manrope
+      fonts:
+        - asset: lib/assets/fonts/Manrope-Variable.ttf
 
 flutter_launcher_icons:
   android: true
