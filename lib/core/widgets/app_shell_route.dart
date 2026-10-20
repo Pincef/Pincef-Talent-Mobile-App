@@ -211,7 +211,9 @@ class _AppShellRouteState extends ConsumerState<AppShellRoute> {
       final item = navItems[i];
       for (var j = 0; j < item.children.length; j++) {
         final route = item.children[j].route;
-        if (route != null && _routeMatches(Uri.parse(route), currentUri)) {
+        if (route != null &&
+            (_routeMatches(Uri.parse(route), currentUri) ||
+                currentUri.path.startsWith('${Uri.parse(route).path}/'))) {
           return (i, j);
         }
       }
