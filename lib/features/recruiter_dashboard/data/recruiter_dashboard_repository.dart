@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import '../../../core/network/dio_provider.dart';
 import 'model/recruiter_dashboard_models.dart';
 
 class RecruiterDashboardRepository {
@@ -14,30 +13,47 @@ class RecruiterDashboardRepository {
       _dio.get('/jobs/mine'),
       _dio.get('/dashboard/applications-trend', queryParameters: {'months': 6}),
     ]);
-    Map<String, dynamic> dataOf(Response response) =>
-        Map<String, dynamic>.from(response.data['data'] as Map);
+    Object? payloadOf(Response response) {
+      final body = response.data;
+      // Dashboard endpoints historically returned bare values. Accept both
+      // forms so a backend deploy and an app update do not have to be atomic.
+      if (body is Map && body.containsKey('data')) return body['data'];
+      return body;
+    }
+
+    Map<String, dynamic> dataOf(Response response) {
+      final payload = payloadOf(response);
+      if (payload is Map) return Map<String, dynamic>.from(payload);
+      throw const FormatException('Dashboard overview response was not an object');
+    }
+
+    List<Map<String, dynamic>> rowsOf(Response response) {
+      final payload = payloadOf(response);
+      if (payload is! List) return const [];
+      return payload
+          .whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList();
+    }
+
     final overview = dataOf(responses[0]);
-    final topJobs = (responses[1].data['data'] as List? ?? const [])
-        .whereType<Map>()
-        .map((row) => Map<String, dynamic>.from(row))
-        .toList();
-    final allJobs = (responses[2].data['data'] as List? ?? const [])
-        .whereType<Map>()
-        .map((row) => Map<String, dynamic>.from(row))
-        .toList();
-    final trend = (responses[3].data['data'] as List? ?? const [])
-        .whereType<Map>()
+    final topJobs = rowsOf(responses[1]);
+    final allJobs = rowsOf(responses[2]);
+    final trend = rowsOf(responses[3])
         .map((row) => ApplicationTrendPoint(
               year: (row['year'] as num?)?.toInt() ?? 0,
               month: (row['month'] as num?)?.toInt() ?? 0,
               count: (row['count'] as num?)?.toInt() ?? 0,
             ))
+        .where((point) => point.month >= 1 && point.month <= 12)
         .toList();
     final jobsById = {
       for (final job in allJobs) (job['_id'] ?? job['id']).toString(): job
     };
-    final statuses = Map<String, dynamic>.from(
-        overview['applicationsByStatus'] as Map? ?? const {});
+    final rawStatuses = overview['applicationsByStatus'];
+    final statuses = rawStatuses is Map
+        ? Map<String, dynamic>.from(rawStatuses)
+        : <String, dynamic>{};
     int count(String status) => (statuses[status] as num?)?.toInt() ?? 0;
 
     return RecruiterDashboardSummary(
