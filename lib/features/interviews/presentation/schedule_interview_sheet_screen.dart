@@ -295,7 +295,7 @@ class _PanelState extends ConsumerState<ScheduleInterviewPanel> {
 
     return Column(children: [
       Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 12, 0),
+        padding: EdgeInsets.fromLTRB(wide ? 20 : 16, 8, 8, 0),
         child: Row(children: [
           Container(
               width: 38,
@@ -314,11 +314,13 @@ class _PanelState extends ConsumerState<ScheduleInterviewPanel> {
                       : 'Configure Interview Round',
                   style: const TextStyle(
                       color: ivNavy,
-                      fontSize: 17,
+                      fontSize: 18,
                       fontWeight: FontWeight.w700)),
               const Text(
                   'Pick a conflict-free time. The candidate is emailed automatically.',
-                  style: TextStyle(color: ivMuted, fontSize: 12)),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: ivMuted, fontSize: 12, height: 1.35)),
             ]),
           ),
           IconButton(
@@ -329,7 +331,7 @@ class _PanelState extends ConsumerState<ScheduleInterviewPanel> {
       const Divider(height: 20),
       Expanded(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
+          padding: EdgeInsets.symmetric(horizontal: wide ? 20 : 16),
           child: wide
               ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Expanded(child: left),
@@ -344,8 +346,7 @@ class _PanelState extends ConsumerState<ScheduleInterviewPanel> {
         ),
       ),
       Container(
-        padding: EdgeInsets.fromLTRB(
-            20, 10, 20, 12 + MediaQuery.viewInsetsOf(context).bottom),
+        padding: EdgeInsets.fromLTRB(wide ? 20 : 16, 10, wide ? 20 : 16, 12),
         decoration: const BoxDecoration(
             border: Border(top: BorderSide(color: ivBorder))),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -524,19 +525,23 @@ class _PanelState extends ConsumerState<ScheduleInterviewPanel> {
       candidateCard,
       const SizedBox(height: 18),
       _section('2', 'INTERVIEW ROUND'),
-      Wrap(spacing: 8, runSpacing: 8, children: [
-        for (final p in _presets)
-          _Choice(
-            title: p.$1,
-            sub: '${p.$2} mins',
-            selected: _round.text.trim() == p.$1,
-            onTap: () => setState(() {
-              _round.text = p.$1;
-              if (_duration != p.$2) _slot = null;
-              _duration = p.$2;
-            }),
-          ),
-      ]),
+      LayoutBuilder(builder: (context, constraints) {
+        final choiceWidth = (constraints.maxWidth - 8) / 2;
+        return Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final p in _presets)
+            _Choice(
+              width: choiceWidth,
+              title: p.$1,
+              sub: '${p.$2} mins',
+              selected: _round.text.trim() == p.$1,
+              onTap: () => setState(() {
+                _round.text = p.$1;
+                if (_duration != p.$2) _slot = null;
+                _duration = p.$2;
+              }),
+            ),
+        ]);
+      }),
       const SizedBox(height: 12),
       TextField(
         controller: _round,
@@ -552,7 +557,7 @@ class _PanelState extends ConsumerState<ScheduleInterviewPanel> {
           style: TextStyle(
               color: ivNavy, fontSize: 12, fontWeight: FontWeight.w600)),
       const SizedBox(height: 6),
-      Wrap(spacing: 8, children: [
+      Wrap(spacing: 8, runSpacing: 4, children: [
         for (final d in _durations)
           ChoiceChip(
             label: Text('$d min'),
@@ -734,10 +739,12 @@ class _Box extends StatelessWidget {
 
 class _Choice extends StatelessWidget {
   const _Choice(
-      {required this.title,
+      {required this.width,
+      required this.title,
       required this.sub,
       required this.selected,
       required this.onTap});
+  final double width;
   final String title, sub;
   final bool selected;
   final VoidCallback onTap;
@@ -747,7 +754,7 @@ class _Choice extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(8),
         child: Container(
-          width: 128,
+          width: width,
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
               color: selected ? ivNavy : const Color(0xFFF0F1F3),

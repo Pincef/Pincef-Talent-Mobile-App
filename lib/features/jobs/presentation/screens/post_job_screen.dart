@@ -31,6 +31,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
   final _streetAddress = TextEditingController();
   final _deadlineController = TextEditingController();
   final _minYears = TextEditingController();
+  final _fieldOfStudy = TextEditingController();
   final _customBenefit = TextEditingController();
   final _assessmentEmailCount = TextEditingController(text: '15');
   final _interviewEmailCount = TextEditingController(text: '10');
@@ -97,6 +98,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
       _streetAddress,
       _deadlineController,
       _minYears,
+      _fieldOfStudy,
       _customBenefit,
       _assessmentEmailCount,
       _interviewEmailCount,
@@ -523,11 +525,21 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
         _minYearsField(),
         const SizedBox(height: 14),
         _educationLevelField(),
+        const SizedBox(height: 14),
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _label('FIELD OF STUDY'),
+          const SizedBox(height: 6),
+          TextFormField(
+            controller: _fieldOfStudy,
+            textCapitalization: TextCapitalization.words,
+            decoration: _input('e.g. Genetics, Biochemistry'),
+          ),
+        ]),
       ]));
 
   Widget _minYearsField() =>
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _label('MINIMUM YEARS OF EXPERIENCE'),
+        _label('MINIMUM YEARS IN THIS FIELD'),
         const SizedBox(height: 6),
         TextFormField(
           controller: _minYears,
@@ -539,7 +551,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
 
   Widget _educationLevelField() =>
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _label('MINIMUM EDUCATION LEVEL'),
+        _label('EDUCATION EXPECTATION'),
         const SizedBox(height: 6),
         DropdownButtonFormField<String>(
           initialValue: _educationLevel,
@@ -900,8 +912,10 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
         const SizedBox(height: 8),
         _setting('Promote on LinkedIn', true),
         _setting('Auto-reject non-matches', _autoReject,
-            enabled: ref.read(authProvider).user?.hasModule(
-                    ModuleCodes.aiCandidateMatch) ??
+            enabled: ref
+                    .read(authProvider)
+                    .user
+                    ?.hasModule(ModuleCodes.aiCandidateMatch) ??
                 false,
             changed: (v) => setState(() {
                   _autoReject = v;
@@ -909,7 +923,8 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
                 })),
         if (_autoReject) ...[
           const SizedBox(height: 8),
-          Text('Reject applicants scoring below ${_autoRejectBelowScore.round()}%',
+          Text(
+              'Reject applicants scoring below ${_autoRejectBelowScore.round()}%',
               style: const TextStyle(color: Colors.white70, fontSize: 12)),
           Slider(
             value: _autoRejectBelowScore,
@@ -1610,6 +1625,8 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
       ],
       minYearsOfExperience: int.tryParse(_minYears.text.trim()),
       educationLevel: _educationLevel,
+      fieldOfStudy:
+          _fieldOfStudy.text.trim().isEmpty ? null : _fieldOfStudy.text.trim(),
       requiresManagementExperience: _requiresManagement,
       autoRejectNonMatches: _autoReject,
       autoRejectBelowScore: _autoRejectBelowScore.round(),
@@ -1618,18 +1635,16 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
       aiSummary: _aiSummary,
       pipelineTier: _pipelineTier,
       rankingPlanTier: _planTier,
-      assessmentEmailCount:
-          _planQuota(
-            ModuleCodes.hiringStageAssessment,
-            'assessmentEmailsPerJob',
-            int.tryParse(_assessmentEmailCount.text.trim()) ?? 15,
-          ),
-      interviewEmailCount:
-          _planQuota(
-            ModuleCodes.hiringStageInterview,
-            'interviewInvitesPerJob',
-            int.tryParse(_interviewEmailCount.text.trim()) ?? 10,
-          ),
+      assessmentEmailCount: _planQuota(
+        ModuleCodes.hiringStageAssessment,
+        'assessmentEmailsPerJob',
+        int.tryParse(_assessmentEmailCount.text.trim()) ?? 15,
+      ),
+      interviewEmailCount: _planQuota(
+        ModuleCodes.hiringStageInterview,
+        'interviewInvitesPerJob',
+        int.tryParse(_interviewEmailCount.text.trim()) ?? 10,
+      ),
       rankingLimit: _planQuota(
         ModuleCodes.aiCandidateMatch,
         'rankingsPerJob',

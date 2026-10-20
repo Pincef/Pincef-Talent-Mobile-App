@@ -51,6 +51,7 @@ class CandidateRankingRepository {
           ...item,
           'score': (item['match'] as Map?)?['score'] ?? 0,
           'insight': (item['match'] as Map?)?['rationale'] ?? '',
+          'strengths': (item['match'] as Map?)?['highlights'] ?? const [],
           'candidate': {
             ...candidate,
             'id': candidate['_id']?.toString() ?? '',

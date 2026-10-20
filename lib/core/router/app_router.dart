@@ -15,6 +15,8 @@ import 'package:talentbridge/features/recruiter_dashboard/presentation/screens/r
 import 'package:talentbridge/features/notifications/presentation/notification_center_screen.dart';
 import 'package:talentbridge/features/hiring_pipeline/presentation/hiring_pipeline_screen.dart';
 import 'package:talentbridge/features/interviews/presentation/interview_calendar_screen.dart';
+import 'package:talentbridge/features/interviews/presentation/candidate_interviews_screen.dart';
+import 'package:talentbridge/features/jobs/presentation/screens/my_applications_screen.dart';
 import 'package:talentbridge/features/recruiter_dashboard/presentation/screens/recruitment_report_screen.dart';
 import 'package:talentbridge/features/support/presentation/support_center_screen.dart';
 import '../../features/auth/application/auth_provider.dart';
@@ -27,6 +29,7 @@ import '../../features/jobs/presentation/screens/job_details_screen.dart';
 import '../../features/jobs/presentation/screens/job_candidates_screen.dart';
 import '../../features/jobs/presentation/screens/candidate_profile_preview_screen.dart';
 import '../../features/jobs/presentation/screens/ai_candidate_ranking_screen.dart';
+import '../../features/jobs/presentation/screens/candidate_comparison_jobs_screen.dart';
 import '../../features/jobs/data/models/application_model.dart';
 import '../../features/onboarding/presentation/screens/role_selection_screen.dart';
 import '../../features/profile/presentation/screens/recruiter_profile_screen.dart';
@@ -299,6 +302,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
           ),
           GoRoute(
+            path: '/candidate-comparison',
+            builder: (context, state) => const CandidateComparisonJobsScreen(),
+          ),
+          GoRoute(
             path: '/profile',
             builder: (context, state) => const RecruiterProfileScreen(),
           ),
@@ -324,7 +331,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/interviews',
-            builder: (context, state) => const InterviewCalendarScreen(),
+            builder: (context, state) => _isRecruiter(ref.read(authProvider))
+                ? const InterviewCalendarScreen()
+                : const CandidateInterviewsScreen(),
+          ),
+          GoRoute(
+            path: '/my-applications',
+            builder: (context, state) => const MyApplicationsScreen(),
           ),
           GoRoute(
             path: '/messages',

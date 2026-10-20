@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../application/candidate_dashboard_provider.dart';
 import '../../../core/widgets/candidate_dashboard_widgets.dart';
 import 'widgets/cv_upload_modal.dart';
@@ -78,7 +79,8 @@ class _DashboardBody extends StatelessWidget {
                 WorkExperienceCard(summary: summary.workExperience),
                 const SizedBox(height: 16),
                 ActiveApplicationsCard(
-                    applications: summary.applications, onViewAll: () {}),
+                    applications: summary.applications,
+                    onViewAll: () => context.go('/my-applications')),
                 const SizedBox(height: 16),
                 RecentUploadsCard(
                     uploads: summary.recentUploads, onAdd: onUploadCv),
@@ -113,7 +115,8 @@ class _DashboardBody extends StatelessWidget {
                     WorkExperienceCard(summary: summary.workExperience),
                     const SizedBox(height: 20),
                     ActiveApplicationsCard(
-                        applications: summary.applications, onViewAll: () {}),
+                        applications: summary.applications,
+                        onViewAll: () => context.go('/my-applications')),
                   ],
                 ),
               ),

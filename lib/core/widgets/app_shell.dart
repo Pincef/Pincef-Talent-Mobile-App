@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talentbridge/core/theme/brand_color.dart';
+import 'package:talentbridge/features/notifications/application/notifications_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/breakpoints.dart';
 
@@ -37,12 +39,12 @@ const List<NavItem> kCandidateNavItems = [
       NavItem(
         label: 'My Applications',
         icon: Icons.circle,
-        route: '/applications',
+        route: '/my-applications',
       ),
       NavItem(
         label: 'Interviews',
         icon: Icons.circle,
-        route: '/applications',
+        route: '/interviews',
       ),
     ],
   ),
@@ -58,21 +60,15 @@ const List<NavItem> kRecruiterNavItems = [
     label: 'Jobs',
     icon: Icons.work_outline,
     children: [
-      NavItem(
-          label: 'Active Jobs',
-          icon: Icons.circle,
-          route: '/jobs?status=active'),
-      NavItem(
-          label: 'Closed Jobs',
-          icon: Icons.circle,
-          route: '/jobs?status=closed'),
       NavItem(label: 'Job Overview', icon: Icons.circle, route: '/jobs'),
       NavItem(
           label: 'Competency Assessment',
           icon: Icons.circle,
           route: '/competency-assessments'),
       NavItem(
-          label: 'Candidate comparison', icon: Icons.circle, route: '/jobs'),
+          label: 'Candidate Comparison',
+          icon: Icons.circle,
+          route: '/candidate-comparison'),
       NavItem(
           label: 'Hiring Pipeline',
           icon: Icons.circle,
@@ -94,10 +90,10 @@ const List<NavItem> kRecruiterNavItems = [
         label: 'Recruiters Message', icon: Icons.circle, route: '/messages'),
     NavItem(label: 'Email Templates', icon: Icons.circle, route: '/jobs/new'),
   ]),
-  NavItem(label: 'Interview', icon: Icons.calendar_today_outlined, children: [
-    NavItem(label: 'Interview meet', icon: Icons.circle, route: '/interviews'),
-    NavItem(label: 'Calendar', icon: Icons.circle, route: '/interviews'),
-  ]),
+  NavItem(
+      label: 'Interview and schedule',
+      icon: Icons.calendar_today_outlined,
+      route: '/interviews'),
   NavItem(label: 'Settings', icon: Icons.settings_outlined, children: [
     NavItem(label: 'Recruiter Profile', icon: Icons.circle, route: '/profile'),
     NavItem(label: 'Account Settings', icon: Icons.circle, route: '/settings'),
@@ -427,7 +423,6 @@ class _SidebarState extends State<_Sidebar> {
     // The sidebar uses the same light surface and navigation treatment for
     // both roles.  Role-specific content (such as the candidate user card)
     // remains unchanged.
-    const foreground = BrandColors.navy;
     const muted = BrandColors.muted;
     return Container(
       width: widget.width,
@@ -554,7 +549,7 @@ class _SidebarState extends State<_Sidebar> {
           Expanded(
             child: SingleChildScrollView(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: List.generate(
                     widget.navItems.length, (index) => _buildNavGroup(index)),
               ),
@@ -632,7 +627,7 @@ class _SidebarState extends State<_Sidebar> {
     const muted = BrandColors.muted;
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
@@ -676,7 +671,7 @@ class _SidebarState extends State<_Sidebar> {
                           item.label,
                           style: TextStyle(
                             color: selected ? Colors.white : foreground,
-                            fontSize: 10,
+                            fontSize: 13,
                             fontWeight:
                                 selected ? FontWeight.w700 : FontWeight.w500,
                           ),
@@ -701,7 +696,7 @@ class _SidebarState extends State<_Sidebar> {
           Padding(
             padding: const EdgeInsets.only(left: 29, bottom: 4),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: List.generate(item.children.length, (subIndex) {
                 final sub = item.children[subIndex];
                 final subSelected = index == widget.currentIndex &&
@@ -729,7 +724,7 @@ class _SidebarState extends State<_Sidebar> {
                           sub.label,
                           style: TextStyle(
                             color: subSelected ? Colors.white : muted,
-                            fontSize: 8.5,
+                            fontSize: 12,
                             fontWeight:
                                 subSelected ? FontWeight.w700 : FontWeight.w400,
                           ),
@@ -828,10 +823,20 @@ class _TopBar extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          IconButton(
-            onPressed: onNotifications,
-            icon: const Icon(Icons.notifications_none, color: BrandColors.navy),
-          ),
+          Consumer(builder: (context, ref, _) {
+            final unread =
+                ref.watch(unreadNotificationCountProvider).valueOrNull ?? 0;
+            return IconButton(
+              onPressed: onNotifications,
+              tooltip:
+                  unread > 0 ? '$unread unread notifications' : 'Notifications',
+              icon: Badge(
+                  isLabelVisible: unread > 0,
+                  label: Text(unread > 99 ? '99+' : '$unread'),
+                  child: const Icon(Icons.notifications_none,
+                      color: BrandColors.navy)),
+            );
+          }),
           const SizedBox(width: 12),
           if (userName != null) ...[
             Column(
@@ -985,39 +990,56 @@ class _MobileShell extends StatelessWidget {
         ),
         actions: compactToolbar
             ? [
-                PopupMenuButton<String>(
-                  tooltip: 'Account and notifications',
-                  onSelected: (value) {
-                    if (value == 'notifications') onNotifications?.call();
-                    if (value == 'profile') onProfileTap?.call();
-                  },
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(
-                      value: 'notifications',
-                      child: ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: Icon(Icons.notifications_none),
-                        title: Text('Notifications'),
+                Consumer(builder: (context, ref, _) {
+                  final unread =
+                      ref.watch(unreadNotificationCountProvider).valueOrNull ??
+                          0;
+                  return PopupMenuButton<String>(
+                    tooltip: 'Account and notifications',
+                    onSelected: (value) {
+                      if (value == 'notifications') onNotifications?.call();
+                      if (value == 'profile') onProfileTap?.call();
+                    },
+                    itemBuilder: (context) => [
+                      PopupMenuItem(
+                        value: 'notifications',
+                        child: ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.notifications_none),
+                          title: Text(unread > 0
+                              ? 'Notifications ($unread)'
+                              : 'Notifications'),
+                        ),
                       ),
-                    ),
-                    PopupMenuItem(
-                      value: 'profile',
-                      child: ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: Icon(Icons.person_outline),
-                        title: Text('Profile'),
+                      const PopupMenuItem(
+                        value: 'profile',
+                        child: ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(Icons.person_outline),
+                          title: Text('Profile'),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  );
+                }),
                 const SizedBox(width: 4),
               ]
             : [
-                IconButton(
-                  onPressed: onNotifications,
-                  tooltip: 'Notifications',
-                  icon: const Icon(Icons.notifications_none),
-                ),
+                Consumer(builder: (context, ref, _) {
+                  final unread =
+                      ref.watch(unreadNotificationCountProvider).valueOrNull ??
+                          0;
+                  return IconButton(
+                    onPressed: onNotifications,
+                    tooltip: unread > 0
+                        ? '$unread unread notifications'
+                        : 'Notifications',
+                    icon: Badge(
+                        isLabelVisible: unread > 0,
+                        label: Text(unread > 99 ? '99+' : '$unread'),
+                        child: const Icon(Icons.notifications_none)),
+                  );
+                }),
                 IconButton(
                   onPressed: onProfileTap,
                   tooltip: 'Profile',

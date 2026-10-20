@@ -19,13 +19,16 @@ class CandidateRankingEntry {
     required this.score,
     required this.fitLabel,
     required this.insight,
+    this.applicationStatus,
     this.avatarUrl,
     this.experienceYears,
     this.previousCompanies = const [],
+    this.strengths = const [],
   });
 
   final int rank;
   final String applicationId; // needed for the row's Message button
+  final String? applicationStatus;
   final String candidateId; // needed for the row's Review/profile link
   final String name;
   final String? avatarUrl;
@@ -44,6 +47,7 @@ class CandidateRankingEntry {
 
   final int? experienceYears;
   final List<String> previousCompanies;
+  final List<String> strengths;
 
   RankingFitLevel get fitLevel => _fitLevelFromScore(score);
 
@@ -59,6 +63,7 @@ class CandidateRankingEntry {
     return CandidateRankingEntry(
       rank: (json['rank'] as num?)?.toInt() ?? 0,
       applicationId: (json['applicationId'] ?? '') as String,
+      applicationStatus: json['applicationStatus'] as String?,
       candidateId: (candidate?['id'] ?? json['candidateId'] ?? '') as String,
       name:
           (candidate?['name'] ?? json['name'] ?? 'Unknown candidate') as String,
@@ -70,6 +75,8 @@ class CandidateRankingEntry {
       experienceYears: (json['experienceYears'] as num?)?.toInt(),
       previousCompanies:
           (json['previousCompanies'] as List?)?.cast<String>() ?? const [],
+      strengths: (json['strengths'] as List?)?.whereType<String>().toList() ??
+          const [],
     );
   }
 }

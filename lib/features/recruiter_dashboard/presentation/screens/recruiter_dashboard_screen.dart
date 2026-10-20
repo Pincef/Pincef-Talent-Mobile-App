@@ -155,10 +155,12 @@ class _RecruiterDashboardBody extends ConsumerWidget {
                             const SizedBox(width: 16),
                             Expanded(
                               child: StatCard(
-                                label: 'Hired this Month',
-                                value: '${summary.hiredThisMonth}',
-                                note: summary.hiredThisMonthNote,
-                                icon: Icons.emoji_events_outlined,
+                                label: 'Average AI Match',
+                                value: summary.averageAiScore == null
+                                    ? '—'
+                                    : '${summary.averageAiScore!.toStringAsFixed(1)}%',
+                                note: 'Across scored applications',
+                                icon: Icons.auto_awesome_outlined,
                                 dark: true,
                               ),
                             ),
@@ -181,10 +183,12 @@ class _RecruiterDashboardBody extends ConsumerWidget {
                             ),
                             const SizedBox(height: 12),
                             StatCard(
-                              label: 'Hired this Month',
-                              value: '${summary.hiredThisMonth}',
-                              note: summary.hiredThisMonthNote,
-                              icon: Icons.emoji_events_outlined,
+                              label: 'Average AI Match',
+                              value: summary.averageAiScore == null
+                                  ? '—'
+                                  : '${summary.averageAiScore!.toStringAsFixed(1)}%',
+                              note: 'Across scored applications',
+                              icon: Icons.auto_awesome_outlined,
                               dark: true,
                             ),
                           ],
@@ -197,7 +201,8 @@ class _RecruiterDashboardBody extends ConsumerWidget {
                         Expanded(
                           flex: 2,
                           child: PriorityJobsCard(
-                              jobs: summary.priorityJobs, onViewAll: () {}),
+                              jobs: summary.priorityJobs,
+                              onViewAll: () => context.go('/jobs')),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
@@ -206,9 +211,13 @@ class _RecruiterDashboardBody extends ConsumerWidget {
                             children: [
                               QuickActionsCard(actions: quickActions),
                               const SizedBox(height: 16),
-                              RecentActivityCard(
-                                  items: summary.recentActivity,
-                                  onViewLog: () {}),
+                              PipelineSnapshotCard(
+                                  counts: summary.pipelineCounts,
+                                  total: summary.totalApplications,
+                                  averageAiScore: summary.averageAiScore),
+                              const SizedBox(height: 16),
+                              ApplicationTrendCard(
+                                  points: summary.applicationTrend),
                             ],
                           ),
                         ),
@@ -217,12 +226,17 @@ class _RecruiterDashboardBody extends ConsumerWidget {
                   : Column(
                       children: [
                         PriorityJobsCard(
-                            jobs: summary.priorityJobs, onViewAll: () {}),
+                            jobs: summary.priorityJobs,
+                            onViewAll: () => context.go('/jobs')),
                         const SizedBox(height: 16),
                         QuickActionsCard(actions: quickActions),
                         const SizedBox(height: 16),
-                        RecentActivityCard(
-                            items: summary.recentActivity, onViewLog: () {}),
+                        PipelineSnapshotCard(
+                            counts: summary.pipelineCounts,
+                            total: summary.totalApplications,
+                            averageAiScore: summary.averageAiScore),
+                        const SizedBox(height: 16),
+                        ApplicationTrendCard(points: summary.applicationTrend),
                       ],
                     ),
               const SizedBox(height: 24),

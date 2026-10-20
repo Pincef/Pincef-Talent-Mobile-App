@@ -64,6 +64,7 @@ class JobDraft {
     this.requiredSkills = const [],
     this.minYearsOfExperience,
     this.educationLevel,
+    this.fieldOfStudy,
     this.requiresManagementExperience = false,
     this.applicationDeadline,
     this.aiRanking = false,
@@ -102,6 +103,7 @@ class JobDraft {
   final int? minYearsOfExperience;
   final String?
       educationLevel; // high_school | associate | bachelors | masters | doctorate
+  final String? fieldOfStudy;
   final bool requiresManagementExperience;
   final DateTime? applicationDeadline;
   final bool aiRanking;
@@ -128,7 +130,8 @@ class JobDraft {
     if (minYearsOfExperience == null) missing.add('minYearsOfExperience');
     if (educationLevel == null) missing.add('educationLevel');
     if (requiredSkills.isEmpty) missing.add('requiredSkills');
-    if ((aiRanking || aiSummary || autoRejectNonMatches) && applicationDeadline == null) {
+    if ((aiRanking || aiSummary || autoRejectNonMatches) &&
+        applicationDeadline == null) {
       missing.add('applicationDeadline');
     }
     if (autoRejectNonMatches && !aiRanking) missing.add('aiRanking');
@@ -150,6 +153,7 @@ class JobDraft {
     List<String>? requiredSkills,
     int? minYearsOfExperience,
     String? educationLevel,
+    String? fieldOfStudy,
     bool? requiresManagementExperience,
     DateTime? applicationDeadline,
     bool? aiRanking,
@@ -179,6 +183,7 @@ class JobDraft {
         requiredSkills: requiredSkills ?? this.requiredSkills,
         minYearsOfExperience: minYearsOfExperience ?? this.minYearsOfExperience,
         educationLevel: educationLevel ?? this.educationLevel,
+        fieldOfStudy: fieldOfStudy ?? this.fieldOfStudy,
         requiresManagementExperience:
             requiresManagementExperience ?? this.requiresManagementExperience,
         applicationDeadline: applicationDeadline ?? this.applicationDeadline,
@@ -213,16 +218,21 @@ class JobDraft {
         if (minYearsOfExperience != null)
           'minYearsOfExperience': minYearsOfExperience,
         if (educationLevel != null) 'educationLevel': educationLevel,
+        if (fieldOfStudy != null) 'fieldOfStudy': fieldOfStudy!.trim(),
         'requiresManagementExperience': requiresManagementExperience,
         'responsibilities': responsibilities,
         'benefits': benefits,
         'autoRejectNonMatches': autoRejectNonMatches,
         'autoRejectBelowScore': autoRejectBelowScore,
-        if (rankingLimit > 0 || assessmentEmailCount > 0 || interviewEmailCount > 0)
+        if (rankingLimit > 0 ||
+            assessmentEmailCount > 0 ||
+            interviewEmailCount > 0)
           'automation': {
-          if (rankingLimit > 0) 'rankingLimit': rankingLimit,
-          if (assessmentEmailCount > 0) 'assessmentEmails': assessmentEmailCount,
-          if (interviewEmailCount > 0) 'interviewInvites': interviewEmailCount,
+            if (rankingLimit > 0) 'rankingLimit': rankingLimit,
+            if (assessmentEmailCount > 0)
+              'assessmentEmails': assessmentEmailCount,
+            if (interviewEmailCount > 0)
+              'interviewInvites': interviewEmailCount,
           },
         if (applicationDeadline != null || id != null)
           'applicationDeadline': applicationDeadline?.toUtc().toIso8601String(),
@@ -652,6 +662,7 @@ class JobDetail {
     required this.requiredSkills,
     this.minYearsOfExperience,
     this.educationLevel,
+    this.fieldOfStudy,
     this.minSalary,
     this.maxSalary,
     this.currency,
@@ -683,6 +694,7 @@ class JobDetail {
   final List<String> requiredSkills;
   final int? minYearsOfExperience;
   final String? educationLevel;
+  final String? fieldOfStudy;
   final double? minSalary;
   final double? maxSalary;
   final String? currency;
@@ -771,6 +783,7 @@ class JobDetail {
           const [],
       minYearsOfExperience: (json['minYearsOfExperience'] as num?)?.toInt(),
       educationLevel: json['educationLevel'] as String?,
+      fieldOfStudy: json['fieldOfStudy'] as String?,
       minSalary: (json['minSalary'] as num?)?.toDouble(),
       maxSalary: (json['maxSalary'] as num?)?.toDouble(),
       currency: json['currency'] as String?,
@@ -787,7 +800,8 @@ class JobDetail {
       requiresManagementExperience:
           json['requiresManagementExperience'] as bool? ?? false,
       autoRejectNonMatches: json['autoRejectNonMatches'] as bool? ?? false,
-      autoRejectBelowScore: (json['autoRejectBelowScore'] as num?)?.toInt() ?? 65,
+      autoRejectBelowScore:
+          (json['autoRejectBelowScore'] as num?)?.toInt() ?? 65,
       applicationDeadline: DateTime.tryParse(
         (json['applicationDeadline'] ?? '').toString(),
       ),
