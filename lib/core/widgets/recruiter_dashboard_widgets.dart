@@ -164,7 +164,7 @@ class _PriorityJobRow extends StatelessWidget {
             if (job.isScanning)
               const _StatusPill(label: 'Scanning...', background: BrandColors.orange, foreground: Colors.white),
             _StatusPill(
-              label: job.status == JobPublishStatus.active ? 'ACTIVE' : 'DRAFTING',
+              label: switch (job.status) { JobPublishStatus.active => 'ACTIVE', JobPublishStatus.drafting => 'DRAFT', JobPublishStatus.closed => 'CLOSED' },
               background: job.status == JobPublishStatus.active ? const Color(0xFF16A34A) : BrandColors.iconBg,
               foreground: job.status == JobPublishStatus.active ? Colors.white : BrandColors.muted,
             ),
@@ -309,6 +309,63 @@ class RecentActivityCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class PipelineSnapshotCard extends StatelessWidget {
+  const PipelineSnapshotCard({super.key, required this.counts, required this.total, required this.averageAiScore});
+  final Map<String, int> counts;
+  final int total;
+  final double? averageAiScore;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: BrandColors.border)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Hiring Pipeline', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: BrandColors.navy)),
+          const SizedBox(height: 6),
+          Text('$total applications${averageAiScore == null ? '' : ' • ${averageAiScore!.toStringAsFixed(1)}% average AI score'}', style: const TextStyle(fontSize: 11.5, color: BrandColors.muted)),
+          const SizedBox(height: 14),
+          for (final stage in const ['submitted', 'shortlisted', 'interviewing', 'offered', 'hired', 'rejected'])
+            if ((counts[stage] ?? 0) > 0) Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(children: [Expanded(child: Text(stage[0].toUpperCase() + stage.substring(1), style: const TextStyle(fontSize: 12, color: BrandColors.navy))), Text('${counts[stage]}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: BrandColors.navy))]),
+            ),
+          if (total == 0) const Text('No applications yet.', style: TextStyle(fontSize: 12, color: BrandColors.muted)),
+        ]),
+      );
+}
+
+class ApplicationTrendCard extends StatelessWidget {
+  const ApplicationTrendCard({super.key, required this.points});
+  final List<ApplicationTrendPoint> points;
+
+  @override
+  Widget build(BuildContext context) {
+    final maxCount = points.fold<int>(0, (max, point) => point.count > max ? point.count : max);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: BrandColors.border)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Application Trend', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: BrandColors.navy)),
+        const SizedBox(height: 14),
+        if (points.isEmpty)
+          const Text('No application trend data yet.', style: TextStyle(fontSize: 12, color: BrandColors.muted))
+        else
+          SizedBox(height: 116, child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            for (final point in points) Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 3), child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
+              Text('${point.count}', style: const TextStyle(fontSize: 10, color: BrandColors.muted)),
+              const SizedBox(height: 4),
+              Expanded(child: Align(alignment: Alignment.bottomCenter, child: Container(width: 20, height: maxCount == 0 ? 2 : (72 * point.count / maxCount).clamp(3, 72).toDouble(), decoration: BoxDecoration(color: BrandColors.orange, borderRadius: BorderRadius.circular(5))))),
+              const SizedBox(height: 5),
+              Text(point.label, style: const TextStyle(fontSize: 9, color: BrandColors.muted)),
+            ]))),
+          ])),
+      ]),
     );
   }
 }
