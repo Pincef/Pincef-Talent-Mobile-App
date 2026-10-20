@@ -9,6 +9,8 @@ import 'package:talentbridge/features/messages/application/messages_provider.dar
         selectedMessageThreadProvider,
         messageThreadsProvider;
 import 'package:talentbridge/features/auth/application/auth_provider.dart';
+import 'package:talentbridge/features/jobs/application/application_provider.dart';
+import 'package:talentbridge/features/jobs/data/models/application_model.dart';
 import '../../application/job_management_provider.dart';
 import '../../application/candidate_ranking_provider.dart';
 import '../../data/models/candidate_ranking_model.dart';
@@ -44,7 +46,8 @@ class AiCandidateRankingScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _Breadcrumb(
-                  jobTitle: jobTitle, onBackToJobs: () => context.go('/jobs')),
+                  jobTitle: jobTitle,
+                  onBackToJobs: () => context.go('/candidate-comparison')),
               const SizedBox(height: 14),
               _Header(
                 isWide: isWide,
@@ -98,7 +101,7 @@ class _Breadcrumb extends StatelessWidget {
         children: [
           InkWell(
             onTap: onBackToJobs,
-            child: const Text('Active Jobs',
+            child: const Text('Candidate Comparison',
                 style: TextStyle(
                     fontSize: 11.5,
                     color: BrandColors.muted,
@@ -139,8 +142,8 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final subtitle = candidateCount == null
-        ? 'AI rankings are generated after this role’s application deadline.'
-        : 'Processed $candidateCount candidates against role requirements using TalentBridge AI';
+        ? 'Comparison data includes match score, role fit, relevant strengths, and experience.'
+        : 'Comparing $candidateCount candidates by AI match score, role fit, strengths, and experience.';
 
     return Wrap(
       alignment: WrapAlignment.spaceBetween,
@@ -153,7 +156,7 @@ class _Header extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('AI Candidate Ranking',
+              const Text('Candidate Comparison',
                   style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
@@ -227,7 +230,8 @@ class _RankingBody extends ConsumerWidget {
                     const SizedBox(width: 16),
                     Expanded(
                         flex: 2,
-                        child: _AutomateWorkflowCard(entries: result.entries)),
+                        child: _AutomateWorkflowCard(
+                            jobId: jobId, entries: result.entries)),
                   ],
                 ),
               )
@@ -235,7 +239,7 @@ class _RankingBody extends ConsumerWidget {
                 children: [
                   _ReasoningCard(result: result),
                   const SizedBox(height: 16),
-                  _AutomateWorkflowCard(entries: result.entries),
+                  _AutomateWorkflowCard(jobId: jobId, entries: result.entries),
                 ],
               ),
       ],
@@ -402,6 +406,27 @@ class _RankingListState extends ConsumerState<_RankingList> {
     }
   }
 
+  Future<void> _shortlist(CandidateRankingEntry entry) async {
+    try {
+      final emailSent = await ref
+          .read(applicationsRepositoryProvider)
+          .updateApplicationStatus(
+            entry.applicationId,
+            ApplicationBackendStatus.shortlisted,
+          );
+      if (!mounted) return;
+      ref.invalidate(candidateRankingProvider(widget.jobId));
+      if (emailSent) {
+        AppToast.success(context, '${entry.name} shortlisted and notified.');
+      } else {
+        AppToast.info(context,
+            '${entry.name} shortlisted. The status email could not be delivered.');
+      }
+    } catch (e) {
+      if (mounted) AppToast.error(context, "Couldn't shortlist candidate: $e");
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final start = _page * _pageSize;
@@ -549,6 +574,12 @@ class _RankingListState extends ConsumerState<_RankingList> {
                             fontSize: 10.5,
                             color: BrandColors.muted,
                             height: 1.35)),
+                    if (entry.strengths.isNotEmpty) ...[
+                      const SizedBox(height: 5),
+                      Text('Strengths: ${entry.strengths.join(', ')}',
+                          style: const TextStyle(
+                              fontSize: 9.5, color: BrandColors.navy)),
+                    ],
                   ],
                 ),
               ),
@@ -571,11 +602,14 @@ class _RankingListState extends ConsumerState<_RankingList> {
               ),
             ),
             SizedBox(
-              width: 100,
+              width: 136,
               child: _RowActions(
                 onReview: () => context.push(
                     '/jobs/${widget.jobId}/candidates/${entry.candidateId}'),
                 onMessage: () => _message(entry),
+                onShortlist: entry.applicationStatus == 'submitted'
+                    ? () => _shortlist(entry)
+                    : null,
                 canMessage: _canMessage,
               ),
             ),
@@ -624,6 +658,12 @@ class _RankingListState extends ConsumerState<_RankingList> {
             Text(entry.insight,
                 style: const TextStyle(
                     fontSize: 11, color: BrandColors.muted, height: 1.4)),
+            if (entry.strengths.isNotEmpty) ...[
+              const SizedBox(height: 5),
+              Text('Strengths: ${entry.strengths.join(', ')}',
+                  style:
+                      const TextStyle(fontSize: 10.5, color: BrandColors.navy)),
+            ],
             const SizedBox(height: 8),
             Row(
               children: [
@@ -645,6 +685,9 @@ class _RankingListState extends ConsumerState<_RankingList> {
               onReview: () => context.push(
                   '/jobs/${widget.jobId}/candidates/${entry.candidateId}'),
               onMessage: () => _message(entry),
+              onShortlist: entry.applicationStatus == 'submitted'
+                  ? () => _shortlist(entry)
+                  : null,
               canMessage: _canMessage,
               expand: true,
             ),
@@ -664,10 +707,12 @@ class _RowActions extends StatelessWidget {
       {required this.onReview,
       required this.onMessage,
       required this.canMessage,
+      this.onShortlist,
       this.expand = false});
   final VoidCallback onReview;
   final VoidCallback onMessage;
   final bool canMessage;
+  final VoidCallback? onShortlist;
   final bool expand;
 
   @override
@@ -701,17 +746,45 @@ class _RowActions extends StatelessWidget {
             size: 14),
       ),
     );
+    final shortlistButton = Tooltip(
+      message: 'Shortlist candidate',
+      child: SizedBox(
+        width: 30,
+        height: 30,
+        child: OutlinedButton(
+          onPressed: onShortlist,
+          style: OutlinedButton.styleFrom(
+            padding: EdgeInsets.zero,
+            foregroundColor: const Color(0xFF0A8F68),
+            side: const BorderSide(color: Color(0xFFB7E5D7)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          ),
+          child: const Icon(Icons.playlist_add_check, size: 15),
+        ),
+      ),
+    );
 
     if (expand) {
       return Row(children: [
         Expanded(child: reviewButton),
         const SizedBox(width: 8),
+        if (onShortlist != null) ...[
+          shortlistButton,
+          const SizedBox(width: 8),
+        ],
         messageButton
       ]);
     }
-    return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [reviewButton, const SizedBox(width: 6), messageButton]);
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      reviewButton,
+      const SizedBox(width: 4),
+      if (onShortlist != null) ...[
+        shortlistButton,
+        const SizedBox(width: 4),
+      ],
+      messageButton,
+    ]);
   }
 }
 
@@ -888,11 +961,9 @@ class _ReasoningCallout extends StatelessWidget {
       );
 }
 
-/// Static checklist for now — "Activate Workflow" has no backend behind it
-/// yet, same status as the other un-implemented AI tools on
-/// job_candidates_screen.dart.
 class _AutomateWorkflowCard extends StatelessWidget {
-  const _AutomateWorkflowCard({required this.entries});
+  const _AutomateWorkflowCard({required this.jobId, required this.entries});
+  final String jobId;
   final List<CandidateRankingEntry> entries;
 
   @override
@@ -906,7 +977,7 @@ class _AutomateWorkflowCard extends StatelessWidget {
             Row(
               children: [
                 const Expanded(
-                  child: Text('Automate Workflow',
+                  child: Text('Next Hiring Steps',
                       style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w800,
@@ -931,22 +1002,23 @@ class _AutomateWorkflowCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
-            const _WorkflowStep(label: 'Technical Assessment'),
-            const _WorkflowStep(label: 'Interview Email'),
-            const _WorkflowStep(label: 'Calendar Reminder'),
+            const _WorkflowStep(label: 'Review AI-ranked candidates'),
+            const _WorkflowStep(
+                label: 'Invite shortlisted candidates to assessment'),
+            const _WorkflowStep(
+                label: 'Schedule interviews and track outcomes'),
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () => AppToast.info(
-                    context, 'Workflow automation is coming soon.'),
+                onPressed: () => context.go('/jobs/$jobId/candidates'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: BrandColors.orange,
                   foregroundColor: Colors.white,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
-                child: const Text('Activate Workflow',
+                child: const Text('Manage Hiring Pipeline',
                     style:
                         TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
               ),
