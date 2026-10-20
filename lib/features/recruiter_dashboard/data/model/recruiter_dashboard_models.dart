@@ -43,7 +43,7 @@ class ApplicationTrendPoint {
         'Oct',
         'Nov',
         'Dec',
-      ][month - 1];
+      ][month >= 1 && month <= 12 ? month - 1 : 0];
 }
 
 class RecentActivityItem {
