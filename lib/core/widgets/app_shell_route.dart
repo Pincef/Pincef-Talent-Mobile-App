@@ -6,6 +6,10 @@ import 'package:talentbridge/features/auth/data/models/user_model.dart';
 import 'package:talentbridge/features/admin/application/admin_provider.dart';
 import 'package:talentbridge/features/candidate_dashboard/presentation/widgets/cv_upload_modal.dart';
 import 'package:talentbridge/features/jobs/application/job_management_provider.dart';
+import 'package:talentbridge/features/jobs/application/application_provider.dart'
+    show myApplicationsListProvider;
+import 'package:talentbridge/features/notifications/application/notifications_provider.dart'
+    show notificationsProvider;
 import 'package:talentbridge/features/messages/application/messages_provider.dart'
     show messageThreadsProvider;
 import 'package:talentbridge/features/messages/application/candidate_messages_provider.dart'
@@ -35,6 +39,8 @@ void _invalidateDataFor(WidgetRef ref, String route) {
     ref.invalidate(candidateContactsProvider);
   } else if (path == '/jobs') {
     ref.invalidate(jobManagementProvider);
+  } else if (path == '/my-applications') {
+    ref.invalidate(myApplicationsListProvider);
   } else if (path == '/admin/users') {
     ref.invalidate(adminUsersProvider);
   } else if (path == '/admin/subscriptions') {
@@ -120,7 +126,10 @@ class _AppShellRouteState extends ConsumerState<AppShellRoute> {
         }
         navigate(destination);
       },
-      onNotifications: () => context.push('/notification'),
+      onNotifications: () {
+        ref.invalidate(notificationsProvider);
+        context.push('/notification');
+      },
       onSupport: isAdmin ? null : () => context.go('/support'),
       // Only meaningful on the candidate Browse Jobs screen right now —
       // there's nothing else this shared top-bar search should drive
