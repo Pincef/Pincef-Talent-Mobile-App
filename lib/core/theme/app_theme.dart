@@ -1,10 +1,27 @@
 import 'package:flutter/material.dart';
 import 'brand_color.dart';
 
+final TextTheme _baseTextTheme = Typography.material2021().black;
+final TextTheme _manropeTextTheme = _baseTextTheme
+    .apply(fontFamily: 'Manrope')
+    .copyWith(
+      bodyLarge: _baseTextTheme.bodyLarge?.copyWith(fontSize: 16, height: 1.5),
+      bodyMedium:
+          _baseTextTheme.bodyMedium?.copyWith(fontSize: 16, height: 1.5),
+      bodySmall: _baseTextTheme.bodySmall?.copyWith(fontSize: 14, height: 1.4),
+      titleLarge:
+          _baseTextTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+      titleMedium:
+          _baseTextTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+      titleSmall:
+          _baseTextTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+    );
+
 final ThemeData appTheme = ThemeData(
   useMaterial3: true,
   brightness: Brightness.light,
-  fontFamily: 'Roboto',
+  fontFamily: 'Manrope',
+  textTheme: _manropeTextTheme,
   colorScheme: const ColorScheme.light(
     primary: BrandColors.orange,
     secondary: BrandColors.navy,
