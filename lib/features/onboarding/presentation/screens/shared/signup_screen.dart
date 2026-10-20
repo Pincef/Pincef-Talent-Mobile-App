@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../../core/theme/brand_color.dart';
 import '../../../../../core/theme/auth_form_style.dart';
@@ -28,6 +29,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
   bool _isSubmitting = false;
+  String _country = 'NG';
   String? _errorText;
 
   @override
@@ -68,6 +70,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
             email: _emailController.text.trim(),
             password: _passwordController.text,
             role: role,
+            country: _country,
           );
 
       if (!mounted) return;
@@ -85,6 +88,18 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  Future<void> _continueWithGoogle() async {
+    final role = ref.read(selectedRoleProvider);
+    if (role == null) {
+      setState(() => _errorText = 'Please choose a role before continuing with Google.');
+      return;
+    }
+    final uri = ref.read(authRepositoryProvider).googleOAuthUrl(role: role, country: _country);
+    if (!await launchUrl(uri, mode: LaunchMode.platformDefault) && mounted) {
+      AppToast.error(context, 'Could not open Google sign-in.');
     }
   }
 
@@ -172,6 +187,31 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                             hint: 'you@example.com', icon: Icons.mail_outline),
                         validator: emailValidator,
                         style: const TextStyle(color: BrandColors.navy),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text('COUNTRY', style: authLabelStyle),
+                      const SizedBox(height: 6),
+                      DropdownButtonFormField<String>(
+                        initialValue: _country,
+                        decoration: authInputDecoration(
+                          hint: 'Select your country',
+                          icon: Icons.public_outlined,
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'NG', child: Text('Nigeria')),
+                          DropdownMenuItem(value: 'GH', child: Text('Ghana')),
+                          DropdownMenuItem(value: 'KE', child: Text('Kenya')),
+                          DropdownMenuItem(
+                              value: 'ZA', child: Text('South Africa')),
+                          DropdownMenuItem(
+                              value: 'GB', child: Text('United Kingdom')),
+                          DropdownMenuItem(
+                              value: 'US', child: Text('United States')),
+                          DropdownMenuItem(value: 'CA', child: Text('Canada')),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) setState(() => _country = value);
+                        },
                       ),
                       const SizedBox(height: 16),
                       const Text('PASSWORD', style: authLabelStyle),
@@ -276,9 +316,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                       ),
                       const SizedBox(height: 18),
                       OutlinedButton.icon(
-                        onPressed: () {
-                          // TODO: wire Google sign-up once you have an OAuth flow
-                        },
+                        onPressed: _continueWithGoogle,
                         icon: const Icon(Icons.g_mobiledata, size: 22),
                         label: const Text('Continue with Google'),
                         style: OutlinedButton.styleFrom(

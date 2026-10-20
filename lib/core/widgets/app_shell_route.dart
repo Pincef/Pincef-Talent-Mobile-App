@@ -29,18 +29,19 @@ import 'logout_success_dialog.dart';
 /// candidate inbox while looking at the recruiter one) — Riverpod just
 /// marks it for recompute next time something reads it.
 void _invalidateDataFor(WidgetRef ref, String route) {
-  if (route == '/messages') {
+  final path = Uri.parse(route).path;
+  if (path == '/messages') {
     ref.invalidate(messageThreadsProvider);
     ref.invalidate(candidateContactsProvider);
-  } else if (route == '/jobs') {
+  } else if (path == '/jobs') {
     ref.invalidate(jobManagementProvider);
-  } else if (route == '/admin/users') {
+  } else if (path == '/admin/users') {
     ref.invalidate(adminUsersProvider);
-  } else if (route == '/admin/subscriptions') {
+  } else if (path == '/admin/subscriptions') {
     ref.invalidate(adminSubscriptionsProvider);
-  } else if (route == '/admin/jobs') {
+  } else if (path == '/admin/jobs') {
     ref.invalidate(adminJobsProvider);
-  } else if (route == '/admin/tickets') {
+  } else if (path == '/admin/tickets') {
     ref.invalidate(adminTicketsProvider);
   }
 }
@@ -56,14 +57,23 @@ void _invalidateDataFor(WidgetRef ref, String route) {
 /// Recruiter vs candidate is decided here, once, from authProvider — the
 /// same _isRecruiter-style check app_router.dart already uses for the
 /// /dashboard route.
-class AppShellRoute extends ConsumerWidget {
+class AppShellRoute extends ConsumerStatefulWidget {
   const AppShellRoute({super.key, required this.state, required this.child});
 
   final GoRouterState state;
   final Widget child;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AppShellRoute> createState() => _AppShellRouteState();
+}
+
+class _AppShellRouteState extends ConsumerState<AppShellRoute> {
+  String? _manualSelectionLocation;
+  int? _manualTopIndex;
+  int? _manualSubIndex;
+
+  @override
+  Widget build(BuildContext context) {
     final user = ref.watch(authProvider).user;
     final isRecruiter = user?.role == UserRole.recruiter;
     final isAdmin = user?.role == UserRole.admin;
@@ -73,7 +83,13 @@ class AppShellRoute extends ConsumerWidget {
         : isRecruiter
             ? kRecruiterNavItems
             : kCandidateNavItems;
-    final (topIndex, subIndex) = _resolveIndex(navItems, state.matchedLocation);
+    final location = widget.state.uri.toString();
+    final manualSelection =
+        _manualSelectionLocation == location && _manualTopIndex != null
+            ? (_manualTopIndex!, _manualSubIndex)
+            : null;
+    final (topIndex, subIndex) =
+        manualSelection ?? _resolveIndex(navItems, location);
 
     void navigate(String? route) {
       if (route == null) return; // no screen wired up for this item yet
@@ -85,22 +101,31 @@ class AppShellRoute extends ConsumerWidget {
       currentIndex: topIndex,
       currentSubIndex: subIndex,
       navItems: navItems,
-      body: child,
-      onNavTap: (index) => navigate(navItems[index].route),
+      body: widget.child,
+      onNavTap: (index) {
+        _clearManualSelection();
+        navigate(navItems[index].route);
+      },
       onSubItemTap: (topLevelIndex, subIdx) {
         final tapped = navItems[topLevelIndex].children[subIdx];
-        // No dedicated route yet for this child (e.g. "Competense base
-        // assessment") -> fall back to the parent's route, same as the
-        // manual /jobs fallback job_management_screen and post_job_screen
-        // had before this was centralized.
-        navigate(tapped.route ?? navItems[topLevelIndex].route);
+        // Items without their own screen open the nearest existing parent
+        // screen. Menu entries with a dedicated route go there directly.
+        final destination = tapped.route ?? navItems[topLevelIndex].route;
+        if (destination != null) {
+          setState(() {
+            _manualSelectionLocation = destination;
+            _manualTopIndex = topLevelIndex;
+            _manualSubIndex = subIdx;
+          });
+        }
+        navigate(destination);
       },
       onNotifications: () => context.push('/notification'),
       onSupport: isAdmin ? null : () => context.go('/support'),
       // Only meaningful on the candidate Browse Jobs screen right now —
       // there's nothing else this shared top-bar search should drive
       // (recruiter screens have no equivalent provider wired to it yet).
-      onSearch: (isCandidate && state.matchedLocation == '/jobs')
+      onSearch: (isCandidate && location == '/jobs')
           ? (query) =>
               ref.read(browseJobsProvider.notifier).setSearchText(query)
           : null,
@@ -158,30 +183,53 @@ class AppShellRoute extends ConsumerWidget {
     );
   }
 
+  void _clearManualSelection() {
+    if (_manualTopIndex == null) return;
+    setState(() {
+      _manualSelectionLocation = null;
+      _manualTopIndex = null;
+      _manualSubIndex = null;
+    });
+  }
+
   /// Matches the current location against navItems (and their children) to
   /// find which sidebar entry should be highlighted. Falls back to a
   /// longest-prefix match so e.g. a future /jobs/:id detail route still
   /// highlights "Jobs" even without an exact entry above.
   (int, int?) _resolveIndex(List<NavItem> navItems, String location) {
+    final currentUri = Uri.parse(location);
     for (var i = 0; i < navItems.length; i++) {
       final item = navItems[i];
       for (var j = 0; j < item.children.length; j++) {
-        if (item.children[j].route == location) return (i, j);
+        final route = item.children[j].route;
+        if (route != null && _routeMatches(Uri.parse(route), currentUri)) {
+          return (i, j);
+        }
       }
-      if (item.route == location) return (i, null);
+      final route = item.route;
+      if (route != null && _routeMatches(Uri.parse(route), currentUri)) {
+        return (i, null);
+      }
     }
     var bestIndex = 0;
     var bestLength = -1;
     for (var i = 0; i < navItems.length; i++) {
       final route = navItems[i].route;
       if (route != null &&
-          location.startsWith(route) &&
+          currentUri.path.startsWith(route) &&
           route.length > bestLength) {
         bestIndex = i;
         bestLength = route.length;
       }
     }
     return (bestIndex, null);
+  }
+
+  bool _routeMatches(Uri menuRoute, Uri currentRoute) {
+    if (menuRoute.path != currentRoute.path) return false;
+    return menuRoute.queryParameters.entries.every(
+      (entry) => currentRoute.queryParameters[entry.key] == entry.value,
+    );
   }
 
   /// UserRole is an enum (e.g. UserRole.recruiter) — this maps it to a

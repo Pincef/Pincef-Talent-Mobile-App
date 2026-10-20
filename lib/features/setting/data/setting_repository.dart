@@ -16,6 +16,7 @@ class SettingsRepository {
     String? lastName,
     String? bio,
     String? location,
+    String? country,
     String? phone,
     bool? remoteFriendly,
     bool? activeSeeking,
@@ -27,6 +28,7 @@ class SettingsRepository {
       if (lastName != null) 'lastName': lastName,
       if (bio != null) 'bio': bio,
       if (location != null) 'location': location,
+      if (country != null) 'country': country,
       if (phone != null) 'phone': phone,
       if (remoteFriendly != null && activeSeeking != null)
         'workPreferences': {

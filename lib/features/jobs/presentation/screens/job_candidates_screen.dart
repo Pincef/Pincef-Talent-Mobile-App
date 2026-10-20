@@ -11,7 +11,7 @@ import '../../application/job_management_provider.dart';
 // application_provider.dart itself (same depth as job_management_provider.dart).
 import '../../application/application_provider.dart';
 import '../../data/models/application_model.dart';
-import '../widgets/send_invite_widget.dart';
+import '../../../interviews/presentation/schedule_interview_sheet_screen.dart';
 // Reused for the "AI CV-to-Job Matching" bulk action below — same
 // repository/provider CandidateProfilePreviewScreen already uses for the
 // single-candidate "Run AI Match" action. If that provider is already
@@ -20,11 +20,11 @@ import '../widgets/send_invite_widget.dart';
 import 'package:talentbridge/features/jobs/data/candidate_profile_repository.dart';
 import 'package:talentbridge/core/network/dio_provider.dart'; // adjust to wherever dioProvider actually lives
 import 'package:talentbridge/core/widgets/app_toast.dart';
+import 'package:talentbridge/features/auth/application/auth_provider.dart'
+    hide dioProvider;
 // "Message" button — reuses the same socket-backed messaging repository/
 // providers as the Messages screens, so a thread started here shows up
 // there (and in the candidate's inbox) with no separate code path.
-import 'package:talentbridge/features/messages/data/messages_repository.dart'
-    show MessagesRepository;
 import 'package:talentbridge/features/messages/application/messages_provider.dart'
     show
         messagesRepositoryProvider,
@@ -146,6 +146,111 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
     }
   }
 
+  Future<void> _setCandidateDecision(
+    JobApplicantSummary applicant,
+    ApplicationBackendStatus status,
+  ) async {
+    final isReject = status == ApplicationBackendStatus.rejected;
+    if (isReject) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Reject candidate?'),
+          content: Text(
+              'This will mark ${applicant.candidate.fullName} as not selected and send them an application update email.'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel')),
+            FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Reject candidate')),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
+    try {
+      final emailSent = await ref
+          .read(applicationsRepositoryProvider)
+          .updateApplicationStatus(applicant.id, status);
+      if (!mounted) return;
+      await ref.read(jobApplicantsProvider(widget.jobId).notifier).refresh();
+      if (!mounted) return;
+      if (isReject && !emailSent) {
+        AppToast.info(context,
+            'Candidate rejected. The email could not be delivered; try again later.');
+      } else {
+        AppToast.success(
+            context,
+            isReject
+                ? 'Candidate rejected and notified.'
+                : 'Candidate shortlisted.');
+      }
+    } catch (e) {
+      if (mounted) AppToast.error(context, "Couldn't update candidate: $e");
+    }
+  }
+
+  Future<void> _bulkSetCandidateDecision(
+      ApplicationBackendStatus status) async {
+    final selected = ref
+        .read(jobApplicantsProvider(widget.jobId))
+        .applications
+        .where(
+            (application) => _selectedApplicationIds.contains(application.id))
+        .toList();
+    if (selected.isEmpty) return;
+    final rejecting = status == ApplicationBackendStatus.rejected;
+    if (rejecting) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Reject ${selected.length} candidates?'),
+          content: const Text(
+              'Each candidate will be marked as not selected and sent an application update email.'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel')),
+            FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Reject candidates')),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
+    var succeeded = 0;
+    var emailFailures = 0;
+    var failures = 0;
+    final repository = ref.read(applicationsRepositoryProvider);
+    for (final applicant in selected) {
+      try {
+        final emailSent =
+            await repository.updateApplicationStatus(applicant.id, status);
+        succeeded++;
+        if (rejecting && !emailSent) emailFailures++;
+      } catch (_) {
+        failures++;
+      }
+    }
+    if (!mounted) return;
+    setState(_selectedApplicationIds.clear);
+    await ref.read(jobApplicantsProvider(widget.jobId).notifier).refresh();
+    if (!mounted) return;
+    final details = <String>[
+      '$succeeded updated',
+      if (emailFailures > 0) '$emailFailures emails not delivered',
+      if (failures > 0) '$failures failed',
+    ].join(' · ');
+    if (failures > 0 || emailFailures > 0) {
+      AppToast.info(context, details);
+    } else {
+      AppToast.success(context, details);
+    }
+  }
+
   static const _avatarPalette = [
     Color(0xFF8B5CF6),
     Color(0xFF0EA5E9),
@@ -192,6 +297,14 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
       orElse: () => 'this role',
     );
     final applicantsState = ref.watch(jobApplicantsProvider(widget.jobId));
+    final user = ref.watch(authProvider).user;
+    final canMessageCandidates =
+        user?.capabilities['allowsCandidateMessaging'] == true ||
+            user?.hasModule('hiring.candidate.messaging') == true;
+    final canScheduleInterviews = user?.hasModule('hiring.stage.interview') ==
+            true &&
+        (((user?.limits['interviewInvitesPerJob'] as num?)?.toInt() ?? 0) > 0 ||
+            user?.limits['interviewInvitesPerJob'] == -1);
     final notifier = ref.read(jobApplicantsProvider(widget.jobId).notifier);
 
     final query = _search.trim().toLowerCase();
@@ -236,7 +349,8 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
                 const SizedBox(height: 14),
                 _aiToolsBar(applicantsState),
                 const SizedBox(height: 18),
-                _body(applicantsState, visible, columns, notifier),
+                _body(applicantsState, visible, columns, notifier,
+                    canMessageCandidates, canScheduleInterviews),
                 const SizedBox(height: 24),
               ],
             ),
@@ -290,6 +404,8 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
     List<JobApplicantSummary> visible,
     int columns,
     JobApplicantsNotifier notifier,
+    bool canMessageCandidates,
+    bool canScheduleInterviews,
   ) {
     if (state.isLoading && state.applications.isEmpty) {
       return const Padding(
@@ -339,22 +455,26 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
                 extra: visible[index],
               ),
               onSendInvite: () async {
-                final sent = await showSendInterviewInviteDialog(
+                if (!canScheduleInterviews) {
+                  AppToast.info(context,
+                      'Interview scheduling is available on Pro and Business plans.');
+                  return;
+                }
+                await showScheduleInterview(
                   context,
-                  applicant: visible[index],
+                  applicationId: visible[index].id,
                 );
-                if (sent == true && context.mounted) {
-                  AppToast.success(context, 'Interview invite sent.');
-                  // Confirmed against your real application_provider.dart:
-                  // jobApplicantsProvider is family'd by jobId with a
-                  // .refresh() method — this re-fetches page 1 so the
-                  // card's status badge flips to "Interviewing".
+                if (context.mounted) {
                   ref
                       .read(jobApplicantsProvider(widget.jobId).notifier)
                       .refresh();
                 }
               },
               onMessage: () => _startMessage(visible[index]),
+              onDecision: (status) =>
+                  _setCandidateDecision(visible[index], status),
+              canMessage: canMessageCandidates,
+              canInvite: canScheduleInterviews,
             );
           },
         ),
@@ -628,6 +748,24 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
               busy: _bulkActionInFlight == action,
               onTap: () => _runBulkAction(action),
             ),
+          if (hasSelection) ...[
+            OutlinedButton.icon(
+              onPressed: _bulkActionInFlight == null
+                  ? () => _bulkSetCandidateDecision(
+                      ApplicationBackendStatus.shortlisted)
+                  : null,
+              icon: const Icon(Icons.playlist_add_check, size: 16),
+              label: const Text('Shortlist selected'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _bulkActionInFlight == null
+                  ? () => _bulkSetCandidateDecision(
+                      ApplicationBackendStatus.rejected)
+                  : null,
+              icon: const Icon(Icons.person_off_outlined, size: 16),
+              label: const Text('Reject selected'),
+            ),
+          ],
         ],
       ),
     );
@@ -992,6 +1130,9 @@ class _CandidateCard extends StatelessWidget {
     required this.onViewProfile,
     required this.onSendInvite,
     required this.onMessage,
+    required this.onDecision,
+    required this.canMessage,
+    required this.canInvite,
   });
   final JobApplicantSummary applicant;
   final Color avatarColor;
@@ -1000,6 +1141,9 @@ class _CandidateCard extends StatelessWidget {
   final VoidCallback onViewProfile;
   final VoidCallback onSendInvite;
   final VoidCallback onMessage;
+  final ValueChanged<ApplicationBackendStatus> onDecision;
+  final bool canMessage;
+  final bool canInvite;
 
   Color get _stageColor => switch (applicant.status) {
         ApplicationBackendStatus.submitted => const Color(0xFF2F6FED),
@@ -1052,6 +1196,34 @@ class _CandidateCard extends StatelessWidget {
             onChanged: (_) => onToggleSelected(),
             visualDensity: VisualDensity.compact,
             side: const BorderSide(color: BrandColors.border),
+          ),
+          SizedBox(
+            width: 34,
+            height: 34,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border.all(color: BrandColors.border),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: PopupMenuButton<ApplicationBackendStatus>(
+                tooltip: 'Candidate decision',
+                padding: EdgeInsets.zero,
+                icon: const Icon(Icons.more_horiz, size: 18),
+                onSelected: onDecision,
+                itemBuilder: (context) => [
+                  if (applicant.status != ApplicationBackendStatus.shortlisted)
+                    const PopupMenuItem(
+                      value: ApplicationBackendStatus.shortlisted,
+                      child: Text('Shortlist candidate'),
+                    ),
+                  if (applicant.status != ApplicationBackendStatus.rejected)
+                    const PopupMenuItem(
+                      value: ApplicationBackendStatus.rejected,
+                      child: Text('Reject and email candidate'),
+                    ),
+                ],
+              ),
+            ),
           ),
         ]),
         const SizedBox(height: 12),
@@ -1135,7 +1307,8 @@ class _CandidateCard extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8)),
               ),
-              child: const Icon(Icons.mail_outline, size: 16),
+              child: Icon(canInvite ? Icons.mail_outline : Icons.lock_outline,
+                  size: 16),
             ),
           ),
           const SizedBox(width: 8),
@@ -1146,7 +1319,10 @@ class _CandidateCard extends StatelessWidget {
               // Opens/reopens a direct conversation with this candidate —
               // distinct from onSendInvite's compose dialog above, which
               // only ever sends the one interview-invite email.
-              onPressed: onMessage,
+              onPressed: canMessage
+                  ? onMessage
+                  : () => AppToast.info(context,
+                      'Candidate messaging is available on Pro and Business plans.'),
               style: OutlinedButton.styleFrom(
                 padding: EdgeInsets.zero,
                 foregroundColor: BrandColors.navy,
@@ -1154,7 +1330,9 @@ class _CandidateCard extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8)),
               ),
-              child: const Icon(Icons.chat_bubble_outline, size: 15),
+              child: Icon(
+                  canMessage ? Icons.chat_bubble_outline : Icons.lock_outline,
+                  size: 15),
             ),
           ),
         ]),

@@ -367,6 +367,13 @@ class _EditJobForm extends ConsumerStatefulWidget {
 
 class _EditJobFormState extends ConsumerState<_EditJobForm> {
   final _formKey = GlobalKey<FormState>();
+  static const _benefitPresets = <String, String>{
+    'Health Insurance': 'Health Insurance',
+    'Equity/RSUs': 'Equity/RSUs',
+    'Learning Stipend': 'Learning Stipend',
+    'Wellness': 'Wellness',
+  };
+  static const _currencies = ['USD', 'NGN', 'GBP', 'EUR', 'CAD'];
 
   late final TextEditingController _title;
   late final TextEditingController _location;
@@ -392,6 +399,7 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
   String? _educationLevel;
   late bool _requiresManagement;
   late bool _autoRejectNonMatches;
+  late double _autoRejectBelowScore;
   late bool _aiRanking;
   late bool _aiSummary;
   late List<String> _skills;
@@ -445,6 +453,7 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
     _educationLevel = job.educationLevel;
     _requiresManagement = job.requiresManagementExperience;
     _autoRejectNonMatches = job.autoRejectNonMatches;
+    _autoRejectBelowScore = job.autoRejectBelowScore.toDouble();
     _aiRanking = job.aiRanking;
     _aiSummary = job.aiSummary;
     _applicationDeadline = job.applicationDeadline;
@@ -536,6 +545,73 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
     });
   }
 
+  void _toggleBenefit(String benefit, bool selected) {
+    setState(() {
+      if (selected && !_benefits.contains(benefit)) {
+        _benefits.add(benefit);
+      } else if (!selected) {
+        _benefits.remove(benefit);
+      }
+    });
+  }
+
+  Widget _benefitsEditor() {
+    final customBenefits = _benefits
+        .where((benefit) => !_benefitPresets.containsValue(benefit))
+        .toList();
+    return _SectionCard(
+      title: 'Benefits Package',
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            for (final benefit in _benefitPresets.values)
+              FilterChip(
+                label: Text(benefit),
+                selected: _benefits.contains(benefit),
+                onSelected: (selected) => _toggleBenefit(benefit, selected),
+                selectedColor: const Color(0xFFFFF0DE),
+                checkmarkColor: BrandColors.orange,
+              ),
+          ],
+        ),
+        if (customBenefits.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final benefit in customBenefits)
+                InputChip(
+                  label: Text(benefit),
+                  onPressed: () =>
+                      _editListItem(_benefits, benefit, 'Edit benefit'),
+                  onDeleted: () => setState(() => _benefits.remove(benefit)),
+                ),
+            ],
+          ),
+        ],
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(
+            child: TextField(
+              controller: _benefitInput,
+              decoration: const InputDecoration(
+                  hintText: 'Add another benefit or package'),
+              onSubmitted: (_) => _addToList(_benefitInput, _benefits),
+            ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton(
+            onPressed: () => _addToList(_benefitInput, _benefits),
+            child: const Text('Add'),
+          ),
+        ]),
+      ]),
+    );
+  }
+
   Widget _editableItemsSection({
     required String title,
     required List<String> items,
@@ -615,6 +691,14 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
     return user?.hasModule(ModuleCodes.jobsPlanAutomation) ?? false;
   }
 
+  int _planQuota(String module, String limitKey, int requested) {
+    final user = ref.read(authProvider).user;
+    if (user?.hasModule(module) != true) return 0;
+    final ceiling = (user?.limits[limitKey] as num?)?.toInt() ?? 0;
+    if (ceiling == 0) return 0;
+    return ceiling == -1 ? requested : requested.clamp(0, ceiling).toInt();
+  }
+
   bool _pipelineTierAvailable(String tier) {
     final user = ref.read(authProvider).user;
     if (tier == 'Standard') return true;
@@ -678,15 +762,27 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
       educationLevel: _educationLevel,
       requiresManagementExperience: _requiresManagement,
       autoRejectNonMatches: _autoRejectNonMatches,
+      autoRejectBelowScore: _autoRejectBelowScore.round(),
       applicationDeadline: _applicationDeadline,
       aiRanking: _aiRanking,
       aiSummary: _aiSummary,
       pipelineTier: _pipelineTier,
       rankingPlanTier: _rankingPlanTier,
-      rankingLimit: _rankingLimit.round(),
-      assessmentEmailCount:
-          int.tryParse(_assessmentEmailCount.text.trim()) ?? 15,
-      interviewEmailCount: int.tryParse(_interviewEmailCount.text.trim()) ?? 10,
+      rankingLimit: _planQuota(
+        ModuleCodes.aiCandidateMatch,
+        'rankingsPerJob',
+        _rankingLimit.round(),
+      ),
+      assessmentEmailCount: _planQuota(
+        ModuleCodes.hiringStageAssessment,
+        'assessmentEmailsPerJob',
+        int.tryParse(_assessmentEmailCount.text.trim()) ?? 15,
+      ),
+      interviewEmailCount: _planQuota(
+        ModuleCodes.hiringStageInterview,
+        'interviewInvitesPerJob',
+        int.tryParse(_interviewEmailCount.text.trim()) ?? 10,
+      ),
     );
 
     try {
@@ -789,7 +885,13 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const _FieldLabel('Location'),
-                                TextFormField(controller: _location),
+                                TextFormField(
+                                  controller: _location,
+                                  decoration: const InputDecoration(
+                                    hintText:
+                                        'City, region, country, or Remote',
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -828,7 +930,22 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const _FieldLabel('Currency'),
-                                TextFormField(controller: _currency),
+                                DropdownButtonFormField<String>(
+                                  initialValue: _currency.text,
+                                  items: {
+                                    ..._currencies,
+                                    if (!_currencies.contains(_currency.text))
+                                      _currency.text,
+                                  }
+                                      .map((value) => DropdownMenuItem(
+                                          value: value, child: Text(value)))
+                                      .toList(),
+                                  onChanged: (value) {
+                                    if (value != null) {
+                                      setState(() => _currency.text = value);
+                                    }
+                                  },
+                                ),
                               ],
                             ),
                           ),
@@ -946,14 +1063,6 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
                         ],
                       ),
                       const SizedBox(height: 10),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Requires management experience',
-                            style: TextStyle(fontSize: 12.5)),
-                        value: _requiresManagement,
-                        onChanged: (v) =>
-                            setState(() => _requiresManagement = v),
-                      ),
                       const SizedBox(height: 6),
                       const _FieldLabel('Required Skills'),
                       Wrap(
@@ -1007,12 +1116,7 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
                   hint: 'Add a responsibility',
                 ),
                 const SizedBox(height: 16),
-                _editableItemsSection(
-                  title: 'Benefits',
-                  items: _benefits,
-                  controller: _benefitInput,
-                  hint: 'Add a benefit',
-                ),
+                _benefitsEditor(),
                 const SizedBox(height: 16),
                 _SectionCard(
                   title: 'Hiring Pipeline',
@@ -1061,8 +1165,18 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Auto-reject non-matches'),
                         value: _autoRejectNonMatches,
-                        onChanged: (v) =>
-                            setState(() => _autoRejectNonMatches = v),
+                        onChanged: (v) {
+                          if (v &&
+                              !(ref.read(authProvider).user?.hasModule(
+                                      ModuleCodes.aiCandidateMatch) ??
+                                  false)) {
+                            return;
+                          }
+                          setState(() {
+                            _autoRejectNonMatches = v;
+                            if (v) _aiRanking = true;
+                          });
+                        },
                       ),
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
@@ -1072,8 +1186,13 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
                           if (v &&
                               !(ref.read(authProvider).user?.hasModule(
                                       ModuleCodes.aiCandidateMatch) ??
-                                  false)) return;
-                          setState(() => _aiRanking = v);
+                                  false)) {
+                            return;
+                          }
+                          setState(() {
+                            _aiRanking = v;
+                            if (!v) _autoRejectNonMatches = false;
+                          });
                         },
                       ),
                       SwitchListTile(
@@ -1084,7 +1203,9 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
                           if (v &&
                               !(ref.read(authProvider).user?.hasModule(
                                       ModuleCodes.aiCandidateSummary) ??
-                                  false)) return;
+                                  false)) {
+                            return;
+                          }
                           setState(() => _aiSummary = v);
                         },
                       ),

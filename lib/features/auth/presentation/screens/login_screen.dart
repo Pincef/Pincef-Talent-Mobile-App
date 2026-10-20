@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/brand_color.dart';
 import '../../../../core/theme/auth_form_style.dart';
@@ -63,6 +64,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  Future<void> _continueWithGoogle() async {
+    final uri = ref.read(authRepositoryProvider).googleOAuthUrl();
+    if (!await launchUrl(uri, mode: LaunchMode.platformDefault)) {
+      if (mounted) AppToast.error(context, 'Could not open Google sign-in.');
     }
   }
 
@@ -223,9 +231,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                           const SizedBox(height: 18),
                           OutlinedButton.icon(
-                            onPressed: () {
-                              // TODO: wire Google sign-in once you have an OAuth flow
-                            },
+                            onPressed: _continueWithGoogle,
                             icon: const Icon(Icons.g_mobiledata, size: 22),
                             label: const Text('Google'),
                             style: OutlinedButton.styleFrom(

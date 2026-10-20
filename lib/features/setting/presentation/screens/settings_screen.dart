@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:talentbridge/core/theme/app_theme.dart';
 import 'package:talentbridge/core/theme/brand_color.dart';
 import 'package:talentbridge/features/auth/application/auth_provider.dart';
@@ -29,6 +30,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController =
       TabController(length: 2, vsync: this);
+  String? _lastRequestedTab;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final requestedTab = GoRouterState.of(context).uri.queryParameters['tab'];
+    if (requestedTab == _lastRequestedTab) return;
+    _lastRequestedTab = requestedTab;
+    if (requestedTab == 'security') {
+      _tabController.index = 1;
+    } else if (requestedTab == null) {
+      _tabController.index = 0;
+    }
+  }
 
   @override
   void dispose() {

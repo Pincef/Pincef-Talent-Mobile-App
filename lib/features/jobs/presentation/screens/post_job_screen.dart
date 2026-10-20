@@ -54,6 +54,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
   bool _learning = false;
   bool _wellness = false;
   bool _autoReject = false;
+  double _autoRejectBelowScore = 65;
   bool _aiRanking = false;
   bool _aiSummary = false;
   String? _educationLevel;
@@ -608,6 +609,14 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
     return user?.hasModule(ModuleCodes.jobsPlanAutomation) ?? false;
   }
 
+  int _planQuota(String module, String limitKey, int requested) {
+    final user = ref.read(authProvider).user;
+    if (user?.hasModule(module) != true) return 0;
+    final ceiling = (user?.limits[limitKey] as num?)?.toInt() ?? 0;
+    if (ceiling == 0) return 0;
+    return ceiling == -1 ? requested : requested.clamp(0, ceiling).toInt();
+  }
+
   bool get _aiJobDescriptionAvailable {
     final user = ref.read(authProvider).user;
     final explicit = user?.capabilities['allowsAiJobDescriptionGeneration'];
@@ -891,11 +900,33 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
         const SizedBox(height: 8),
         _setting('Promote on LinkedIn', true),
         _setting('Auto-reject non-matches', _autoReject,
-            changed: (v) => setState(() => _autoReject = v)),
+            enabled: ref.read(authProvider).user?.hasModule(
+                    ModuleCodes.aiCandidateMatch) ??
+                false,
+            changed: (v) => setState(() {
+                  _autoReject = v;
+                  if (v) _aiRanking = true;
+                })),
+        if (_autoReject) ...[
+          const SizedBox(height: 8),
+          Text('Reject applicants scoring below ${_autoRejectBelowScore.round()}%',
+              style: const TextStyle(color: Colors.white70, fontSize: 12)),
+          Slider(
+            value: _autoRejectBelowScore,
+            min: 0,
+            max: 100,
+            divisions: 20,
+            label: '${_autoRejectBelowScore.round()}%',
+            onChanged: (value) => setState(() => _autoRejectBelowScore = value),
+          ),
+        ],
         _setting(
           'AI candidate ranking',
           _aiRanking,
-          changed: (v) => setState(() => _aiRanking = v),
+          changed: (v) => setState(() {
+            _aiRanking = v;
+            if (!v) _autoReject = false;
+          }),
           enabled: ref
                   .read(authProvider)
                   .user
@@ -1581,15 +1612,29 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
       educationLevel: _educationLevel,
       requiresManagementExperience: _requiresManagement,
       autoRejectNonMatches: _autoReject,
+      autoRejectBelowScore: _autoRejectBelowScore.round(),
       applicationDeadline: _deadline,
       aiRanking: _aiRanking,
       aiSummary: _aiSummary,
       pipelineTier: _pipelineTier,
       rankingPlanTier: _planTier,
-      rankingLimit: _rankingLimit.round(),
       assessmentEmailCount:
-          int.tryParse(_assessmentEmailCount.text.trim()) ?? 15,
-      interviewEmailCount: int.tryParse(_interviewEmailCount.text.trim()) ?? 10,
+          _planQuota(
+            ModuleCodes.hiringStageAssessment,
+            'assessmentEmailsPerJob',
+            int.tryParse(_assessmentEmailCount.text.trim()) ?? 15,
+          ),
+      interviewEmailCount:
+          _planQuota(
+            ModuleCodes.hiringStageInterview,
+            'interviewInvitesPerJob',
+            int.tryParse(_interviewEmailCount.text.trim()) ?? 10,
+          ),
+      rankingLimit: _planQuota(
+        ModuleCodes.aiCandidateMatch,
+        'rankingsPerJob',
+        _rankingLimit.round(),
+      ),
     );
 
     try {

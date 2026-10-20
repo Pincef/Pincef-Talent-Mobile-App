@@ -125,6 +125,29 @@ class ApplicationsRepository {
     );
   }
 
+  /// Recruiter shortlist/reject decision. Rejections send the standard
+  /// application update email on the backend; the response reports delivery.
+  Future<bool> updateApplicationStatus(
+    String applicationId,
+    ApplicationBackendStatus status,
+  ) {
+    return _request(
+      () => _dio.patch('/applications/$applicationId/status', data: {
+        'status': switch (status) {
+          ApplicationBackendStatus.submitted => 'submitted',
+          ApplicationBackendStatus.shortlisted => 'shortlisted',
+          ApplicationBackendStatus.interviewing => 'interviewing',
+          ApplicationBackendStatus.offered => 'offered',
+          ApplicationBackendStatus.rejected => 'rejected',
+          ApplicationBackendStatus.hired => 'hired',
+        },
+      }),
+      (data) => data is Map<String, dynamic>
+          ? data['rejectionEmailSent'] == true
+          : false,
+    );
+  }
+
   /// The token names available to insert into an invite's subject/body
   /// (e.g. "jobTitle", "CompanyName") — fetched rather than hardcoded so
   /// this can't drift from what sendInterviewInvite actually renders.

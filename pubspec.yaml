@@ -42,3 +42,8 @@ flutter_launcher_icons:
   android: true
   ios: true
   image_path: "lib/assets/images/logo.jpeg"
+  web:
+    generate: true
+    image_path: "lib/assets/images/logo.jpeg"
+    background_color: "#1B2A4E"
+    theme_color: "#1B2A4E"

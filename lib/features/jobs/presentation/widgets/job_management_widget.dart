@@ -376,7 +376,7 @@ class JobPostingCard extends StatelessWidget {
                     color: BrandColors.navy)),
             const SizedBox(height: 2),
             Text(
-              '${job.location} • ${job.department} • ${job.workMode}',
+              '${job.location} • ${job.industry} • ${job.workMode}',
               style: const TextStyle(fontSize: 11, color: BrandColors.muted),
             ),
             const Spacer(),

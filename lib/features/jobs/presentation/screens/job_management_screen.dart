@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../widgets/job_management_widget.dart';
 import '../../application/job_management_provider.dart';
-// import '../../data/models/job_management_model.dart';
+import '../../data/models/job_management_model.dart';
 
 class JobManagementScreen extends ConsumerStatefulWidget {
   const JobManagementScreen({super.key});
@@ -18,6 +18,30 @@ class _JobManagementScreenState extends ConsumerState<JobManagementScreen> {
   // Wire these to actually refetch once the real endpoint supports
   // filtering/pagination server-side.
   JobPostingTab _tab = JobPostingTab.active;
+  String? _lastRouteStatus;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final routeStatus =
+        GoRouterState.of(context).uri.queryParameters['status'] ?? 'active';
+    if (routeStatus == _lastRouteStatus) return;
+    _lastRouteStatus = routeStatus;
+    final nextTab = switch (routeStatus) {
+      'closed' => JobPostingTab.closed,
+      'pending' => JobPostingTab.pending,
+      _ => JobPostingTab.active,
+    };
+    if (nextTab != _tab) {
+      _tab = nextTab;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref
+            .read(jobManagementProvider.notifier)
+            .load(tab: _toPipelineStatus(nextTab));
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,11 +50,31 @@ class _JobManagementScreenState extends ConsumerState<JobManagementScreen> {
     return _Body(
       state: state,
       tab: _tab,
-      onTabChanged: (tab) => setState(() => _tab = tab),
+      onTabChanged: (tab) {
+        final status = switch (tab) {
+          JobPostingTab.active => 'active',
+          JobPostingTab.pending => 'pending',
+          JobPostingTab.closed => 'closed',
+        };
+        setState(() {
+          _tab = tab;
+          _lastRouteStatus = status;
+        });
+        ref
+            .read(jobManagementProvider.notifier)
+            .load(tab: _toPipelineStatus(tab));
+        context.go('/jobs?status=$status');
+      },
       onRetry: () => ref.read(jobManagementProvider.notifier).load(),
       onPostJob: () => context.go('/jobs/new'),
     );
   }
+
+  JobPipelineStatus _toPipelineStatus(JobPostingTab tab) => switch (tab) {
+        JobPostingTab.active => JobPipelineStatus.active,
+        JobPostingTab.pending => JobPipelineStatus.drafting,
+        JobPostingTab.closed => JobPipelineStatus.closed,
+      };
 }
 
 class _Body extends StatelessWidget {

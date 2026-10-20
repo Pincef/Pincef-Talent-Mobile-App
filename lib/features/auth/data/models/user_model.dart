@@ -94,6 +94,7 @@ class UserModel {
   final ProfileImage? profileImage;
   final String? bio;
   final String? location;
+  final String? country;
   final List<String> competencies;
   final List<Certification> certifications;
 
@@ -116,6 +117,7 @@ class UserModel {
     this.profileImage,
     this.bio,
     this.location,
+    this.country,
     this.competencies = const [],
     this.certifications = const [],
     this.phone,
@@ -145,6 +147,7 @@ class UserModel {
           : null,
       bio: json['bio'] as String?,
       location: json['location'] as String?,
+      country: json['country'] as String?,
       competencies: (json['competencies'] as List<dynamic>?)
               ?.map((e) => e as String)
               .toList() ??
