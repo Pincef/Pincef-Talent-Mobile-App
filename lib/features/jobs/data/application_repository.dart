@@ -143,7 +143,8 @@ class ApplicationsRepository {
         },
       }),
       (data) => data is Map<String, dynamic>
-          ? data['rejectionEmailSent'] == true
+          ? (data['statusEmailSent'] == true ||
+              data['rejectionEmailSent'] == true)
           : false,
     );
   }
