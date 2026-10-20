@@ -80,15 +80,12 @@ const List<NavItem> kRecruiterNavItems = [
     icon: Icons.bar_chart_outlined,
     children: [
       NavItem(
-          label: 'Recruitment Report Generation',
-          icon: Icons.circle,
-          route: '/reports'),
+          label: 'Recruitment Report', icon: Icons.circle, route: '/reports'),
     ],
   ),
   NavItem(label: 'Message', icon: Icons.chat_bubble_outline, children: [
     NavItem(
         label: 'Recruiters Message', icon: Icons.circle, route: '/messages'),
-    NavItem(label: 'Email Templates', icon: Icons.circle, route: '/jobs/new'),
   ]),
   NavItem(
       label: 'Interview and schedule',
