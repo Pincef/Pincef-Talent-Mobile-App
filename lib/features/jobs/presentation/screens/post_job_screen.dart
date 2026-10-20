@@ -110,15 +110,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(authProvider);
     final saving = ref.watch(postJobProvider).isSaving;
-    final usage = ref.watch(jobManagementProvider);
-    final monthlyLimit =
-        (ref.read(authProvider).user?.limits['jobsPerMonth'] as num?)?.toInt();
-    final monthlyPublished = usage.summary?.monthlyPublishedCount;
-    final atMonthlyLimit = monthlyLimit != null &&
-        monthlyPublished != null &&
-        monthlyPublished >= monthlyLimit;
     return Container(
       color: const Color(0xFFF5F7FB),
       child: LayoutBuilder(
@@ -133,17 +125,9 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (monthlyLimit != null) ...[
-                        _monthlyJobsNotice(
-                          used: monthlyPublished,
-                          limit: monthlyLimit,
-                        ),
-                        const SizedBox(height: 14),
-                      ],
                       _pageHeader(
                         saving,
-                        canPublish: monthlyLimit == null ||
-                            (monthlyPublished != null && !atMonthlyLimit),
+                        canPublish: true,
                       ),
                       const SizedBox(height: 16),
                       LayoutBuilder(builder: (context, box) {
@@ -196,42 +180,6 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _monthlyJobsNotice({required int? used, required int limit}) {
-    final blocked = used != null && used >= limit;
-    final message = used == null
-        ? 'Checking this month’s job posting usage…'
-        : blocked
-            ? 'You’ve used all $limit job postings included in your plan this month. Upgrade your subscription to post more.'
-            : '$used of $limit job postings used this month.';
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: blocked ? const Color(0xFFFFF1F0) : const Color(0xFFFFF8EC),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: blocked ? const Color(0xFFF3C7C3) : const Color(0xFFF2D8AF),
-        ),
-      ),
-      child: Row(children: [
-        Icon(blocked ? Icons.lock_outline : Icons.info_outline,
-            size: 18,
-            color: blocked ? const Color(0xFFB42318) : BrandColors.orange),
-        const SizedBox(width: 9),
-        Expanded(
-          child: Text(message,
-              style:
-                  const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-        ),
-        if (blocked)
-          TextButton(
-            onPressed: () => context.go('/payments'),
-            child: const Text('View plans'),
-          ),
-      ]),
     );
   }
 
@@ -1683,38 +1631,6 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
 
   Future<void> _publishJob() async {
     if (_pendingAction != null) return;
-    final user = ref.read(authProvider).user;
-    final monthlyLimit = (user?.limits['jobsPerMonth'] as num?)?.toInt();
-    final monthlyPublished =
-        ref.read(jobManagementProvider).summary?.monthlyPublishedCount;
-    if (monthlyLimit != null &&
-        (monthlyPublished == null || monthlyPublished >= monthlyLimit)) {
-      if (monthlyPublished == null) {
-        _showError(
-            'Job posting usage is still loading. Please try again shortly.');
-      } else {
-        showDialog<void>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Job posting limit reached'),
-            content: Text(
-                'Your plan includes $monthlyLimit job postings per month. Upgrade your subscription to post more.'),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Not now')),
-              FilledButton(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    context.go('/payments');
-                  },
-                  child: const Text('View plans')),
-            ],
-          ),
-        );
-      }
-      return;
-    }
     setState(() => _pendingAction = 'publish');
     try {
       final saved = await _saveAll(
