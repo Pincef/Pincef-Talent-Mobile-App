@@ -1,9 +1,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/network/dio_provider.dart';
 import '../data/payment_repository.dart';
 
-final paymentRepositoryProvider = Provider<PaymentRepository>((ref) => PaymentRepository());
+final paymentRepositoryProvider = Provider<PaymentRepository>(
+  (ref) => PaymentRepository(ref.watch(dioProvider)),
+);
 final subscriptionPlansProvider = FutureProvider<List<SubscriptionPlan>>(
   (ref) => ref.watch(paymentRepositoryProvider).getPlans(),
+);
+final currentSubscriptionProvider = FutureProvider<CurrentSubscription?>(
+  (ref) => ref.watch(paymentRepositoryProvider).getCurrentSubscription(),
 );
 
 class PaymentViewState {
@@ -11,7 +17,8 @@ class PaymentViewState {
   final bool isAnnual;
   final String selectedPlan;
 
-  PaymentViewState copyWith({bool? isAnnual, String? selectedPlan}) => PaymentViewState(
+  PaymentViewState copyWith({bool? isAnnual, String? selectedPlan}) =>
+      PaymentViewState(
         isAnnual: isAnnual ?? this.isAnnual,
         selectedPlan: selectedPlan ?? this.selectedPlan,
       );
@@ -23,6 +30,7 @@ class PaymentViewNotifier extends StateNotifier<PaymentViewState> {
   void selectPlan(String id) => state = state.copyWith(selectedPlan: id);
 }
 
-final paymentViewProvider = StateNotifierProvider<PaymentViewNotifier, PaymentViewState>(
+final paymentViewProvider =
+    StateNotifierProvider<PaymentViewNotifier, PaymentViewState>(
   (ref) => PaymentViewNotifier(),
 );

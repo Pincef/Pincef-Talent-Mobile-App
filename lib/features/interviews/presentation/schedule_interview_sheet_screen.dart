@@ -46,9 +46,16 @@ Future<void> showScheduleInterview(BuildContext context,
       backgroundColor: Colors.white,
       insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1000, maxHeight: 760),
-          child: panel),
+      child: SizedBox(
+        width: 1000,
+        // The panel uses Expanded for its scrollable middle section. Give it
+        // a finite height at the dialog boundary so it also lays out correctly
+        // during Dialog's intrinsic-width measurement pass.
+        height: MediaQuery.sizeOf(context).height * .9 > 760
+            ? 760
+            : MediaQuery.sizeOf(context).height * .9,
+        child: panel,
+      ),
     ),
   );
 }

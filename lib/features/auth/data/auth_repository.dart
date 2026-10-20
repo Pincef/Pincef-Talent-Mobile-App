@@ -9,6 +9,32 @@ class AuthRepository {
   final Dio _dio;
   final SecureStorageService _storage;
 
+  Uri googleOAuthUrl({UserRole? role, String? country}) {
+    final query = <String, String>{};
+    if (role != null) query['role'] = role.name;
+    if (country != null) query['country'] = country;
+    return Uri.parse('${_dio.options.baseUrl}/v1/oauth/google')
+        .replace(queryParameters: query.isEmpty ? null : query);
+  }
+
+  Future<UserModel> completeGoogleOAuth(String handoffCode) async {
+    try {
+      final response = await _dio.post('/v1/oauth/exchange', data: {'code': handoffCode});
+      final loginData = _sessionData(response.data);
+      final accessToken = loginData['accessToken'] as String?;
+      final refreshToken = loginData['refreshToken'] as String?;
+      if (accessToken == null || refreshToken == null) {
+        throw const FormatException('The server returned an incomplete OAuth session.');
+      }
+      await _storage.saveTokens(accessToken: accessToken, refreshToken: refreshToken);
+      final me = await _dio.get('/auth/me');
+      return UserModel.fromJson({...loginData, ..._sessionData(me.data)});
+    } on DioException catch (e) {
+      try { await _storage.clearTokens(); } catch (_) {}
+      throw ApiException.fromDioError(e);
+    }
+  }
+
   /// Registers the account, then immediately logs in with the same
   /// credentials to obtain and store real tokens.
   ///
@@ -28,6 +54,7 @@ class AuthRepository {
     required String email,
     required String password,
     required UserRole role,
+    String country = 'NG',
   }) async {
     try {
       // POST /auth/register returns only { userId } — no tokens, so
@@ -38,6 +65,7 @@ class AuthRepository {
         'email': email,
         'password': password,
         'role': role.name,
+        'country': country,
       });
 
       return await login(email: email, password: password);
@@ -100,6 +128,37 @@ class AuthRepository {
 
   Future<void> logout() async {
     await _storage.clearTokens();
+  }
+
+  /// Exchanges the rotating refresh token after billing changes, then reads
+  /// /auth/me with the new access token so feature gates update immediately.
+  Future<UserModel> refreshSession() async {
+    try {
+      final refreshToken = await _storage.getRefreshToken();
+      if (refreshToken == null || refreshToken.isEmpty) {
+        throw const FormatException(
+            'Your session expired. Please sign in again.');
+      }
+      final response = await _dio.post('/auth/refresh', data: {
+        'refreshToken': refreshToken,
+      });
+      final session = _sessionData(response.data);
+      final accessToken = session['accessToken'] as String?;
+      final nextRefreshToken = session['refreshToken'] as String?;
+      if (accessToken == null || nextRefreshToken == null) {
+        throw const FormatException(
+            'The server returned an incomplete session.');
+      }
+      await _storage.saveTokens(
+        accessToken: accessToken,
+        refreshToken: nextRefreshToken,
+      );
+      final me = await _dio.get('/auth/me');
+      final profile = _sessionData(me.data);
+      return UserModel.fromJson({...session, ...profile});
+    } on DioException catch (e) {
+      throw ApiException.fromDioError(e);
+    }
   }
 
   Future<bool> hasStoredSession() async {

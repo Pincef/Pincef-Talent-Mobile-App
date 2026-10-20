@@ -27,6 +27,10 @@ const List<NavItem> kCandidateNavItems = [
       label: 'DASHBOARD', icon: Icons.grid_view_rounded, route: '/dashboard'),
   NavItem(label: 'BROWSE JOBS', icon: Icons.work_outline, route: '/jobs'),
   NavItem(
+      label: 'MY ASSESSMENTS',
+      icon: Icons.assignment_outlined,
+      route: '/my-assessments'),
+  NavItem(
     label: 'APPLICATIONS',
     icon: Icons.people_outline,
     children: [
@@ -53,16 +57,26 @@ const List<NavItem> kRecruiterNavItems = [
   NavItem(
     label: 'Jobs',
     icon: Icons.work_outline,
-    route: '/jobs',
     children: [
-      NavItem(label: 'Competence Based Assessment', icon: Icons.circle),
-    ],
-  ),
-  NavItem(
-    label: 'Candidates',
-    icon: Icons.people_outline,
-    children: [
-      NavItem(label: 'Candidate Comparison', icon: Icons.circle),
+      NavItem(
+          label: 'Active Jobs',
+          icon: Icons.circle,
+          route: '/jobs?status=active'),
+      NavItem(
+          label: 'Closed Jobs',
+          icon: Icons.circle,
+          route: '/jobs?status=closed'),
+      NavItem(label: 'Job Overview', icon: Icons.circle, route: '/jobs'),
+      NavItem(
+          label: 'Competency Assessment',
+          icon: Icons.circle,
+          route: '/competency-assessments'),
+      NavItem(
+          label: 'Candidate comparison', icon: Icons.circle, route: '/jobs'),
+      NavItem(
+          label: 'Hiring Pipeline',
+          icon: Icons.circle,
+          route: '/hiring-pipelines'),
     ],
   ),
   NavItem(
@@ -75,32 +89,31 @@ const List<NavItem> kRecruiterNavItems = [
           route: '/reports'),
     ],
   ),
-  NavItem(
-    label: 'CV Upload',
-    icon: Icons.upload_file_outlined,
-    children: [
-      NavItem(label: 'AI CV Parsing', icon: Icons.circle),
-      NavItem(label: 'AI Resume Summary', icon: Icons.circle),
-      NavItem(label: 'AI CV-to-Job Matching', icon: Icons.circle),
-      NavItem(label: 'AI Candidate Ranking', icon: Icons.circle),
-    ],
-  ),
-  NavItem(
-      label: 'Message', icon: Icons.chat_bubble_outline, route: '/messages'),
-  NavItem(
-      label: 'Interview',
-      icon: Icons.calendar_today_outlined,
-      route: '/interviews'),
-  NavItem(
-      label: 'Hiring Pipelines',
-      icon: Icons.account_tree_outlined,
-      route: '/hiring-pipelines'),
-  NavItem(
-    label: 'Payment & Subscription',
-    icon: Icons.payments_outlined,
-    route: '/payments',
-  ),
-  NavItem(label: 'Settings', icon: Icons.settings_outlined, route: '/settings'),
+  NavItem(label: 'Message', icon: Icons.chat_bubble_outline, children: [
+    NavItem(
+        label: 'Recruiters Message', icon: Icons.circle, route: '/messages'),
+    NavItem(label: 'Email Templates', icon: Icons.circle, route: '/jobs/new'),
+  ]),
+  NavItem(label: 'Interview', icon: Icons.calendar_today_outlined, children: [
+    NavItem(label: 'Interview meet', icon: Icons.circle, route: '/interviews'),
+    NavItem(label: 'Calendar', icon: Icons.circle, route: '/interviews'),
+  ]),
+  NavItem(label: 'Settings', icon: Icons.settings_outlined, children: [
+    NavItem(label: 'Recruiter Profile', icon: Icons.circle, route: '/profile'),
+    NavItem(label: 'Account Settings', icon: Icons.circle, route: '/settings'),
+    NavItem(
+        label: 'Notification Settings',
+        icon: Icons.circle,
+        route: '/notification'),
+    NavItem(
+        label: 'Security', icon: Icons.circle, route: '/settings?tab=security'),
+    NavItem(
+        label: 'Password', icon: Icons.circle, route: '/settings?tab=security'),
+    NavItem(
+        label: 'Subscription & payments',
+        icon: Icons.circle,
+        route: '/payments'),
+  ]),
 ];
 
 const List<NavItem> kAdminNavItems = [
@@ -908,6 +921,9 @@ class _MobileShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final compactToolbar = screenWidth < 400;
+    final veryNarrowToolbar = screenWidth < 300;
     return Scaffold(
       backgroundColor: AppColors.surface,
       // Providing `drawer:` makes Flutter automatically add the hamburger
@@ -956,27 +972,69 @@ class _MobileShell extends StatelessWidget {
         backgroundColor: Colors.white,
         foregroundColor: AppColors.textPrimary,
         elevation: 0,
-        title:
-            const Text('PINCEF TalentBridge', style: TextStyle(fontSize: 15)),
-        actions: [
-          IconButton(
-              onPressed: onNotifications,
-              icon: const Icon(Icons.notifications_none)),
-          IconButton(
-            onPressed: onProfileTap,
-            icon: CircleAvatar(
-              radius: 14,
-              backgroundColor: AppColors.peach,
-              backgroundImage: profileImageUrl != null
-                  ? NetworkImage(profileImageUrl!)
-                  : null,
-              child: profileImageUrl == null
-                  ? const Icon(Icons.person, size: 14, color: AppColors.orange)
-                  : null,
-            ),
-          ),
-          const SizedBox(width: 8),
-        ],
+        titleSpacing: 8,
+        title: Text(
+          veryNarrowToolbar
+              ? ''
+              : compactToolbar
+                  ? 'TalentBridge'
+                  : 'PINCEF TalentBridge',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 15),
+        ),
+        actions: compactToolbar
+            ? [
+                PopupMenuButton<String>(
+                  tooltip: 'Account and notifications',
+                  onSelected: (value) {
+                    if (value == 'notifications') onNotifications?.call();
+                    if (value == 'profile') onProfileTap?.call();
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: 'notifications',
+                      child: ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.notifications_none),
+                        title: Text('Notifications'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'profile',
+                      child: ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.person_outline),
+                        title: Text('Profile'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 4),
+              ]
+            : [
+                IconButton(
+                  onPressed: onNotifications,
+                  tooltip: 'Notifications',
+                  icon: const Icon(Icons.notifications_none),
+                ),
+                IconButton(
+                  onPressed: onProfileTap,
+                  tooltip: 'Profile',
+                  icon: CircleAvatar(
+                    radius: 14,
+                    backgroundColor: AppColors.peach,
+                    backgroundImage: profileImageUrl != null
+                        ? NetworkImage(profileImageUrl!)
+                        : null,
+                    child: profileImageUrl == null
+                        ? const Icon(Icons.person,
+                            size: 14, color: AppColors.orange)
+                        : null,
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
       ),
       body: primaryActionLabel == 'Post New Job'
           ? _MobileActionLayer(body: body, onPressed: onUploadCv)

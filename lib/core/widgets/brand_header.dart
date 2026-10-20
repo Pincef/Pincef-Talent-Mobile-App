@@ -44,30 +44,44 @@ class BrandHeader extends StatelessWidget {
           children: [
             LogoMark(),
             SizedBox(width: 8),
-            Text(
-              'PINCEF TALENTBRIDGE',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: BrandColors.navy),
+            Flexible(
+              child: Text(
+                'PINCEF TALENTBRIDGE',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: BrandColors.navy,
+                ),
+              ),
             ),
           ],
         ),
         const SizedBox(height: 4),
-        const Text('Global Talent Acquisition', style: TextStyle(fontSize: 11, color: BrandColors.muted)),
+        const Text('Global Talent Acquisition',
+            style: TextStyle(fontSize: 11, color: BrandColors.muted)),
         if (title != null) ...[
           const SizedBox(height: 20),
           Text(
             title!,
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: titleFontSize, fontWeight: FontWeight.w800, color: BrandColors.navy),
+            style: TextStyle(
+                fontSize: titleFontSize,
+                fontWeight: FontWeight.w800,
+                color: BrandColors.navy),
           ),
         ],
         if (subtitle != null) ...[
           const SizedBox(height: 4),
           ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: subtitleMaxWidth ?? double.infinity),
+            constraints:
+                BoxConstraints(maxWidth: subtitleMaxWidth ?? double.infinity),
             child: Text(
               subtitle!,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12.5, color: BrandColors.muted, height: 1.4),
+              style: const TextStyle(
+                  fontSize: 12.5, color: BrandColors.muted, height: 1.4),
             ),
           ),
         ],

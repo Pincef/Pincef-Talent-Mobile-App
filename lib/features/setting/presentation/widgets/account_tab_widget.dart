@@ -22,6 +22,7 @@ class _AccountTabState extends ConsumerState<AccountTab> {
   late final TextEditingController _nameController;
   late final TextEditingController _bioController;
   late final TextEditingController _locationController;
+  late String _country;
   final _competencyController = TextEditingController();
 
   late List<String> _competencies;
@@ -37,6 +38,7 @@ class _AccountTabState extends ConsumerState<AccountTab> {
     _nameController = TextEditingController(text: _user.fullName);
     _bioController = TextEditingController(text: _user.bio ?? '');
     _locationController = TextEditingController(text: _user.location ?? '');
+    _country = _user.country ?? 'US';
     _competencies = List.of(_user.competencies);
     _certifications = List.of(_user.certifications);
   }
@@ -66,6 +68,7 @@ class _AccountTabState extends ConsumerState<AccountTab> {
             lastName: lastName,
             bio: _bioController.text.trim(),
             location: _locationController.text.trim(),
+            country: _country,
             competencies: _competencies,
             certifications: _certifications
                 .map((c) => {
@@ -251,6 +254,25 @@ class _AccountTabState extends ConsumerState<AccountTab> {
                           letterSpacing: 0.4)),
                   const SizedBox(height: 4),
                   TextField(controller: _nameController),
+                  const SizedBox(height: 16),
+                  const Text('BILLING COUNTRY',
+                      style: TextStyle(
+                          color: BrandColors.muted,
+                          fontSize: 10.5,
+                          letterSpacing: 0.4)),
+                  const SizedBox(height: 4),
+                  DropdownButtonFormField<String>(
+                    initialValue: _country,
+                    items: const [
+                      DropdownMenuItem(value: 'NG', child: Text('Nigeria — NGN')),
+                      DropdownMenuItem(value: 'US', child: Text('United States — USD')),
+                      DropdownMenuItem(value: 'GB', child: Text('United Kingdom — GBP')),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) setState(() => _country = value);
+                    },
+                    decoration: const InputDecoration(isDense: true),
+                  ),
                   const SizedBox(height: 16),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.end,

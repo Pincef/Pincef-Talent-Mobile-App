@@ -93,7 +93,8 @@ class DioClient {
     return normalized.endsWith('/auth/login') ||
         normalized.endsWith('/auth/register') ||
         normalized.endsWith('/auth/refresh') ||
-        normalized.endsWith('/auth/refresh-token');
+        normalized.endsWith('/auth/refresh-token') ||
+        normalized.endsWith('/v1/oauth/exchange');
   }
 
   Future<String?> _refreshAccessToken() async {

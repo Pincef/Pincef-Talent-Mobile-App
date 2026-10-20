@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:talentbridge/features/auth/data/models/user_model.dart';
 import 'package:talentbridge/features/auth/presentation/screens/forgot_password_screen.dart';
+import 'package:talentbridge/features/auth/presentation/screens/oauth_callback_screen.dart';
 import 'package:talentbridge/features/candidate_dashboard/presentation/candidate_dashboard_screen.dart';
 import 'package:talentbridge/features/onboarding/presentation/screens/candidate_profile_setup_screen.dart';
 import 'package:talentbridge/features/onboarding/presentation/screens/profile_setup_complete_screen.dart';
@@ -34,6 +35,10 @@ import '../../features/payments/presentation/screens/payment_screen.dart';
 import '../../features/messages/presentation/screens/messages_screen.dart';
 import '../../features/messages/presentation/screens/candidate_messages_screen.dart';
 import '../../features/admin/presentation/admin_console_screens.dart';
+import '../../features/assessment/presentation/assessment_list_screen.dart';
+import '../../features/assessment/presentation/assessment_create_screen.dart';
+import '../../features/assessment/presentation/candidate_assessments_screen.dart';
+import '../../features/assessment/presentation/candidate_assessment_session_screen.dart';
 import '../widgets/app_shell_route.dart';
 
 const _publicRoutes = {
@@ -42,6 +47,7 @@ const _publicRoutes = {
   '/login',
   '/choose-role',
   '/signup',
+  '/auth/callback',
 };
 
 /// These routes are valid immediately after registration. Keeping `/signup`
@@ -119,6 +125,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       // provide the explicit "Skip for now" path to /dashboard.
       if (isLoggedIn &&
           isPublicRoute &&
+          state.matchedLocation != '/auth/callback' &&
           !_postSignupRoutes.contains(state.matchedLocation)) {
         return '/dashboard';
       }
@@ -158,6 +165,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
           path: '/forgot-password',
           builder: (context, state) => const ForgotPasswordScreen()),
+      GoRoute(
+        path: '/auth/callback',
+        builder: (context, state) => OAuthCallbackScreen(
+          code: state.uri.queryParameters['code'],
+          error: state.uri.queryParameters['status'] == 'error'
+              ? state.uri.queryParameters['reason'] ?? 'authentication_failed'
+              : null,
+        ),
+      ),
       GoRoute(
           path: '/signup', builder: (context, state) => const SignUpScreen()),
       GoRoute(
@@ -221,6 +237,34 @@ final routerProvider = Provider<GoRouter>((ref) {
                   : const BrowseJobsScreen();
             },
           ),
+          GoRoute(
+            path: '/competency-assessments',
+            builder: (context, state) => const AssessmentListScreen(),
+            routes: [
+              GoRoute(
+                  path: 'new',
+                  builder: (context, state) => const AssessmentCreateScreen()),
+              GoRoute(
+                  path: ':testId',
+                  builder: (context, state) => AssessmentDetailsScreen(
+                      testId: state.pathParameters['testId']!),
+                  routes: [
+                    GoRoute(
+                      path: 'edit',
+                      builder: (context, state) => AssessmentCreateScreen(
+                        testId: state.pathParameters['testId']!,
+                      ),
+                    ),
+                  ]),
+            ],
+          ),
+          GoRoute(
+              path: '/my-assessments',
+              builder: (context, state) => const CandidateAssessmentsScreen()),
+          GoRoute(
+              path: '/assessments/:assessmentId',
+              builder: (context, state) => CandidateAssessmentSessionScreen(
+                  assessmentId: state.pathParameters['assessmentId']!)),
           GoRoute(
               path: '/jobs/new',
               builder: (context, state) => const PostJobScreen()),
@@ -288,11 +332,12 @@ final routerProvider = Provider<GoRouter>((ref) {
                 ? const MessagesScreen()
                 : const CandidateMessagesScreen(),
           ),
+          GoRoute(
+            path: '/notification',
+            builder: (context, state) => const NotificationCenterScreen(),
+          ),
         ],
       ),
-      GoRoute(
-          path: '/notification',
-          builder: (context, state) => const NotificationCenterScreen())
       // TODO: add routes per feature as they're built:
       //   /candidate-profile   (CV upload, parsed profile view)
       //   /applications        (candidate's own applications)
