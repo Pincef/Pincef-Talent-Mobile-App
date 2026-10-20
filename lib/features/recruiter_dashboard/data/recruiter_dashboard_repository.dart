@@ -1,73 +1,87 @@
+import 'package:dio/dio.dart';
+import '../../../core/network/dio_provider.dart';
 import 'model/recruiter_dashboard_models.dart';
 
-/// Same situation as the candidate DashboardRepository: mocked to match
-/// the design so the UI can be built/reviewed now. Swap loadDashboard()
-/// for a real endpoint call when the recruiter analytics API exists —
-/// the RecruiterDashboardSummary shape stays the same either way.
 class RecruiterDashboardRepository {
-  Future<RecruiterDashboardSummary> loadDashboard() async {
-    await Future.delayed(const Duration(milliseconds: 400));
+  RecruiterDashboardRepository(this._dio);
 
-    return const RecruiterDashboardSummary(
-      recruiterFirstName: 'Alex',
-      activeJobs: 24,
-      activeJobsNote: '+3 from last month',
-      newApplicants: 143,
-      newApplicantsNote: '42 urgent reviews',
-      hiredThisMonth: 25,
-      hiredThisMonthNote: '+47% success rate',
-      priorityJobs: [
-        PriorityJob(
-          title: 'Senior Frontend Engineer',
-          department: 'Engineering • San Francisco, CA',
-          applicantCount: 32,
-          matchCount: 12,
-          status: JobPublishStatus.active,
-        ),
-        PriorityJob(
-          title: 'Lead Product Designer',
-          department: 'Design • Remote',
-          applicantCount: 18,
-          matchCount: 5,
-          status: JobPublishStatus.active,
-        ),
-        PriorityJob(
-          title: 'Solutions Architect',
-          department: 'IT Ops • Austin, TX',
-          applicantCount: 12,
-          status: JobPublishStatus.drafting,
-          isScanning: true,
-        ),
-        PriorityJob(
-          title: 'Solutions Architect',
-          department: 'IT Ops • Austin, TX',
-          applicantCount: 12,
-          status: JobPublishStatus.drafting,
-          isScanning: true,
-        ),
-      ],
-      recentActivity: [
-        RecentActivityItem(
-          type: ActivityType.application,
-          boldText: 'Sarah Chen',
-          suffixText: ' applied for Frontend Engineer. Match score: 94%',
-          timeAgo: '2 hours ago',
-        ),
-        RecentActivityItem(
-          type: ActivityType.interview,
-          prefixText: 'Interview scheduled with ',
-          boldText: 'Marcus Wright',
-          suffixText: '.',
-          timeAgo: '4 hours ago',
-        ),
-        RecentActivityItem(
-          type: ActivityType.jobUpdate,
-          prefixText: 'Job description for ',
-          boldText: 'Product Designer',
-          suffixText: ' updated.',
-          timeAgo: 'Yesterday',
-        ),
-      ],
+  final Dio _dio;
+
+  Future<RecruiterDashboardSummary> loadDashboard() async {
+    final responses = await Future.wait([
+      _dio.get('/dashboard/overview'),
+      _dio.get('/dashboard/top-jobs', queryParameters: {'limit': 5}),
+      _dio.get('/jobs/mine'),
+      _dio.get('/dashboard/applications-trend', queryParameters: {'months': 6}),
+    ]);
+    Map<String, dynamic> dataOf(Response response) =>
+        Map<String, dynamic>.from(response.data['data'] as Map);
+    final overview = dataOf(responses[0]);
+    final topJobs = (responses[1].data['data'] as List? ?? const [])
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+    final allJobs = (responses[2].data['data'] as List? ?? const [])
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+    final trend = (responses[3].data['data'] as List? ?? const [])
+        .whereType<Map>()
+        .map((row) => ApplicationTrendPoint(
+              year: (row['year'] as num?)?.toInt() ?? 0,
+              month: (row['month'] as num?)?.toInt() ?? 0,
+              count: (row['count'] as num?)?.toInt() ?? 0,
+            ))
+        .toList();
+    final jobsById = {
+      for (final job in allJobs) (job['_id'] ?? job['id']).toString(): job
+    };
+    final statuses = Map<String, dynamic>.from(
+        overview['applicationsByStatus'] as Map? ?? const {});
+    int count(String status) => (statuses[status] as num?)?.toInt() ?? 0;
+
+    return RecruiterDashboardSummary(
+      recruiterFirstName: '',
+      activeJobs: (overview['activeJobs'] as num?)?.toInt() ?? 0,
+      activeJobsNote:
+          '${(overview['totalJobs'] as num?)?.toInt() ?? 0} total roles',
+      newApplicants: count('submitted'),
+      newApplicantsNote: 'Awaiting initial review',
+      hiredThisMonth: count('hired'),
+      hiredThisMonthNote: 'Applications in hired stage',
+      averageAiScore: (overview['averageAiScore'] as num?)?.toDouble(),
+      totalApplications: (overview['totalApplications'] as num?)?.toInt() ?? 0,
+      pipelineCounts: {
+        for (final status in const [
+          'submitted',
+          'shortlisted',
+          'interviewing',
+          'offered',
+          'hired',
+          'rejected'
+        ])
+          status: count(status)
+      },
+      applicationTrend: trend,
+      priorityJobs: topJobs.map((row) {
+        final job = jobsById[(row['jobId'] ?? '').toString()] ?? const {};
+        final status = job['status']?.toString() ?? '';
+        return PriorityJob(
+          id: (row['jobId'] ?? '').toString(),
+          title: row['title'] as String? ?? 'Untitled role',
+          department: [job['industry'], job['location']]
+              .whereType<String>()
+              .where((part) => part.trim().isNotEmpty)
+              .join(' • '),
+          applicantCount: (row['applicantCount'] as num?)?.toInt() ?? 0,
+          status: status == 'published'
+              ? JobPublishStatus.active
+              : status == 'closed'
+                  ? JobPublishStatus.closed
+                  : JobPublishStatus.drafting,
+        );
+      }).toList(),
+      recentActivity: const [],
     );
   }
 }
