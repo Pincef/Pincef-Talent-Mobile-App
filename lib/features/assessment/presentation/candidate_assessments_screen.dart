@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/brand_color.dart';
+import '../../../core/widgets/paged_list_view.dart';
 import '../application/assessment_provider.dart';
+import 'widgets/assessment_hero.dart';
 
 class CandidateAssessmentsScreen extends ConsumerWidget {
   const CandidateAssessmentsScreen({super.key});
@@ -10,17 +12,29 @@ class CandidateAssessmentsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(candidateAssessmentsProvider);
+    final items = state.valueOrNull ?? const <Map<String, dynamic>>[];
+    final inProgress = items
+        .where((item) => item['status']?.toString() == 'in_progress')
+        .length;
+    final toComplete = items
+        .where((item) =>
+            item['status']?.toString() == 'pending' ||
+            item['status']?.toString() == 'in_progress')
+        .length;
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('My Assessments',
-            style: TextStyle(
-                fontSize: 23,
-                fontWeight: FontWeight.w800,
-                color: BrandColors.navy)),
-        const SizedBox(height: 5),
-        const Text(
-            'View your assessment invitations, schedules and completed results.'),
+        AssessmentHero(
+          eyebrow: 'Your next step',
+          title: 'Show what you can do.',
+          description:
+              'Review your invitations, pick up an assessment in progress, and track what you have completed.',
+          metrics: [
+            AssessmentHeroMetric('To complete', '$toComplete'),
+            AssessmentHeroMetric('In progress', '$inProgress'),
+            AssessmentHeroMetric('Invitations', '${items.length}'),
+          ],
+        ),
         const SizedBox(height: 18),
         Expanded(
             child: state.when(
@@ -34,11 +48,9 @@ class CandidateAssessmentsScreen extends ConsumerWidget {
           ])),
           data: (items) => items.isEmpty
               ? const Center(child: Text('No assessment invitations yet.'))
-              : ListView.separated(
-                  itemCount: items.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (context, index) {
-                    final item = items[index];
+              : PagedListView<Map<String, dynamic>>(
+                  items: items,
+                  itemBuilder: (context, item, index) {
                     final job = item['job'] is Map
                         ? Map<String, dynamic>.from(item['job'] as Map)
                         : const <String, dynamic>{};
