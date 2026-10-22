@@ -102,42 +102,187 @@ class _Body extends StatelessWidget {
         final isWide = constraints.maxWidth >= 760;
         return SingleChildScrollView(
           padding: EdgeInsets.all(isWide ? 24 : 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _Breadcrumb(title: job.title, isRecruiter: isRecruiter),
-              const SizedBox(height: 12),
-              _Header(
-                  job: job,
-                  isRecruiter: isRecruiter,
-                  jobId: jobId,
-                  isWide: isWide,
-                  onEdit: onEdit),
-              const SizedBox(height: 16),
-              _SectionCard(
-                title: 'Job Summary',
-                child: Text(
-                  job.description.isEmpty
-                      ? 'No description provided.'
-                      : job.description,
-                  style: const TextStyle(
-                      fontSize: 12.5, color: BrandColors.muted, height: 1.6),
-                ),
-              ),
-              if (job.requiredSkills.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                _SectionCard(
-                  title: 'Technical Requirements',
-                  child: _SkillsGrid(skills: job.requiredSkills),
-                ),
-              ],
-            ],
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1240),
+              child: LayoutBuilder(builder: (context, content) {
+                final columns = content.maxWidth >= 980
+                    ? 3
+                    : content.maxWidth >= 560
+                        ? 2
+                        : 1;
+                final factWidth =
+                    (content.maxWidth - (columns - 1) * 12) / columns;
+                final factTiles = <Widget>[
+                  _JobFactTile(
+                      icon: Icons.location_on_outlined,
+                      label: 'Location',
+                      value: job.location),
+                  _JobFactTile(
+                      icon: Icons.work_outline,
+                      label: 'Employment',
+                      value: job.employmentTypeLabel),
+                  if (job.workplaceType?.isNotEmpty ?? false)
+                    _JobFactTile(
+                        icon: Icons.laptop_mac_outlined,
+                        label: 'Work arrangement',
+                        value: _workplaceLabel(job.workplaceType!)),
+                  if (job.salaryRangeLabel != null)
+                    _JobFactTile(
+                        icon: Icons.payments_outlined,
+                        label: 'Compensation',
+                        value: job.salaryRangeLabel!),
+                  if (job.minYearsOfExperience?.isNotEmpty ?? false)
+                    _JobFactTile(
+                        icon: Icons.timeline_outlined,
+                        label: 'Experience',
+                        value: job.minYearsOfExperience!),
+                  if (job.educationLevelLabel != null)
+                    _JobFactTile(
+                        icon: Icons.school_outlined,
+                        label: 'Education',
+                        value: [
+                          job.educationLevelLabel!,
+                          if (job.fieldOfStudy?.isNotEmpty ?? false)
+                            job.fieldOfStudy!,
+                        ].join(' · ')),
+                  if (job.industry?.isNotEmpty ?? false)
+                    _JobFactTile(
+                        icon: Icons.domain_outlined,
+                        label: 'Industry',
+                        value: job.industry!),
+                ];
+                final sections = <Widget>[];
+                if (job.responsibilities.isNotEmpty) {
+                  sections.add(SizedBox(
+                    width: factWidth,
+                    child: _SectionCard(
+                      title: 'Responsibilities',
+                      child: _DetailBulletList(items: job.responsibilities),
+                    ),
+                  ));
+                }
+                if (job.requiredSkills.isNotEmpty ||
+                    (job.minYearsOfExperience?.isNotEmpty ?? false) ||
+                    job.educationLevelLabel != null ||
+                    job.requiresManagementExperience) {
+                  sections.add(SizedBox(
+                    width: factWidth,
+                    child: _SectionCard(
+                      title: 'Skills & qualifications',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (job.requiredSkills.isNotEmpty)
+                            _SkillsGrid(skills: job.requiredSkills),
+                          if (job.minYearsOfExperience?.isNotEmpty ??
+                              false) ...[
+                            if (job.requiredSkills.isNotEmpty)
+                              const SizedBox(height: 14),
+                            _DetailBulletList(items: [
+                              '${job.minYearsOfExperience} experience',
+                              if (job.educationLevelLabel != null)
+                                'Education: ${job.educationLevelLabel}${job.fieldOfStudy?.isNotEmpty ?? false ? ' · ${job.fieldOfStudy}' : ''}',
+                              if (job.requiresManagementExperience)
+                                'Management experience required',
+                            ]),
+                          ] else if (job.educationLevelLabel != null ||
+                              job.requiresManagementExperience) ...[
+                            if (job.requiredSkills.isNotEmpty)
+                              const SizedBox(height: 14),
+                            _DetailBulletList(items: [
+                              if (job.educationLevelLabel != null)
+                                'Education: ${job.educationLevelLabel}${job.fieldOfStudy?.isNotEmpty ?? false ? ' · ${job.fieldOfStudy}' : ''}',
+                              if (job.requiresManagementExperience)
+                                'Management experience required',
+                            ]),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ));
+                }
+                if (job.benefits.isNotEmpty) {
+                  sections.add(SizedBox(
+                    width: factWidth,
+                    child: _SectionCard(
+                      title: 'Benefits',
+                      child: _DetailBulletList(items: job.benefits),
+                    ),
+                  ));
+                }
+                if (job.companyOverview?.trim().isNotEmpty ?? false) {
+                  sections.add(SizedBox(
+                    width: factWidth,
+                    child: _SectionCard(
+                      title: 'About ${job.companyName}',
+                      child: Text(job.companyOverview!.trim(),
+                          style: const TextStyle(
+                              fontSize: 12.5,
+                              color: BrandColors.muted,
+                              height: 1.6)),
+                    ),
+                  ));
+                }
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _Breadcrumb(title: job.title, isRecruiter: isRecruiter),
+                    const SizedBox(height: 12),
+                    _Header(
+                        job: job,
+                        isRecruiter: isRecruiter,
+                        jobId: jobId,
+                        isWide: isWide,
+                        onEdit: onEdit),
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: factTiles
+                          .map(
+                              (tile) => SizedBox(width: factWidth, child: tile))
+                          .toList(),
+                    ),
+                    const SizedBox(height: 14),
+                    _SectionCard(
+                      title: 'About the role',
+                      child: Text(
+                        job.description.isEmpty
+                            ? 'No description provided.'
+                            : job.description,
+                        style: const TextStyle(
+                            fontSize: 13,
+                            color: BrandColors.muted,
+                            height: 1.7),
+                      ),
+                    ),
+                    if (sections.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      Wrap(
+                        spacing: 14,
+                        runSpacing: 14,
+                        children: sections,
+                      ),
+                    ],
+                  ],
+                );
+              }),
+            ),
           ),
         );
       },
     );
   }
 }
+
+String _workplaceLabel(String value) => switch (value) {
+      'remote' => 'Remote',
+      'hybrid' => 'Hybrid',
+      'on_site' => 'On-site',
+      _ => value,
+    };
 
 class _Breadcrumb extends StatelessWidget {
   const _Breadcrumb({required this.title, required this.isRecruiter});
@@ -1864,6 +2009,98 @@ class _SkillsGrid extends StatelessWidget {
           .toList(),
     );
   }
+}
+
+class _JobFactTile extends StatelessWidget {
+  const _JobFactTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        constraints: const BoxConstraints(minHeight: 82),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: BrandColors.border),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: BrandColors.iconBg,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, size: 18, color: BrandColors.navy),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label.toUpperCase(),
+                      style: const TextStyle(
+                          fontSize: 9,
+                          letterSpacing: .5,
+                          fontWeight: FontWeight.w800,
+                          color: BrandColors.muted)),
+                  const SizedBox(height: 4),
+                  Text(value,
+                      style: const TextStyle(
+                          fontSize: 12,
+                          height: 1.35,
+                          fontWeight: FontWeight.w700,
+                          color: BrandColors.navy)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class _DetailBulletList extends StatelessWidget {
+  const _DetailBulletList({required this.items});
+  final List<String> items;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final item in items)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 9),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(top: 4),
+                    child: Icon(Icons.check_circle_outline,
+                        size: 15, color: BrandColors.orange),
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(item,
+                        style: const TextStyle(
+                            fontSize: 12.5,
+                            height: 1.5,
+                            color: BrandColors.muted)),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      );
 }
 
 class _SectionCard extends StatelessWidget {

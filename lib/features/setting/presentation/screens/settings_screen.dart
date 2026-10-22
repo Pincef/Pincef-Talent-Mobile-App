@@ -55,9 +55,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   Widget build(BuildContext context) {
     final isRecruiter =
         ref.watch(authProvider).user?.role == UserRole.recruiter;
+    final isCompact = MediaQuery.sizeOf(context).width < 600;
 
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(isCompact ? 12 : 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

@@ -80,117 +80,207 @@ class _PublicJobContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFF0DE),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.work_outline, color: BrandColors.orange),
-          ),
-          const SizedBox(width: 12),
-          const Text('TalentBridge',
-              style: TextStyle(
-                  color: BrandColors.navy,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 17)),
-        ]),
-        const SizedBox(height: 22),
-        _Card(
+    return LayoutBuilder(builder: (context, constraints) {
+      final compact = constraints.maxWidth < 600;
+      final contentWidth = (constraints.maxWidth - (compact ? 28 : 48))
+          .clamp(0, 1072)
+          .toDouble();
+      final columns = contentWidth >= 800 ? 2 : 1;
+      final cardWidth = (contentWidth - (columns - 1) * 14) / columns;
+      final detailCards = <Widget>[];
+      if (job.responsibilities.isNotEmpty) {
+        detailCards.add(SizedBox(
+            width: cardWidth,
+            child: _Card(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  const _SectionTitle('Responsibilities'),
+                  const SizedBox(height: 12),
+                  for (final item in job.responsibilities) _Bullet(text: item),
+                ]))));
+      }
+      if (job.requiredSkills.isNotEmpty ||
+          (job.minYearsOfExperience?.isNotEmpty ?? false) ||
+          job.educationLevelLabel != null ||
+          job.requiresManagementExperience) {
+        detailCards.add(SizedBox(
+            width: cardWidth,
+            child: _Card(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  const _SectionTitle('Skills and requirements'),
+                  if (job.requiredSkills.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Wrap(spacing: 8, runSpacing: 8, children: [
+                      for (final skill in job.requiredSkills)
+                        Chip(
+                          label: Text(skill),
+                          backgroundColor: const Color(0xFFF3F5F8),
+                          side: BorderSide.none,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                    ]),
+                  ],
+                  if (job.minYearsOfExperience != null ||
+                      job.educationLevelLabel != null ||
+                      job.requiresManagementExperience) ...[
+                    const SizedBox(height: 10),
+                    if (job.minYearsOfExperience?.isNotEmpty ?? false)
+                      _Bullet(text: '${job.minYearsOfExperience} experience'),
+                    if (job.educationLevelLabel != null)
+                      _Bullet(
+                          text:
+                              'Education: ${job.educationLevelLabel}${job.fieldOfStudy?.isNotEmpty ?? false ? ' · ${job.fieldOfStudy}' : ''}'),
+                    if (job.requiresManagementExperience)
+                      const _Bullet(text: 'Management experience required'),
+                  ],
+                ]))));
+      }
+      if (job.benefits.isNotEmpty) {
+        detailCards.add(SizedBox(
+            width: cardWidth,
+            child: _Card(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  const _SectionTitle('Benefits'),
+                  const SizedBox(height: 12),
+                  for (final item in job.benefits) _Bullet(text: item),
+                ]))));
+      }
+      if (job.companyOverview?.trim().isNotEmpty ?? false) {
+        detailCards.add(SizedBox(
+            width: cardWidth,
+            child: _Card(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  const _SectionTitle('About the company'),
+                  const SizedBox(height: 12),
+                  Text(job.companyOverview!,
+                      style: const TextStyle(
+                          fontSize: 14, color: BrandColors.muted, height: 1.7)),
+                ]))));
+      }
+
+      return SingleChildScrollView(
+        padding: EdgeInsets.all(compact ? 14 : 24),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1120),
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(job.title,
-              style: const TextStyle(
-                  fontSize: 26,
-                  height: 1.15,
-                  fontWeight: FontWeight.w800,
-                  color: BrandColors.navy)),
-          const SizedBox(height: 8),
-          Text(job.companyName,
-              style: const TextStyle(
-                  fontSize: 16,
-                  color: BrandColors.muted,
-                  fontWeight: FontWeight.w600)),
-          const SizedBox(height: 18),
-          Wrap(spacing: 18, runSpacing: 10, children: [
-            _Meta(icon: Icons.location_on_outlined, text: job.location),
-            _Meta(icon: Icons.schedule_outlined, text: job.employmentTypeLabel),
-            if (job.workplaceType != null)
-              _Meta(
-                  icon: Icons.laptop_mac_outlined,
-                  text: _workplace(job.workplaceType!)),
-            if (job.salaryRangeLabel != null)
-              _Meta(icon: Icons.payments_outlined, text: job.salaryRangeLabel!),
-          ]),
-        ])),
-        const SizedBox(height: 16),
-        _Card(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const _SectionTitle('About the role'),
-          const SizedBox(height: 12),
-          Text(
-              job.description.isEmpty
-                  ? 'No description provided.'
-                  : job.description,
-              style: const TextStyle(
-                  fontSize: 14, color: BrandColors.muted, height: 1.7)),
-          if (job.responsibilities.isNotEmpty) ...[
-            const SizedBox(height: 22),
-            const _SectionTitle('Responsibilities'),
-            const SizedBox(height: 10),
-            for (final item in job.responsibilities) _Bullet(text: item),
-          ],
-          if (job.requiredSkills.isNotEmpty) ...[
-            const SizedBox(height: 22),
-            const _SectionTitle('Skills and requirements'),
-            const SizedBox(height: 10),
-            Wrap(spacing: 8, runSpacing: 8, children: [
-              for (final skill in job.requiredSkills)
-                Chip(
-                  label: Text(skill),
-                  backgroundColor: const Color(0xFFF3F5F8),
-                  side: BorderSide.none,
-                  visualDensity: VisualDensity.compact,
+              Row(children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF0DE),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child:
+                      const Icon(Icons.work_outline, color: BrandColors.orange),
                 ),
+                const SizedBox(width: 12),
+                const Text('TalentBridge',
+                    style: TextStyle(
+                        color: BrandColors.navy,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 17)),
+              ]),
+              const SizedBox(height: 18),
+              _Card(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Text(job.title,
+                        style: const TextStyle(
+                            fontSize: 26,
+                            height: 1.15,
+                            fontWeight: FontWeight.w800,
+                            color: BrandColors.navy)),
+                    const SizedBox(height: 8),
+                    Text(job.companyName,
+                        style: const TextStyle(
+                            fontSize: 16,
+                            color: BrandColors.muted,
+                            fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 18),
+                    LayoutBuilder(builder: (context, box) {
+                      final facts = <(IconData, String, String)>[
+                        (Icons.location_on_outlined, 'Location', job.location),
+                        (
+                          Icons.schedule_outlined,
+                          'Employment',
+                          job.employmentTypeLabel
+                        ),
+                        if (job.workplaceType != null)
+                          (
+                            Icons.laptop_mac_outlined,
+                            'Work arrangement',
+                            _workplace(job.workplaceType!)
+                          ),
+                        if (job.salaryRangeLabel != null)
+                          (
+                            Icons.payments_outlined,
+                            'Compensation',
+                            job.salaryRangeLabel!
+                          ),
+                        if (job.industry?.isNotEmpty ?? false)
+                          (Icons.domain_outlined, 'Industry', job.industry!),
+                      ];
+                      final count = box.maxWidth >= 760
+                          ? 3
+                          : box.maxWidth >= 430
+                              ? 2
+                              : 1;
+                      final width = (box.maxWidth - (count - 1) * 10) / count;
+                      return Wrap(spacing: 10, runSpacing: 10, children: [
+                        for (final fact in facts)
+                          SizedBox(
+                              width: width,
+                              child: _PublicFactTile(
+                                  icon: fact.$1,
+                                  label: fact.$2,
+                                  value: fact.$3)),
+                      ]);
+                    }),
+                  ])),
+              const SizedBox(height: 16),
+              _Card(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    const _SectionTitle('About the role'),
+                    const SizedBox(height: 12),
+                    Text(
+                        job.description.isEmpty
+                            ? 'No description provided.'
+                            : job.description,
+                        style: const TextStyle(
+                            fontSize: 14,
+                            color: BrandColors.muted,
+                            height: 1.7)),
+                  ])),
+              if (detailCards.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Wrap(spacing: 14, runSpacing: 14, children: detailCards),
+              ],
+              const SizedBox(height: 16),
+              Center(
+                child: TextButton.icon(
+                  onPressed: () => context.go('/signup'),
+                  icon: const Icon(Icons.person_add_alt_1_outlined, size: 17),
+                  label: const Text('Create an account to apply'),
+                ),
+              ),
             ]),
-            if (job.minYearsOfExperience != null) ...[
-              const SizedBox(height: 8),
-              _Bullet(text: '${job.minYearsOfExperience} experience'),
-            ],
-            if (job.educationLevelLabel != null)
-              _Bullet(text: 'Education: ${job.educationLevelLabel}'),
-          ],
-          if (job.benefits.isNotEmpty) ...[
-            const SizedBox(height: 22),
-            const _SectionTitle('Benefits'),
-            const SizedBox(height: 10),
-            for (final item in job.benefits) _Bullet(text: item),
-          ],
-          if (job.companyOverview?.trim().isNotEmpty ?? false) ...[
-            const SizedBox(height: 22),
-            const _SectionTitle('About the company'),
-            const SizedBox(height: 10),
-            Text(job.companyOverview!,
-                style: const TextStyle(
-                    fontSize: 14, color: BrandColors.muted, height: 1.7)),
-          ],
-        ])),
-        const SizedBox(height: 16),
-        Center(
-          child: TextButton.icon(
-            onPressed: () => context.go('/signup'),
-            icon: const Icon(Icons.person_add_alt_1_outlined, size: 17),
-            label: const Text('Create an account to apply'),
           ),
         ),
-      ]),
-    );
+      );
+    });
   }
 
   static String _workplace(String value) => switch (value) {
@@ -228,19 +318,47 @@ class _SectionTitle extends StatelessWidget {
           fontSize: 16, fontWeight: FontWeight.w800, color: BrandColors.navy));
 }
 
-class _Meta extends StatelessWidget {
-  const _Meta({required this.icon, required this.text});
+class _PublicFactTile extends StatelessWidget {
+  const _PublicFactTile(
+      {required this.icon, required this.label, required this.value});
+
   final IconData icon;
-  final String text;
+  final String label;
+  final String value;
 
   @override
-  Widget build(BuildContext context) =>
-      Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 16, color: BrandColors.muted),
-        const SizedBox(width: 6),
-        Text(text,
-            style: const TextStyle(color: BrandColors.muted, fontSize: 13)),
-      ]);
+  Widget build(BuildContext context) => Container(
+        constraints: const BoxConstraints(minHeight: 76),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F9FC),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: BrandColors.border),
+        ),
+        child: Row(children: [
+          Icon(icon, size: 18, color: BrandColors.orange),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(label.toUpperCase(),
+                      style: const TextStyle(
+                          fontSize: 9,
+                          letterSpacing: .5,
+                          fontWeight: FontWeight.w800,
+                          color: BrandColors.muted)),
+                  const SizedBox(height: 3),
+                  Text(value,
+                      style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: BrandColors.navy)),
+                ]),
+          ),
+        ]),
+      );
 }
 
 class _Bullet extends StatelessWidget {

@@ -115,18 +115,31 @@ class _RecruiterDashboardBody extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  if (isWide)
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        // TODO: wire an actual date-range picker/menu
-                      },
-                      icon: const Icon(Icons.calendar_today_outlined, size: 14),
-                      label: const Text('This Week'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF1B2A4E),
-                        side: const BorderSide(color: Color(0xFFE7E9EF)),
-                      ),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final now = DateTime.now();
+                      final range = await showDateRangePicker(
+                        context: context,
+                        firstDate: DateTime(2018),
+                        lastDate: now,
+                        initialDateRange: state.from != null && state.to != null
+                            ? DateTimeRange(start: state.from!, end: state.to!)
+                            : null,
+                      );
+                      if (range != null)
+                        ref
+                            .read(recruiterDashboardProvider.notifier)
+                            .load(from: range.start, to: range.end);
+                    },
+                    icon: const Icon(Icons.calendar_today_outlined, size: 14),
+                    label: Text(state.from == null || state.to == null
+                        ? 'Filter by dates'
+                        : '${state.from!.month}/${state.from!.day}/${state.from!.year} – ${state.to!.month}/${state.to!.day}/${state.to!.year}'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF1B2A4E),
+                      side: const BorderSide(color: Color(0xFFE7E9EF)),
                     ),
+                  ),
                 ],
               ),
               const SizedBox(height: 20),
@@ -202,7 +215,8 @@ class _RecruiterDashboardBody extends ConsumerWidget {
                           flex: 2,
                           child: PriorityJobsCard(
                               jobs: summary.priorityJobs,
-                              onViewAll: () => context.go('/jobs')),
+                              onViewAll: () => context.go('/jobs'),
+                              onJobTap: (job) => context.go('/jobs/${job.id}')),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
@@ -227,7 +241,8 @@ class _RecruiterDashboardBody extends ConsumerWidget {
                       children: [
                         PriorityJobsCard(
                             jobs: summary.priorityJobs,
-                            onViewAll: () => context.go('/jobs')),
+                            onViewAll: () => context.go('/jobs'),
+                            onJobTap: (job) => context.go('/jobs/${job.id}')),
                         const SizedBox(height: 16),
                         QuickActionsCard(actions: quickActions),
                         const SizedBox(height: 16),

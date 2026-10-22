@@ -74,6 +74,10 @@ class _DownloadCvButtonState extends State<DownloadCvButton> {
       return _isDownloading
           ? Padding(padding: const EdgeInsets.all(2), child: progressIndicator)
           : IconButton(
+              tooltip: 'Download CV',
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints.tightFor(width: 34, height: 34),
               onPressed: _download,
               icon: const Icon(Icons.download_outlined,
                   size: 17, color: BrandColors.navy),

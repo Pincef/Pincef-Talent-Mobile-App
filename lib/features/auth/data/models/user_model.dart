@@ -1,5 +1,8 @@
 enum UserRole { candidate, recruiter, admin }
 
+/// Temporary global plan-gate bypass for product testing.
+const bool billingGuardsEnabled = false;
+
 UserRole userRoleFromString(String value) {
   switch (value) {
     case 'recruiter':
@@ -135,13 +138,13 @@ class UserModel {
       role: userRoleFromString(json['role'] as String),
       companyId: json['companyId'] as String?,
       isVerified: json['isVerified'] as bool? ?? false,
-      modules: json['modules'] is List
+      modules: !billingGuardsEnabled ? const ['job.pipeline','jobs.unlimited_post','jobs.boost','analytics.advanced','analytics.basic','ai.candidate_match','ai.candidate_summary','ai.candidate_interview','ai.candidate_engagement','ai.candidate_outreach','ai.candidate_outreach_templates','ai.candidate_outreach_scheduling','ai.candidate_outreach_analytics','ai.candidate_outreach_personalization','ai.candidate_outreach_a_b_testing','ai.candidate_outreach_multi_channel','ai.candidate_outreach_integrations','ai.candidate_outreach_automation','ai.candidate_outreach_customization','ai.candidate_outreach_reporting','ai.candidate_outreach_security','team.extra_seats','hiring.pipeline','ai.cv_parsing','hiring.stage.interview','hiring.stage.assessment','hiring.candidate.messaging'] : json['modules'] is List
           ? (json['modules'] as List).map((e) => e.toString()).toList()
           : null,
-      capabilities: rawCapabilities is Map
+      capabilities: !billingGuardsEnabled ? const {'allowsPlanAutomation':true,'allowsCandidateMessaging':true,'allowsCustomPipelines':true,'allowsPremiumPipeline':true,'allowsAiJobDescriptionGeneration':true,'maxCustomPipelines':999999} : rawCapabilities is Map
           ? Map<String, dynamic>.from(rawCapabilities)
           : const {},
-      limits: rawLimits is Map ? Map<String, dynamic>.from(rawLimits) : const {},
+      limits: !billingGuardsEnabled ? const {'jobsPerMonth':-1,'pipelines':-1,'cvUploads':-1,'rankingsPerJob':-1,'assessmentEmailsPerJob':-1,'interviewInvitesPerJob':-1} : rawLimits is Map ? Map<String, dynamic>.from(rawLimits) : const {},
       profileImage: json['profileImage'] != null
           ? ProfileImage.fromJson(json['profileImage'] as Map<String, dynamic>)
           : null,
@@ -164,7 +167,7 @@ class UserModel {
     );
   }
 
-  bool hasModule(String code) => modules?.contains(code) ?? false;
+  bool hasModule(String code) => !billingGuardsEnabled || (modules?.contains(code) ?? false);
 
   String get fullName {
     final combined = '$firstName $lastName'.trim();

@@ -18,6 +18,7 @@ import '../../../interviews/presentation/schedule_interview_sheet_screen.dart';
 // declared there under a different name, import and reuse it instead of
 // this local one to avoid two Dio-backed instances of the same repository.
 import 'package:talentbridge/features/jobs/data/candidate_profile_repository.dart';
+import 'package:talentbridge/features/jobs/presentation/widgets/download_cv_button.dart';
 import 'package:talentbridge/core/network/dio_provider.dart'; // adjust to wherever dioProvider actually lives
 import 'package:talentbridge/core/widgets/app_toast.dart';
 import 'package:talentbridge/features/auth/application/auth_provider.dart'
@@ -57,14 +58,9 @@ Future<bool> _openExternalUrl(Uri uri) async {
 }
 
 /// The four "AI Candidate Tools" actions in the mockup's bulk-action bar.
-/// Only [cvToJobMatching] maps to a real endpoint today —
-/// CandidateProfileViewRepository.requestJobAnalysis, called once per
-/// selected candidate against this screen's widget.jobId (there's no bulk
-/// endpoint, so N selections means N sequential requests; fine for normal
-/// selection sizes, worth flagging to backend if that changes). The other
-/// three have no backend support at all — wire them once
-/// candidateProfile.service.ts grows the matching endpoints for CV
-/// parsing / resume summarization / cross-candidate ranking.
+/// Summary and matching both use the existing job-scoped analysis endpoint.
+/// CV parsing is queued automatically when a candidate uploads a CV, while
+/// cross-candidate ranking has its own job-level screen.
 enum CandidateBulkAiAction {
   cvParsing,
   resumeSummary,
@@ -86,6 +82,7 @@ extension on CandidateBulkAiAction {
   //   this != CandidateBulkAiAction.candidateRanking || company.planType != PlanType.FREE
   bool get isImplemented =>
       this == CandidateBulkAiAction.cvToJobMatching ||
+      this == CandidateBulkAiAction.resumeSummary ||
       this == CandidateBulkAiAction.candidateRanking;
 }
 
@@ -766,6 +763,11 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
   }
 
   Future<void> _runBulkAction(CandidateBulkAiAction action) async {
+    if (action == CandidateBulkAiAction.cvParsing) {
+      AppToast.info(context,
+          'CV parsing starts automatically when a candidate uploads a résumé.');
+      return;
+    }
     if (!action.isImplemented) {
       AppToast.info(context, '${action.label} is coming soon.');
       return;
@@ -792,7 +794,8 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
     final failures = <String>[];
     for (final candidateId in candidateIds) {
       try {
-        await repository.requestJobAnalysis(candidateId, widget.jobId);
+        await repository.requestJobAnalysis(candidateId, widget.jobId,
+            includeSummary: action == CandidateBulkAiAction.resumeSummary);
       } catch (_) {
         failures.add(candidateId);
       }
@@ -801,11 +804,15 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
     setState(() => _bulkActionInFlight = null);
 
     final ranCount = candidateIds.length - failures.length;
+    final actionName = action == CandidateBulkAiAction.resumeSummary
+        ? 'summarized'
+        : 'matched';
     if (failures.isEmpty) {
-      AppToast.success(
-          context, 'Matched $ranCount candidate${ranCount == 1 ? '' : 's'}.');
+      AppToast.success(context,
+          'AI $actionName $ranCount candidate${ranCount == 1 ? '' : 's'}.');
     } else {
-      AppToast.error(context, 'Matched $ranCount, ${failures.length} failed.');
+      AppToast.error(
+          context, 'AI $actionName $ranCount, ${failures.length} failed.');
     }
     ref.read(jobApplicantsProvider(widget.jobId).notifier).refresh();
   }
@@ -1264,9 +1271,8 @@ class _CandidateCard extends StatelessWidget {
             child: SizedBox(
               height: 34,
               child: ElevatedButton(
-                // CV download moves to the candidate profile screen once
-                // it exists — this button's job is just to get there, not
-                // to open the PDF itself.
+                // Open the full profile; a separate control downloads the
+                // CV directly from this applicant card.
                 onPressed: onViewProfile,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: BrandColors.orange,
@@ -1280,6 +1286,16 @@ class _CandidateCard extends StatelessWidget {
                     style:
                         TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700)),
               ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 34,
+            height: 34,
+            child: DownloadCvButton(
+              url: applicant.cvUrl,
+              fileName: '${candidate.fullName}_CV',
+              compact: true,
             ),
           ),
           const SizedBox(width: 8),

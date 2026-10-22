@@ -916,8 +916,8 @@ class _MobileShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.sizeOf(context).width;
-    final compactToolbar = screenWidth < 400;
-    final veryNarrowToolbar = screenWidth < 300;
+    final compactToolbar = screenWidth < 460;
+    final veryNarrowToolbar = screenWidth < 320;
     return Scaffold(
       backgroundColor: AppColors.surface,
       // Providing `drawer:` makes Flutter automatically add the hamburger
@@ -1033,10 +1033,17 @@ class _MobileShell extends StatelessWidget {
                 const SizedBox(width: 8),
               ],
       ),
-      body: primaryActionLabel == 'Post New Job'
-          ? _MobileActionLayer(body: body, onPressed: onUploadCv)
+      body: primaryActionLabel == 'Post New Job' ||
+              primaryActionLabel == 'Upload CV'
+          ? _MobileActionLayer(
+              body: body,
+              onPressed: onUploadCv,
+              label: primaryActionLabel,
+              icon: primaryActionIcon,
+            )
           : body,
-      floatingActionButton: primaryActionLabel == 'Post New Job'
+      floatingActionButton: primaryActionLabel == 'Post New Job' ||
+              primaryActionLabel == 'Upload CV'
           ? null
           : FloatingActionButton.extended(
               backgroundColor: AppColors.orange,
@@ -1049,10 +1056,17 @@ class _MobileShell extends StatelessWidget {
 }
 
 class _MobileActionLayer extends StatefulWidget {
-  const _MobileActionLayer({required this.body, required this.onPressed});
+  const _MobileActionLayer({
+    required this.body,
+    required this.onPressed,
+    required this.label,
+    required this.icon,
+  });
 
   final Widget body;
   final VoidCallback? onPressed;
+  final String label;
+  final IconData icon;
 
   @override
   State<_MobileActionLayer> createState() => _MobileActionLayerState();
@@ -1175,12 +1189,12 @@ class _MobileActionLayerState extends State<_MobileActionLayer> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.add, color: Colors.white),
+                        Icon(widget.icon, color: Colors.white),
                         if (!_isCollapsed) ...[
                           const SizedBox(width: 8),
-                          const Flexible(
+                          Flexible(
                             child: Text(
-                              'Post New Job',
+                              widget.label,
                               maxLines: 1,
                               overflow: TextOverflow.fade,
                               softWrap: false,

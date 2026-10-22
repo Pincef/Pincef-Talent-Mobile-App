@@ -66,10 +66,11 @@ class StatCard extends StatelessWidget {
 // ============================================================
 
 class PriorityJobsCard extends StatelessWidget {
-  const PriorityJobsCard({super.key, required this.jobs, required this.onViewAll});
+  const PriorityJobsCard({super.key, required this.jobs, required this.onViewAll, this.onJobTap});
 
   final List<PriorityJob> jobs;
   final VoidCallback onViewAll;
+  final ValueChanged<PriorityJob>? onJobTap;
 
   @override
   Widget build(BuildContext context) {
@@ -101,7 +102,7 @@ class PriorityJobsCard extends StatelessWidget {
           const SizedBox(height: 8),
           for (var i = 0; i < jobs.length; i++) ...[
             if (i > 0) const Divider(color: BrandColors.border, height: 24),
-            _PriorityJobRow(job: jobs[i]),
+            _PriorityJobRow(job: jobs[i], onTap: onJobTap == null ? null : () => onJobTap!(jobs[i])),
           ],
         ],
       ),
@@ -110,12 +111,18 @@ class PriorityJobsCard extends StatelessWidget {
 }
 
 class _PriorityJobRow extends StatelessWidget {
-  const _PriorityJobRow({required this.job});
+  const _PriorityJobRow({required this.job, this.onTap});
   final PriorityJob job;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Container(
@@ -171,6 +178,7 @@ class _PriorityJobRow extends StatelessWidget {
           ],
         ),
       ],
+    )),
     );
   }
 }

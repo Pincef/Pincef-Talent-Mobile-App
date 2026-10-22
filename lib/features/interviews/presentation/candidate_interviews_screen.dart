@@ -37,6 +37,7 @@ class _CandidateInterviewsScreenState
   @override
   Widget build(BuildContext context) {
     final ref = this.ref;
+    final compact = MediaQuery.sizeOf(context).width < 560;
     final state = ref.watch(myInterviewsProvider);
     final upcomingCount = state.valueOrNull
             ?.where((interview) =>
@@ -48,9 +49,9 @@ class _CandidateInterviewsScreenState
         ref.invalidate(myInterviewsProvider);
         await ref.read(myInterviewsProvider.future);
       },
-      child: ListView(padding: const EdgeInsets.all(24), children: [
+      child: ListView(padding: EdgeInsets.all(compact ? 12 : 24), children: [
         Container(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(compact ? 18 : 24),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             gradient: const LinearGradient(
@@ -107,18 +108,19 @@ class _CandidateInterviewsScreenState
                             color: Colors.white, fontWeight: FontWeight.w700)),
                   ]),
                 ])),
-            const SizedBox(width: 12),
-            Container(
-              width: 76,
-              height: 76,
-              decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: .1),
-                  shape: BoxShape.circle,
-                  border:
-                      Border.all(color: Colors.white.withValues(alpha: .16))),
-              child: const Icon(Icons.video_camera_front_outlined,
-                  color: Color(0xFFFFC58E), size: 36),
-            ),
+            if (!compact) const SizedBox(width: 12),
+            if (!compact)
+              Container(
+                width: 76,
+                height: 76,
+                decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: .1),
+                    shape: BoxShape.circle,
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: .16))),
+                child: const Icon(Icons.video_camera_front_outlined,
+                    color: Color(0xFFFFC58E), size: 36),
+              ),
           ]),
         ),
         const SizedBox(height: 22),

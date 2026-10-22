@@ -125,12 +125,33 @@ class CandidateProfilePreviewScreen extends ConsumerWidget {
                       : () => AppToast.info(context,
                           'Candidate messaging is available on Pro and Business plans.'),
                 ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      try {
+                        await ref.read(candidateProfileViewRepositoryProvider).requestCvParsing(candidateId, jobId);
+                        ref.invalidate(candidateProfileViewProvider(args));
+                        if (context.mounted) AppToast.success(context, 'CV parsing queued');
+                      } catch (e) {
+                        if (context.mounted) AppToast.error(context, 'Could not parse CV: $e');
+                      }
+                    },
+                    icon: const Icon(Icons.auto_awesome_outlined, size: 17),
+                    label: const Text('Parse CV'),
+                  ),
+                ),
                 const SizedBox(height: 18),
                 if (wide)
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(flex: 3, child: _MainColumn(data: data)),
+                      Expanded(
+                          flex: 3,
+                          child: _MainColumn(
+                              data: data,
+                              candidateId: candidateId,
+                              jobId: jobId)),
                       const SizedBox(width: 18),
                       SizedBox(
                           width: 290,
@@ -140,7 +161,8 @@ class CandidateProfilePreviewScreen extends ConsumerWidget {
                 else
                   Column(
                     children: [
-                      _MainColumn(data: data),
+                      _MainColumn(
+                          data: data, candidateId: candidateId, jobId: jobId),
                       const SizedBox(height: 18),
                       _SideColumn(data: data, applicant: applicant),
                     ],
@@ -271,8 +293,11 @@ class _ProfileHeader extends StatelessWidget {
 }
 
 class _MainColumn extends StatelessWidget {
-  const _MainColumn({required this.data});
+  const _MainColumn(
+      {required this.data, required this.candidateId, required this.jobId});
   final CandidateProfileViewData data;
+  final String candidateId;
+  final String jobId;
 
   @override
   Widget build(BuildContext context) {
@@ -281,6 +306,9 @@ class _MainColumn extends StatelessWidget {
       children: [
         _MatchInsights(
             analysis: data.analysis, candidateName: data.user.firstName),
+        const SizedBox(height: 18),
+        _JobSummaryPanel(
+            candidateId: candidateId, jobId: jobId, analysis: data.analysis),
         const SizedBox(height: 18),
         _SectionCard(
           title: 'Professional Summary',
@@ -304,6 +332,182 @@ class _MainColumn extends StatelessWidget {
               : _Education(entries: data.profile.education),
         ),
       ],
+    );
+  }
+}
+
+class _JobSummaryPanel extends ConsumerStatefulWidget {
+  const _JobSummaryPanel(
+      {required this.candidateId, required this.jobId, this.analysis});
+  final String candidateId;
+  final String jobId;
+  final CandidateJobAnalysis? analysis;
+
+  @override
+  ConsumerState<_JobSummaryPanel> createState() => _JobSummaryPanelState();
+}
+
+class _JobSummaryPanelState extends ConsumerState<_JobSummaryPanel> {
+  bool _busy = false;
+
+  Future<void> _generateSummary() async {
+    setState(() => _busy = true);
+    try {
+      final result = await ref
+          .read(candidateProfileViewRepositoryProvider)
+          .requestJobAnalysis(widget.candidateId, widget.jobId,
+              includeSummary: true);
+      if (!mounted) return;
+      if (result.status == CandidateJobAnalysisStatus.completed &&
+          result.resumeSummary != null) {
+        AppToast.success(context, 'Candidate summary generated.');
+        ref.invalidate(candidateProfileViewProvider(
+            (candidateId: widget.candidateId, jobId: widget.jobId)));
+      } else {
+        AppToast.error(context,
+            result.error ?? 'The candidate summary could not be generated.');
+      }
+    } catch (error) {
+      if (mounted) {
+        AppToast.error(context, 'Could not generate summary: $error');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final summary = widget.analysis?.resumeSummary;
+    final executive = summary?['executiveSummary']?.toString().trim();
+    final achievements = (summary?['topAchievements'] as List? ?? const [])
+        .map((value) => value.toString())
+        .where((value) => value.trim().isNotEmpty)
+        .toList();
+    final skills = (summary?['skills'] as List? ?? const [])
+        .whereType<Map>()
+        .map((value) => Map<String, dynamic>.from(value))
+        .toList();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFFF8F2), Color(0xFFFFFDFB)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFF0D2C4)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+                color: BrandColors.orange.withValues(alpha: .12),
+                borderRadius: BorderRadius.circular(10)),
+            child: const Icon(Icons.auto_awesome,
+                color: BrandColors.orange, size: 18),
+          ),
+          const SizedBox(width: 10),
+          const Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('AI candidate summary',
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: BrandColors.navy)),
+              SizedBox(height: 2),
+              Text('Tailored to this role', style: _smallMuted),
+            ]),
+          ),
+          if (widget.analysis?.isStale == true)
+            const Padding(
+              padding: EdgeInsets.only(right: 4),
+              child: Tooltip(
+                message:
+                    'The candidate profile changed since this summary was generated.',
+                child: Icon(Icons.info_outline,
+                    size: 18, color: BrandColors.orange),
+              ),
+            ),
+          if (summary != null)
+            IconButton(
+              tooltip: 'Regenerate summary',
+              onPressed: _busy ? null : _generateSummary,
+              icon: const Icon(Icons.refresh, size: 19),
+            ),
+        ]),
+        if (executive != null && executive.isNotEmpty) ...[
+          const SizedBox(height: 13),
+          Text(executive, style: _bodyStyle),
+          if (achievements.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            const Text('KEY ACHIEVEMENTS',
+                style: TextStyle(
+                    fontSize: 10,
+                    letterSpacing: .6,
+                    fontWeight: FontWeight.w800,
+                    color: BrandColors.muted)),
+            const SizedBox(height: 7),
+            for (final achievement in achievements)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.check_circle_outline,
+                          size: 16, color: BrandColors.orange),
+                      const SizedBox(width: 7),
+                      Expanded(child: Text(achievement, style: _bodyStyle)),
+                    ]),
+              ),
+          ],
+          if (skills.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 7,
+              runSpacing: 7,
+              children: skills.map((skill) {
+                final name = skill['name']?.toString() ?? '';
+                final level = skill['level']?.toString();
+                return Chip(
+                  visualDensity: VisualDensity.compact,
+                  backgroundColor: Colors.white,
+                  side: const BorderSide(color: Color(0xFFF0D2C4)),
+                  label: Text(
+                      level == null || level.isEmpty ? name : '$name · $level',
+                      style: const TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                          color: BrandColors.navy)),
+                );
+              }).toList(),
+            ),
+          ],
+        ] else ...[
+          const SizedBox(height: 10),
+          const Text(
+              'Generate a role-specific summary of this applicant’s experience, strengths, and relevant skills.',
+              style: _bodyStyle),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _busy ? null : _generateSummary,
+            icon: _busy
+                ? const SizedBox(
+                    width: 15,
+                    height: 15,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.auto_awesome, size: 16),
+            label: Text(_busy ? 'Generating summary…' : 'Generate summary'),
+            style: OutlinedButton.styleFrom(foregroundColor: BrandColors.navy),
+          ),
+        ],
+      ]),
     );
   }
 }

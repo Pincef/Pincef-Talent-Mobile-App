@@ -21,8 +21,9 @@ class CandidateAssessmentsScreen extends ConsumerWidget {
             item['status']?.toString() == 'pending' ||
             item['status']?.toString() == 'in_progress')
         .length;
+    final compact = MediaQuery.sizeOf(context).width < 560;
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(compact ? 12 : 24),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         AssessmentHero(
           eyebrow: 'Your next step',
@@ -56,30 +57,71 @@ class CandidateAssessmentsScreen extends ConsumerWidget {
                         : const <String, dynamic>{};
                     final status = item['status']?.toString() ?? 'pending';
                     final available = item['availableUntil']?.toString();
+                    final submitted =
+                        status == 'graded' || status == 'submitted';
+                    final actionLabel = submitted
+                        ? 'Submitted'
+                        : status == 'in_progress'
+                            ? 'Resume'
+                            : status == 'pending'
+                                ? 'Start'
+                                : 'Completed';
+                    final action = FilledButton(
+                      onPressed: submitted
+                          ? null
+                          : () => context.go('/assessments/${item['id']}'),
+                      child: Text(actionLabel),
+                    );
+                    final subtitle =
+                        '${job['title'] ?? 'Job'} · ${status == 'submitted' ? 'Awaiting recruiter review' : status}${available == null ? '' : ' · Closes ${_date(available)}'}';
                     return Card(
-                        child: ListTile(
-                      leading: const CircleAvatar(
-                          backgroundColor: Color(0xFFFFF0E8),
-                          child: Icon(Icons.assignment_outlined,
-                              color: BrandColors.orange)),
-                      title: Text(
-                          item['title']?.toString() ?? 'Competency assessment',
-                          style: const TextStyle(fontWeight: FontWeight.w700)),
-                      subtitle: Text(
-                          '${job['title'] ?? 'Job'} · ${status == 'submitted' ? 'Awaiting recruiter review' : status}${available == null ? '' : ' · Closes ${_date(available)}'}'),
-                      trailing: FilledButton(
-                          onPressed: status == 'graded' || status == 'submitted'
-                              ? null
-                              : () => context.go('/assessments/${item['id']}'),
-                          child:
-                              Text(status == 'graded' || status == 'submitted'
-                                  ? 'Submitted'
-                                  : status == 'in_progress'
-                                      ? 'Resume'
-                                      : status == 'pending'
-                                          ? 'Start'
-                                          : 'Completed')),
-                    ));
+                      child: LayoutBuilder(builder: (context, constraints) {
+                        if (constraints.maxWidth < 480) {
+                          return Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(children: [
+                                  const CircleAvatar(
+                                      backgroundColor: Color(0xFFFFF0E8),
+                                      child: Icon(Icons.assignment_outlined,
+                                          color: BrandColors.orange)),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      item['title']?.toString() ??
+                                          'Competency assessment',
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w700),
+                                    ),
+                                  ),
+                                ]),
+                                const SizedBox(height: 10),
+                                Text(subtitle),
+                                const SizedBox(height: 12),
+                                Align(
+                                    alignment: Alignment.centerRight,
+                                    child: action),
+                              ],
+                            ),
+                          );
+                        }
+                        return ListTile(
+                          leading: const CircleAvatar(
+                              backgroundColor: Color(0xFFFFF0E8),
+                              child: Icon(Icons.assignment_outlined,
+                                  color: BrandColors.orange)),
+                          title: Text(
+                              item['title']?.toString() ??
+                                  'Competency assessment',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w700)),
+                          subtitle: Text(subtitle),
+                          trailing: action,
+                        );
+                      }),
+                    );
                   },
                 ),
         )),

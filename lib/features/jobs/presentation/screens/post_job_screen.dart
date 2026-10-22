@@ -1542,29 +1542,22 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
   }
 
   String _nextPipelineRoute({required String? jobId}) {
-    String? nextStage;
-    if (_pipelineTier == 'Premium') {
-      nextStage = 'ASSESSMENT';
-    } else if (_pipelineTier == 'Custom' && _selectedPipelineId != null) {
-      final pipeline = (ref.read(pipelinesProvider).value ?? const [])
-          .where((item) => item.id == _selectedPipelineId)
-          .firstOrNull;
-      final stages = [...?pipeline?.stages]
-        ..sort((a, b) => a.order.compareTo(b.order));
-      nextStage = stages
-          .where((stage) => stage.type.toUpperCase() != 'APPLIED')
-          .firstOrNull
-          ?.type
-          .toUpperCase();
-    }
-    if (nextStage != null && isAssessmentType(nextStage)) {
+    final selectedPipeline =
+        _pipelineTier == 'Custom' && _selectedPipelineId != null
+            ? (ref.read(pipelinesProvider).value ?? const [])
+                .where((item) => item.id == _selectedPipelineId)
+                .firstOrNull
+            : null;
+    final hasAssessmentStage = _pipelineTier == 'Premium' ||
+        selectedPipeline?.stages.any((stage) => isAssessmentType(stage.type)) ==
+            true;
+    if (hasAssessmentStage) {
       final query = Uri(queryParameters: {
         if (jobId != null) 'jobId': jobId,
         if (_selectedPipelineId != null) 'pipelineId': _selectedPipelineId!,
       }).query;
       return '/competency-assessments/new${query.isEmpty ? '' : '?$query'}';
     }
-    if (nextStage?.contains('INTERVIEW') == true) return '/interviews';
     return jobId == null ? '/jobs' : '/jobs/$jobId/candidates';
   }
 
