@@ -101,7 +101,7 @@ class JobDraft {
 
   // Experience & Requirements
   final List<String> requiredSkills;
-  final int? minYearsOfExperience;
+  final String? minYearsOfExperience;
   final String?
       educationLevel; // high_school | associate | bachelors | masters | doctorate
   final String? fieldOfStudy;
@@ -153,7 +153,7 @@ class JobDraft {
     double? maximumSalary,
     String? currency,
     List<String>? requiredSkills,
-    int? minYearsOfExperience,
+    String? minYearsOfExperience,
     String? educationLevel,
     String? fieldOfStudy,
     bool? requiresManagementExperience,
@@ -698,7 +698,7 @@ class JobDetail {
   final String? employmentType;
   final JobBackendStatus status;
   final List<String> requiredSkills;
-  final int? minYearsOfExperience;
+  final String? minYearsOfExperience;
   final String? educationLevel;
   final String? fieldOfStudy;
   final double? minSalary;
@@ -788,7 +788,7 @@ class JobDetail {
               ?.map((e) => e.toString())
               .toList() ??
           const [],
-      minYearsOfExperience: (json['minYearsOfExperience'] as num?)?.toInt(),
+      minYearsOfExperience: json['minYearsOfExperience']?.toString(),
       educationLevel: json['educationLevel'] as String?,
       fieldOfStudy: json['fieldOfStudy'] as String?,
       minSalary: (json['minSalary'] as num?)?.toDouble(),
