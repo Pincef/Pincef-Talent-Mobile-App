@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/paged_list_view.dart';
 import '../../application/messages_provider.dart';
 import '../../application/presence_provider.dart';
 import '../../data/messages_repository.dart';
@@ -206,12 +207,12 @@ class _ThreadList extends ConsumerWidget {
           ),
           _InboxTabs(unreadCount: threads.where((t) => t.unread).length),
           Expanded(
-            child: ListView.separated(
-              itemCount: threads.length,
+            child: PagedListView<MessageThread>(
+              items: threads,
+              pageSize: 12,
               separatorBuilder: (_, __) =>
                   const Divider(height: 1, color: AppColors.divider),
-              itemBuilder: (_, i) {
-                final thread = threads[i];
+              itemBuilder: (_, thread, i) {
                 final active = selected == thread.id;
                 final online = ref.watch(presenceProvider
                     .select((p) => p[thread.partnerId]?.online ?? false));
@@ -394,19 +395,26 @@ class _ConversationPaneState extends ConsumerState<_ConversationPane> {
           children: [
             _ConversationHeader(thread: widget.thread, onBack: widget.onBack),
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-                children: [
-                  const Center(
-                    child: Text('Today',
-                        style: TextStyle(
-                            fontSize: 8, color: AppColors.textSecondary)),
+              child: Column(children: [
+                const Padding(
+                  padding: EdgeInsets.only(top: 16, bottom: 10),
+                  child: Text('Today',
+                      style: TextStyle(
+                          fontSize: 8, color: AppColors.textSecondary)),
+                ),
+                Expanded(
+                  child: PagedListView<ChatMessage>(
+                    items: messages,
+                    pageSize: 30,
+                    startAtEnd: true,
+                    previousLabel: 'Older messages',
+                    nextLabel: 'Newer messages',
+                    padding: const EdgeInsets.fromLTRB(24, 6, 24, 8),
+                    itemBuilder: (_, message, __) => _Bubble(message: message),
                   ),
-                  const SizedBox(height: 14),
-                  ...messages.map((message) => _Bubble(message: message)),
-                  const _InterviewCard(),
-                ],
-              ),
+                ),
+                const _InterviewCard(),
+              ]),
             ),
             const _SuggestedReplies(),
             _Composer(controller: _controller, onSend: _send),
