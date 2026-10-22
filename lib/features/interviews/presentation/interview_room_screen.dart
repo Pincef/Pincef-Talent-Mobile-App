@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 // Prefixed: LiveKit also exports a `ConnectionState` that clashes with Flutter's.
 import 'package:livekit_client/livekit_client.dart' as lk;
 
@@ -247,6 +248,16 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
     if (mounted) Navigator.of(context).pop();
   }
 
+  Future<void> _switchInterview(Interview interview) async {
+    _leaving = true;
+    await _cleanup();
+    if (!mounted) return;
+    await Navigator.of(context).pushReplacement(MaterialPageRoute<void>(
+      fullscreenDialog: true,
+      builder: (_) => InterviewRoomScreen(interview: interview),
+    ));
+  }
+
   void _showParticipants() {
     final room = _room;
     if (room == null) return;
@@ -321,7 +332,7 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final wide = MediaQuery.sizeOf(context).width >= 900;
+    final wide = MediaQuery.sizeOf(context).width >= 1180;
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -442,7 +453,13 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
       Expanded(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
-          child: _stage(local, remotes, wide),
+          child: wide
+              ? Row(children: [
+                  Expanded(child: _stage(local, remotes, true)),
+                  const SizedBox(width: 12),
+                  SizedBox(width: 270, child: _scheduledRail()),
+                ])
+              : _stage(local, remotes, false),
         ),
       ),
       // Controls
@@ -491,6 +508,96 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
         ),
       ),
     ]);
+  }
+
+  Widget _scheduledRail() {
+    final now = DateTime.now();
+    final monday = DateTime(now.year, now.month, now.day - (now.weekday - 1));
+    final range = (from: monday, to: monday.add(const Duration(days: 7)));
+    return Container(
+      decoration:
+          BoxDecoration(color: _panel, borderRadius: BorderRadius.circular(14)),
+      padding: const EdgeInsets.all(12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Upcoming interviews',
+            style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 14)),
+        const SizedBox(height: 10),
+        Expanded(
+            child: ref.watch(interviewsProvider(range)).when(
+                  loading: () => const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2)),
+                  error: (_, __) => const Text('Could not load your schedule.',
+                      style: TextStyle(color: Colors.white70, fontSize: 12)),
+                  data: (items) {
+                    final upcoming = items
+                        .where((item) =>
+                            item.id != widget.interview.id &&
+                            item.isActive &&
+                            item.endsAt.isAfter(now))
+                        .toList()
+                      ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+                    if (upcoming.isEmpty)
+                      return const Center(
+                          child: Text('No other scheduled meetings this week.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                  color: Colors.white60, fontSize: 12)));
+                    return ListView.separated(
+                      itemCount: upcoming.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final item = upcoming[index];
+                        return Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                              color: const Color(0xFF202957),
+                              borderRadius: BorderRadius.circular(10)),
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(item.candidate.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 12)),
+                                const SizedBox(height: 3),
+                                Text('${item.jobTitle} · ${item.roundName}',
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        color: Colors.white60, fontSize: 10)),
+                                const SizedBox(height: 6),
+                                Row(children: [
+                                  Expanded(
+                                      child: Text(
+                                          DateFormat('EEE · h:mm a')
+                                              .format(item.startsAt),
+                                          style: const TextStyle(
+                                              color: Colors.white70,
+                                              fontSize: 10))),
+                                  if (item.canJoinNow)
+                                    TextButton(
+                                        onPressed: () => _switchInterview(item),
+                                        style: TextButton.styleFrom(
+                                            foregroundColor: ivOrange,
+                                            padding: EdgeInsets.zero,
+                                            minimumSize: const Size(44, 28)),
+                                        child: const Text('Join',
+                                            style: TextStyle(fontSize: 11))),
+                                ]),
+                              ]),
+                        );
+                      },
+                    );
+                  },
+                )),
+      ]),
+    );
   }
 
   Widget _banner(String text, Color color) => Container(
