@@ -492,14 +492,12 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
 
   Widget _minYearsField() =>
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _label('MINIMUM YEARS IN THIS FIELD'),
+        _label('EXPERIENCE REQUIREMENT'),
         const SizedBox(height: 6),
         TextFormField(
           controller: _minYears,
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           validator: _minYearsValidator,
-          decoration: _input('e.g. 3'),
+          decoration: _input('e.g. 3+ years, or entry level'),
         ),
       ]);
 
@@ -580,22 +578,11 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
   }
 
   bool get _premiumPipelineAvailable {
-    final user = ref.read(authProvider).user;
-    final explicit = user?.capabilities['allowsPremiumPipeline'];
-    if (explicit is bool) return explicit;
-    return user?.hasModule(ModuleCodes.jobPipelinePremium) ?? false;
+    return true;
   }
 
   bool get _customPipelineAvailable {
-    final user = ref.read(authProvider).user;
-    final maxCustom =
-        (user?.capabilities['maxCustomPipelines'] as num?)?.toInt() ?? 0;
-    final hasCustomModule =
-        user?.hasModule(ModuleCodes.jobPipelineCustom) == true ||
-            user?.hasModule(ModuleCodes.hiringPipeline) == true;
-    return hasCustomModule &&
-        user?.capabilities['allowsCustomPipelines'] == true &&
-        maxCustom > 0;
+    return true;
   }
 
   bool get _planAutomationAvailable {
@@ -624,11 +611,11 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
         children: [
           _pipelineTierChoice('Standard', enabled: true),
           const SizedBox(width: 7),
-          _pipelineTierChoice('Premium', enabled: _premiumPipelineAvailable),
+          _pipelineTierChoice('Premium', enabled: true),
           const SizedBox(width: 7),
           _pipelineTierChoice(
             'Custom',
-            enabled: _customPipelineAvailable,
+            enabled: true,
             opensModal: true,
           ),
         ],
@@ -1332,19 +1319,9 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
       value != null && values.contains(value) ? value : null;
   String? Function(String?) _required(String message) =>
       (value) => value == null || value.trim().isEmpty ? message : null;
-  // Unlike _required, this also checks the text is actually a valid
-  // non-negative integer — int.tryParse() returns null on bad input, and
-  // that null was previously being dropped from the payload silently
-  // (JobDraft.toJson() only sends the key when it's non-null), so the job
-  // would save without minYearsOfExperience even though the field looked
-  // "filled" and passed the old emptiness-only validator.
   String? _minYearsValidator(String? value) {
     final trimmed = value?.trim() ?? '';
-    if (trimmed.isEmpty) return 'Enter minimum years of experience';
-    final parsed = int.tryParse(trimmed);
-    if (parsed == null) return 'Enter a whole number (e.g. 3)';
-    if (parsed < 0) return 'Years of experience cannot be negative';
-    return null;
+    return trimmed.isEmpty ? 'Describe the experience required' : null;
   }
 
   String get _jobLocation => [
@@ -1564,49 +1541,32 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
     }
   }
 
-  bool get _canStartAssessmentAfterPublish {
-    final user = ref.read(authProvider).user;
-    if (user?.hasModule(ModuleCodes.hiringStageAssessment) != true) {
-      return false;
+  String _nextPipelineRoute({required String? jobId}) {
+    String? nextStage;
+    if (_pipelineTier == 'Premium') {
+      nextStage = 'ASSESSMENT';
+    } else if (_pipelineTier == 'Custom' && _selectedPipelineId != null) {
+      final pipeline = (ref.read(pipelinesProvider).value ?? const [])
+          .where((item) => item.id == _selectedPipelineId)
+          .firstOrNull;
+      final stages = [...?pipeline?.stages]
+        ..sort((a, b) => a.order.compareTo(b.order));
+      nextStage = stages
+          .where((stage) => stage.type.toUpperCase() != 'APPLIED')
+          .firstOrNull
+          ?.type
+          .toUpperCase();
     }
-    if (_pipelineTier == 'Premium') return true;
-    if (_pipelineTier != 'Custom' || _selectedPipelineId == null) return false;
-    final pipeline = (ref.read(pipelinesProvider).value ?? const [])
-        .where((item) => item.id == _selectedPipelineId)
-        .firstOrNull;
-    return pipeline?.stages.any((stage) => isAssessmentType(stage.type)) ??
-        false;
+    if (nextStage != null && isAssessmentType(nextStage)) {
+      final query = Uri(queryParameters: {
+        if (jobId != null) 'jobId': jobId,
+        if (_selectedPipelineId != null) 'pipelineId': _selectedPipelineId!,
+      }).query;
+      return '/competency-assessments/new${query.isEmpty ? '' : '?$query'}';
+    }
+    if (nextStage?.contains('INTERVIEW') == true) return '/interviews';
+    return jobId == null ? '/jobs' : '/jobs/$jobId/candidates';
   }
-
-  Future<bool> _askToSetUpAssessment() async =>
-      await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) => AlertDialog(
-          icon: const Icon(Icons.assignment_outlined,
-              color: BrandColors.orange, size: 28),
-          title: const Text('Add an assessment to this hiring flow?'),
-          content: const Text(
-            'Your selected pipeline includes an assessment stage. You can set up the assessment now and choose whether to invite shortlisted candidates automatically.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Maybe later'),
-            ),
-            FilledButton.icon(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              icon: const Icon(Icons.arrow_forward, size: 16),
-              label: const Text('Set up assessment'),
-              style: FilledButton.styleFrom(
-                backgroundColor: BrandColors.orange,
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ],
-        ),
-      ) ??
-      false;
 
   /// Builds the full [JobDraft] from the current form state and persists
   /// it in a single call. Now that the form is one screen instead of a
@@ -1656,7 +1616,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
         if (_wellness) 'Wellness',
         ..._customBenefits,
       ],
-      minYearsOfExperience: int.tryParse(_minYears.text.trim()),
+      minYearsOfExperience: _minYears.text.trim(),
       educationLevel: _educationLevel,
       fieldOfStudy:
           _fieldOfStudy.text.trim().isEmpty ? null : _fieldOfStudy.text.trim(),
@@ -1728,27 +1688,12 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
       if (!mounted) return;
       if (published) {
         final jobId = ref.read(postJobProvider).draft.id;
-        final pipelineId = _selectedPipelineId;
-        final shouldOfferAssessment = _canStartAssessmentAfterPublish;
+        final nextRoute = _nextPipelineRoute(jobId: jobId);
         ref.invalidate(
             jobManagementProvider); // forces a fresh load() next time /jobs is shown
         _showToast('Job post published successfully.', isError: false);
         ref.read(postJobProvider.notifier).reset();
-        if (shouldOfferAssessment && jobId != null) {
-          final setUpAssessment = await _askToSetUpAssessment();
-          if (!mounted) return;
-          if (setUpAssessment) {
-            final query = Uri(queryParameters: {
-              'jobId': jobId,
-              if (pipelineId != null) 'pipelineId': pipelineId,
-            }).query;
-            context.go('/competency-assessments/new?$query');
-          } else {
-            context.go('/jobs');
-          }
-        } else {
-          context.go('/jobs');
-        }
+        context.go(nextRoute);
       } else {
         _showError('Could not publish the job. Please try again.');
       }
