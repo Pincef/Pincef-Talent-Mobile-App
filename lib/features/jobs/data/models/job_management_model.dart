@@ -70,6 +70,7 @@ class JobDraft {
     this.aiRanking = false,
     this.aiSummary = false,
     this.pipelineTier = 'Standard',
+    this.pipelineId,
     this.rankingPlanTier = 'Premium',
     this.rankingLimit = 20,
     this.assessmentEmailCount = 15,
@@ -109,6 +110,7 @@ class JobDraft {
   final bool aiRanking;
   final bool aiSummary;
   final String pipelineTier;
+  final String? pipelineId;
   final String rankingPlanTier;
   final int rankingLimit;
   final int assessmentEmailCount;
@@ -165,6 +167,7 @@ class JobDraft {
     bool? autoRejectNonMatches,
     int? autoRejectBelowScore,
     String? pipelineTier,
+    String? pipelineId,
     String? rankingPlanTier,
     int? rankingLimit,
     int? assessmentEmailCount,
@@ -196,6 +199,7 @@ class JobDraft {
         autoRejectNonMatches: autoRejectNonMatches ?? this.autoRejectNonMatches,
         autoRejectBelowScore: autoRejectBelowScore ?? this.autoRejectBelowScore,
         pipelineTier: pipelineTier ?? this.pipelineTier,
+        pipelineId: pipelineId ?? this.pipelineId,
         rankingPlanTier: rankingPlanTier ?? this.rankingPlanTier,
         rankingLimit: rankingLimit ?? this.rankingLimit,
         assessmentEmailCount: assessmentEmailCount ?? this.assessmentEmailCount,
@@ -224,6 +228,7 @@ class JobDraft {
         'benefits': benefits,
         'autoRejectNonMatches': autoRejectNonMatches,
         'autoRejectBelowScore': autoRejectBelowScore,
+        if (pipelineId != null) 'pipelineId': pipelineId,
         if (rankingLimit > 0 ||
             assessmentEmailCount > 0 ||
             interviewEmailCount > 0)
@@ -678,6 +683,7 @@ class JobDetail {
     this.aiRanking = false,
     this.aiSummary = false,
     this.pipelineTier = 'Standard',
+    this.pipelineId,
     this.rankingPlanTier = 'Premium',
     this.rankingLimit = 20,
     this.assessmentEmailCount = 15,
@@ -710,6 +716,7 @@ class JobDetail {
   final bool aiRanking;
   final bool aiSummary;
   final String pipelineTier;
+  final String? pipelineId;
   final String rankingPlanTier;
   final int rankingLimit;
   final int assessmentEmailCount;
@@ -808,6 +815,7 @@ class JobDetail {
       aiRanking: (json['aiConfig'] as Map?)?['ranking'] as bool? ?? false,
       aiSummary: (json['aiConfig'] as Map?)?['summary'] as bool? ?? false,
       pipelineTier: json['pipelineTier'] as String? ?? 'Standard',
+      pipelineId: json['pipelineId']?.toString(),
       rankingPlanTier: json['rankingPlanTier'] as String? ?? 'Premium',
       rankingLimit: (automation?['rankingLimit'] as num?)?.toInt() ?? 20,
       assessmentEmailCount:
