@@ -128,16 +128,6 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const title =
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('Interview & Calendar Schedule',
-          style: TextStyle(
-              color: ivNavy, fontSize: 24, fontWeight: FontWeight.w700)),
-      SizedBox(height: 4),
-      Text(
-          'Coordinate candidate rounds and keep recruiter availability in sync.',
-          style: TextStyle(color: ivMuted, fontSize: 13)),
-    ]);
     final button = FilledButton.icon(
       onPressed: () => showScheduleInterview(context),
       icon: const Icon(Icons.add, size: 18),
@@ -150,21 +140,82 @@ class _Header extends StatelessWidget {
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
     );
 
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('Dashboard  /  Interviews & Calendar',
-          style: TextStyle(color: ivMuted, fontSize: 12)),
-      const SizedBox(height: 8),
-      if (wide)
-        Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          const Expanded(child: title),
-          button,
-        ])
-      else ...[
-        title,
-        const SizedBox(height: 12),
-        SizedBox(width: double.infinity, child: button),
-      ],
-    ]);
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(wide ? 24 : 18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF101A3B), Color(0xFF273B68)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: const [
+          BoxShadow(
+              color: Color(0x1F101A3B), blurRadius: 18, offset: Offset(0, 8)),
+        ],
+      ),
+      child: LayoutBuilder(builder: (context, constraints) {
+        final compact = constraints.maxWidth < 600;
+        final intro = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .12),
+                  borderRadius: BorderRadius.circular(20)),
+              child: const Text('HIRING PIPELINE  ·  INTERVIEWS',
+                  style: TextStyle(
+                      color: Color(0xFFFFC58E),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.1)),
+            ),
+            const SizedBox(height: 14),
+            const Text('Interview & Calendar Schedule',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    height: 1.15,
+                    fontWeight: FontWeight.w800)),
+            const SizedBox(height: 7),
+            Text(
+                'Coordinate candidate rounds and keep recruiter availability in sync.',
+                style: TextStyle(
+                    color: Colors.white.withValues(alpha: .78),
+                    fontSize: 13,
+                    height: 1.4)),
+          ],
+        );
+        final emblem = Container(
+          width: 76,
+          height: 76,
+          decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: .1),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white.withValues(alpha: .16))),
+          child: const Icon(Icons.video_camera_front_outlined,
+              color: Color(0xFFFFC58E), size: 36),
+        );
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (compact)
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              intro,
+              const SizedBox(height: 14),
+              SizedBox(width: double.infinity, child: button),
+            ])
+          else
+            Row(children: [
+              Expanded(child: intro),
+              const SizedBox(width: 16),
+              emblem,
+              const SizedBox(width: 16),
+              button,
+            ]),
+        ]);
+      }),
+    );
   }
 }
 
