@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/paged_list_view.dart';
 import '../../application/candidate_messages_provider.dart';
 import '../../application/presence_provider.dart';
 import '../../data/candidate_messages_repository.dart';
@@ -197,11 +198,11 @@ class _CandidateInbox extends ConsumerWidget {
             ),
           ),
           Expanded(
-            child: ListView.separated(
-              itemCount: contacts.length,
+            child: PagedListView<CandidateChatContact>(
+              items: contacts,
+              pageSize: 12,
               separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (_, index) {
-                final contact = contacts[index];
+              itemBuilder: (_, contact, index) {
                 final online = ref.watch(presenceProvider
                     .select((p) => p[contact.partnerId]?.online ?? false));
                 return InkWell(
@@ -331,19 +332,26 @@ class _CandidateConversationState
             _CandidateConversationHeader(
                 contact: widget.contact, onBack: widget.onBack),
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(28, 19, 28, 10),
-                children: [
-                  const Center(
-                    child: Text('Today',
-                        style: TextStyle(
-                            fontSize: 8, color: AppColors.textSecondary)),
+              child: Column(children: [
+                const Padding(
+                  padding: EdgeInsets.only(top: 16, bottom: 10),
+                  child: Text('Today',
+                      style: TextStyle(
+                          fontSize: 8, color: AppColors.textSecondary)),
+                ),
+                Expanded(
+                  child: PagedListView<ChatMessage>(
+                    items: messages,
+                    pageSize: 30,
+                    startAtEnd: true,
+                    previousLabel: 'Older messages',
+                    nextLabel: 'Newer messages',
+                    padding: const EdgeInsets.fromLTRB(28, 6, 28, 10),
+                    itemBuilder: (_, message, __) =>
+                        _CandidateBubble(message: message),
                   ),
-                  const SizedBox(height: 16),
-                  ...messages
-                      .map((message) => _CandidateBubble(message: message)),
-                ],
-              ),
+                ),
+              ]),
             ),
             _CandidateComposer(controller: _controller, onSend: _send),
           ],
