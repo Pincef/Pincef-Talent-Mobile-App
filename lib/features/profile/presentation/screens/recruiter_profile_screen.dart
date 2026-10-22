@@ -97,35 +97,46 @@ class _ProfileCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        user.fullName,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
+                LayoutBuilder(builder: (context, constraints) {
+                  final compact = constraints.maxWidth < 380;
+                  final name = Text(
+                    user.fullName,
+                    maxLines: compact ? 2 : 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
                     ),
-                    OutlinedButton.icon(
-                      // Deep-links to Settings > Account rather than
-                      // opening its own edit form here — name/email/photo
-                      // live there, and bio/location/competencies/
-                      // certifications moved there too so there's one
-                      // editing surface, not two.
-                      onPressed: () => context.push('/settings'),
-                      icon: const Icon(Icons.edit_outlined, size: 14),
-                      label: const Text('Edit Profile'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.orange,
-                        side: const BorderSide(color: AppColors.orange),
-                      ),
+                  );
+                  final editButton = OutlinedButton.icon(
+                    // Deep-links to Settings > Account rather than
+                    // opening its own edit form here — name/email/photo
+                    // live there, and bio/location/competencies/
+                    // certifications moved there too so there's one
+                    // editing surface, not two.
+                    onPressed: () => context.push('/settings'),
+                    icon: const Icon(Icons.edit_outlined, size: 14),
+                    label: const Text('Edit Profile'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.orange,
+                      side: const BorderSide(color: AppColors.orange),
                     ),
-                  ],
-                ),
+                  );
+                  return compact
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            name,
+                            const SizedBox(height: 8),
+                            editButton
+                          ],
+                        )
+                      : Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [Expanded(child: name), editButton],
+                        );
+                }),
                 Text(
                   // `title` (e.g. "Senior Lead Recruiter") was deliberately
                   // left off the backend for now — falling back to a role
@@ -174,8 +185,12 @@ class _IconLabel extends StatelessWidget {
       children: [
         Icon(icon, size: 14, color: BrandColors.muted),
         const SizedBox(width: 4),
-        Text(label,
-            style: const TextStyle(color: BrandColors.muted, fontSize: 12)),
+        Flexible(
+          child: Text(label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: BrandColors.muted, fontSize: 12)),
+        ),
       ],
     );
   }

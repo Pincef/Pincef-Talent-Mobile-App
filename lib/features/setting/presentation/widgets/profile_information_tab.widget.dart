@@ -187,206 +187,231 @@ class _ProfileInformationTabState extends ConsumerState<ProfileInformationTab> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                flex: 2,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _Card(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Basic Information',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w700, fontSize: 13)),
-                          const SizedBox(height: 14),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: _LabeledField(
-                                  label: 'FULL NAME',
-                                  child: TextField(controller: _nameController),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: _LabeledField(
-                                  label: 'EMAIL ADDRESS',
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: TextField(
-                                          controller: TextEditingController(
-                                              text: _user.email),
-                                          enabled: false,
-                                        ),
-                                      ),
-                                      TextButton(
-                                        onPressed: _openEmailChangeDialog,
-                                        child: const Text('Change'),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: _LabeledField(
-                                  label: 'PHONE NUMBER',
-                                  child:
-                                      TextField(controller: _phoneController),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: _LabeledField(
-                                  label: 'LOCATION',
-                                  child: TextField(
-                                      controller: _locationController),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          _LabeledField(
-                            label: 'PROFESSIONAL SUMMARY',
-                            child: TextField(
-                                controller: _summaryController,
-                                maxLines: 3,
-                                maxLength: 1000),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _Card(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Work Preferences',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w700, fontSize: 13)),
-                          const SizedBox(height: 8),
-                          _PreferenceSwitch(
-                            title: 'Remote Friendly',
-                            subtitle:
-                                'You are open to remote or hybrid opportunities.',
-                            value: _remoteFriendly,
-                            onChanged: (v) =>
-                                setState(() => _remoteFriendly = v),
-                          ),
-                          const Divider(height: 20, color: AppColors.divider),
-                          _PreferenceSwitch(
-                            title: 'Active Seeking',
-                            subtitle:
-                                'Allow recruiters to find your profile in talent searches.',
-                            value: _activeSeeking,
-                            onChanged: (v) =>
-                                setState(() => _activeSeeking = v),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _Card(
+    return LayoutBuilder(builder: (context, constraints) {
+      final isWide = constraints.maxWidth >= 760;
+      final isCompact = constraints.maxWidth < 560;
+      return SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Flex(
+              direction: isWide ? Axis.horizontal : Axis.vertical,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Flexible(
+                  fit: FlexFit.loose,
+                  flex: isWide ? 2 : 0,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Profile Picture',
-                          style: TextStyle(
-                              fontWeight: FontWeight.w700, fontSize: 13)),
-                      const SizedBox(height: 14),
-                      Center(
-                        child: CircleAvatar(
-                          radius: 36,
-                          backgroundColor: AppColors.peach,
-                          backgroundImage: _user.profileImage != null
-                              ? NetworkImage(_user.profileImage!.url)
-                              : null,
-                          child: _isUploadingPhoto
-                              ? const SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : (_user.profileImage == null
-                                  ? const Icon(Icons.person,
-                                      size: 36, color: AppColors.orange)
-                                  : null),
+                      _Card(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Basic Information',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w700, fontSize: 13)),
+                            const SizedBox(height: 14),
+                            Flex(
+                              direction:
+                                  isCompact ? Axis.vertical : Axis.horizontal,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Flexible(
+                                  fit: FlexFit.loose,
+                                  flex: isCompact ? 0 : 1,
+                                  child: _LabeledField(
+                                    label: 'FULL NAME',
+                                    child:
+                                        TextField(controller: _nameController),
+                                  ),
+                                ),
+                                SizedBox(
+                                    width: isCompact ? 0 : 12,
+                                    height: isCompact ? 12 : 0),
+                                Flexible(
+                                  fit: FlexFit.loose,
+                                  flex: isCompact ? 0 : 1,
+                                  child: _LabeledField(
+                                    label: 'EMAIL ADDRESS',
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: TextField(
+                                            controller: TextEditingController(
+                                                text: _user.email),
+                                            enabled: false,
+                                          ),
+                                        ),
+                                        TextButton(
+                                          onPressed: _openEmailChangeDialog,
+                                          child: const Text('Change'),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Flex(
+                              direction:
+                                  isCompact ? Axis.vertical : Axis.horizontal,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Flexible(
+                                  fit: FlexFit.loose,
+                                  flex: isCompact ? 0 : 1,
+                                  child: _LabeledField(
+                                    label: 'PHONE NUMBER',
+                                    child:
+                                        TextField(controller: _phoneController),
+                                  ),
+                                ),
+                                SizedBox(
+                                    width: isCompact ? 0 : 12,
+                                    height: isCompact ? 12 : 0),
+                                Flexible(
+                                  fit: FlexFit.loose,
+                                  flex: isCompact ? 0 : 1,
+                                  child: _LabeledField(
+                                    label: 'LOCATION',
+                                    child: TextField(
+                                        controller: _locationController),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            _LabeledField(
+                              label: 'PROFESSIONAL SUMMARY',
+                              child: TextField(
+                                  controller: _summaryController,
+                                  maxLines: 3,
+                                  maxLength: 1000),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      const Center(
-                        child: Text('JPG, GIF or PNG. Max size 800K',
-                            style: TextStyle(
-                                color: BrandColors.muted, fontSize: 10.5)),
-                      ),
-                      const SizedBox(height: 14),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton(
-                          onPressed: _isUploadingPhoto ? null : _updatePhoto,
-                          child: Text(_isUploadingPhoto
-                              ? 'Uploading...'
-                              : 'Update Photo'),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Center(
-                        child: TextButton(
-                          onPressed:
-                              (_user.profileImage == null || _isRemovingPhoto)
-                                  ? null
-                                  : _removePhoto,
-                          child: Text(
-                            _isRemovingPhoto ? 'Removing...' : 'Remove',
-                            style: const TextStyle(color: Colors.red),
-                          ),
+                      const SizedBox(height: 16),
+                      _Card(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Work Preferences',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w700, fontSize: 13)),
+                            const SizedBox(height: 8),
+                            _PreferenceSwitch(
+                              title: 'Remote Friendly',
+                              subtitle:
+                                  'You are open to remote or hybrid opportunities.',
+                              value: _remoteFriendly,
+                              onChanged: (v) =>
+                                  setState(() => _remoteFriendly = v),
+                            ),
+                            const Divider(height: 20, color: AppColors.divider),
+                            _PreferenceSwitch(
+                              title: 'Active Seeking',
+                              subtitle:
+                                  'Allow recruiters to find your profile in talent searches.',
+                              value: _activeSeeking,
+                              onChanged: (v) =>
+                                  setState(() => _activeSeeking = v),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              OutlinedButton(
-                  onPressed: _isSaving ? null : _cancel,
-                  child: const Text('Cancel')),
-              const SizedBox(width: 12),
-              ElevatedButton(
-                onPressed: _isSaving ? null : _save,
-                style:
-                    ElevatedButton.styleFrom(backgroundColor: AppColors.orange),
-                child: Text(_isSaving ? 'Saving...' : 'Save Changes'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
+                SizedBox(width: isWide ? 16 : 0, height: isWide ? 0 : 16),
+                Flexible(
+                  fit: FlexFit.loose,
+                  flex: isWide ? 1 : 0,
+                  child: _Card(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Profile Picture',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 13)),
+                        const SizedBox(height: 14),
+                        Center(
+                          child: CircleAvatar(
+                            radius: 36,
+                            backgroundColor: AppColors.peach,
+                            backgroundImage: _user.profileImage != null
+                                ? NetworkImage(_user.profileImage!.url)
+                                : null,
+                            child: _isUploadingPhoto
+                                ? const SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                : (_user.profileImage == null
+                                    ? const Icon(Icons.person,
+                                        size: 36, color: AppColors.orange)
+                                    : null),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Center(
+                          child: Text('JPG, GIF or PNG. Max size 800K',
+                              style: TextStyle(
+                                  color: BrandColors.muted, fontSize: 10.5)),
+                        ),
+                        const SizedBox(height: 14),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton(
+                            onPressed: _isUploadingPhoto ? null : _updatePhoto,
+                            child: Text(_isUploadingPhoto
+                                ? 'Uploading...'
+                                : 'Update Photo'),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Center(
+                          child: TextButton(
+                            onPressed:
+                                (_user.profileImage == null || _isRemovingPhoto)
+                                    ? null
+                                    : _removePhoto,
+                            child: Text(
+                              _isRemovingPhoto ? 'Removing...' : 'Remove',
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                OutlinedButton(
+                    onPressed: _isSaving ? null : _cancel,
+                    child: const Text('Cancel')),
+                const SizedBox(width: 12),
+                ElevatedButton(
+                  onPressed: _isSaving ? null : _save,
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.orange),
+                  child: Text(_isSaving ? 'Saving...' : 'Save Changes'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    });
   }
 }
 

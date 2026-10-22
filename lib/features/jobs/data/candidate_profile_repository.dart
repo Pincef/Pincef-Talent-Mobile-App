@@ -41,8 +41,14 @@ class CandidateProfileViewRepository {
     try {
       final response = await _dio
           .get('/candidate-profile/$candidateId/jobs/$jobId/analysis');
-      return CandidateJobAnalysis.fromJson(
-          response.data['data'] as Map<String, dynamic>);
+      final data = Map<String, dynamic>.from(response.data['data'] as Map);
+      final analysis = data['analysis'] is Map
+          ? Map<String, dynamic>.from(data['analysis'] as Map)
+          : data;
+      return CandidateJobAnalysis.fromJson({
+        ...analysis,
+        'isStale': data['isStale'] == true,
+      });
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) return null;
       rethrow;
@@ -54,10 +60,17 @@ class CandidateProfileViewRepository {
   /// matching now runs inline, so this resolves to COMPLETED/FAILED
   /// synchronously rather than needing to be polled.
   Future<CandidateJobAnalysis> requestJobAnalysis(
-      String candidateId, String jobId) async {
-    final response =
-        await _dio.post('/candidate-profile/$candidateId/jobs/$jobId/analyze');
+      String candidateId, String jobId,
+      {bool includeSummary = false}) async {
+    final response = await _dio.post(
+      '/candidate-profile/$candidateId/jobs/$jobId/analyze',
+      data: {'includeSummary': includeSummary},
+    );
     return CandidateJobAnalysis.fromJson(
         response.data['data'] as Map<String, dynamic>);
+  }
+
+  Future<void> requestCvParsing(String candidateId, String jobId) async {
+    await _dio.post('/candidate-profile/$candidateId/jobs/$jobId/parse-cv');
   }
 }

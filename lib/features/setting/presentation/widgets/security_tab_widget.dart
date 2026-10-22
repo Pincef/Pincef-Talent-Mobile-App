@@ -14,25 +14,34 @@ class SecurityTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return LayoutBuilder(builder: (context, constraints) {
+      final isWide = constraints.maxWidth >= 760;
+      return SingleChildScrollView(
+          padding: const EdgeInsets.only(bottom: 20),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: _PasswordManagementCard()),
-              SizedBox(width: 16),
-              Expanded(child: _TwoFactorAuthCard()),
+              if (isWide)
+                const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: _PasswordManagementCard()),
+                    SizedBox(width: 16),
+                    Expanded(child: _TwoFactorAuthCard()),
+                  ],
+                )
+              else ...[
+                const _PasswordManagementCard(),
+                const SizedBox(height: 16),
+                const _TwoFactorAuthCard(),
+              ],
+              const SizedBox(height: 16),
+              _ActiveSessionsCard(),
+              const SizedBox(height: 16),
+              _SecurityLogsCard(),
             ],
-          ),
-          SizedBox(height: 16),
-          _ActiveSessionsCard(),
-          SizedBox(height: 16),
-          _SecurityLogsCard(),
-        ],
-      ),
-    );
+          ));
+    });
   }
 }
 

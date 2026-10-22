@@ -260,6 +260,7 @@ class _CandidateAssessmentSessionScreenState
               Text('This assessment has no questions. Contact the recruiter.'));
     final question = _questions[_index];
     final questionId = _questionKey(question, _index);
+    final compact = MediaQuery.sizeOf(context).width < 520;
     return Shortcuts(
       shortcuts: const <ShortcutActivator, Intent>{
         SingleActivator(LogicalKeyboardKey.escape): _AssessmentEscapeIntent()
@@ -268,7 +269,7 @@ class _CandidateAssessmentSessionScreenState
           canRequestFocus: false,
           onKeyEvent: (node, event) => KeyEventResult.ignored,
           child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
+              padding: EdgeInsets.all(compact ? 12 : 24),
               child: Center(
                   child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 860),
@@ -373,33 +374,38 @@ class _CandidateAssessmentSessionScreenState
                                                 onChanged: (value) =>
                                                     _answer(questionId, value)),
                                         ]))),
-                            Row(children: [
-                              OutlinedButton(
-                                  onPressed: _index > 0
-                                      ? () => setState(() => _index--)
-                                      : null,
-                                  child: const Text('Previous')),
-                              const Spacer(),
-                              Text(
-                                  '${_answers.length}/${_questions.length} answered'),
-                              const SizedBox(width: 12),
-                              if (_index < _questions.length - 1)
-                                FilledButton(
-                                    onPressed: () => setState(() => _index++),
-                                    style: FilledButton.styleFrom(
-                                        backgroundColor: BrandColors.navy),
-                                    child: const Text('Next'))
-                              else
-                                FilledButton(
-                                    onPressed: _busy
-                                        ? null
-                                        : () => _submit(timedOut: false),
-                                    style: FilledButton.styleFrom(
-                                        backgroundColor: BrandColors.orange),
-                                    child: Text(_busy
-                                        ? 'Submitting…'
-                                        : 'Submit assessment'))
-                            ]),
+                            Wrap(
+                                alignment: WrapAlignment.spaceBetween,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                spacing: 12,
+                                runSpacing: 12,
+                                children: [
+                                  OutlinedButton(
+                                      onPressed: _index > 0
+                                          ? () => setState(() => _index--)
+                                          : null,
+                                      child: const Text('Previous')),
+                                  Text(
+                                      '${_answers.length}/${_questions.length} answered'),
+                                  if (_index < _questions.length - 1)
+                                    FilledButton(
+                                        onPressed: () =>
+                                            setState(() => _index++),
+                                        style: FilledButton.styleFrom(
+                                            backgroundColor: BrandColors.navy),
+                                        child: const Text('Next'))
+                                  else
+                                    FilledButton(
+                                        onPressed: _busy
+                                            ? null
+                                            : () => _submit(timedOut: false),
+                                        style: FilledButton.styleFrom(
+                                            backgroundColor:
+                                                BrandColors.orange),
+                                        child: Text(_busy
+                                            ? 'Submitting…'
+                                            : 'Submit assessment'))
+                                ]),
                             const SizedBox(height: 10),
                             const Center(
                                 child: Text(

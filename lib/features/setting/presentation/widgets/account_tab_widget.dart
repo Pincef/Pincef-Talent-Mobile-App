@@ -187,213 +187,224 @@ class _AccountTabState extends ConsumerState<AccountTab> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            flex: 3,
-            child: _Card(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Profile Photo',
-                      style:
-                          TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Stack(
-                        children: [
-                          CircleAvatar(
-                            radius: 28,
-                            backgroundColor: AppColors.peach,
-                            backgroundImage: _user.profileImage != null
-                                ? NetworkImage(_user.profileImage!.url)
-                                : null,
-                            child: _isUploadingPhoto
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2),
-                                  )
-                                : (_user.profileImage == null
-                                    ? const Icon(Icons.person,
-                                        size: 28, color: AppColors.orange)
-                                    : null),
-                          ),
-                          Positioned(
-                            right: 0,
-                            bottom: 0,
-                            child: GestureDetector(
-                              onTap: _isUploadingPhoto ? null : _pickPhoto,
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: const BoxDecoration(
-                                    color: AppColors.orange,
-                                    shape: BoxShape.circle),
-                                child: const Icon(Icons.edit,
-                                    size: 11, color: Colors.white),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(width: 12),
-                      const Text('PNG, JPG or GIF. Max size 2MB.',
-                          style: TextStyle(
-                              color: BrandColors.muted, fontSize: 11)),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  const Text('FULL NAME',
-                      style: TextStyle(
-                          color: BrandColors.muted,
-                          fontSize: 10.5,
-                          letterSpacing: 0.4)),
-                  const SizedBox(height: 4),
-                  TextField(controller: _nameController),
-                  const SizedBox(height: 16),
-                  const Text('BILLING COUNTRY',
-                      style: TextStyle(
-                          color: BrandColors.muted,
-                          fontSize: 10.5,
-                          letterSpacing: 0.4)),
-                  const SizedBox(height: 4),
-                  DropdownButtonFormField<String>(
-                    initialValue: _country,
-                    items: const [
-                      DropdownMenuItem(value: 'NG', child: Text('Nigeria — NGN')),
-                      DropdownMenuItem(value: 'US', child: Text('United States — USD')),
-                      DropdownMenuItem(value: 'GB', child: Text('United Kingdom — GBP')),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) setState(() => _country = value);
-                    },
-                    decoration: const InputDecoration(isDense: true),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+    return LayoutBuilder(builder: (context, constraints) {
+      final isWide = constraints.maxWidth >= 760;
+      return SingleChildScrollView(
+        child: Flex(
+          direction: isWide ? Axis.horizontal : Axis.vertical,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Flexible(
+              fit: FlexFit.loose,
+              flex: isWide ? 3 : 0,
+              child: _Card(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Profile Photo',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 13)),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Stack(
                           children: [
-                            const Text('WORK EMAIL',
-                                style: TextStyle(
-                                    color: BrandColors.muted,
-                                    fontSize: 10.5,
-                                    letterSpacing: 0.4)),
-                            const SizedBox(height: 4),
-                            TextField(
-                              controller:
-                                  TextEditingController(text: _user.email),
-                              enabled: false,
+                            CircleAvatar(
+                              radius: 28,
+                              backgroundColor: AppColors.peach,
+                              backgroundImage: _user.profileImage != null
+                                  ? NetworkImage(_user.profileImage!.url)
+                                  : null,
+                              child: _isUploadingPhoto
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2),
+                                    )
+                                  : (_user.profileImage == null
+                                      ? const Icon(Icons.person,
+                                          size: 28, color: AppColors.orange)
+                                      : null),
+                            ),
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: GestureDetector(
+                                onTap: _isUploadingPhoto ? null : _pickPhoto,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                      color: AppColors.orange,
+                                      shape: BoxShape.circle),
+                                  child: const Icon(Icons.edit,
+                                      size: 11, color: Colors.white),
+                                ),
+                              ),
                             ),
                           ],
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      TextButton(
-                        onPressed: _openEmailChangeDialog,
-                        child: const Text('Change'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('BIO',
-                      style: TextStyle(
-                          color: BrandColors.muted,
-                          fontSize: 10.5,
-                          letterSpacing: 0.4)),
-                  const SizedBox(height: 4),
-                  TextField(
-                      controller: _bioController, maxLines: 3, maxLength: 1000),
-                  const SizedBox(height: 8),
-                  const Text('LOCATION',
-                      style: TextStyle(
-                          color: BrandColors.muted,
-                          fontSize: 10.5,
-                          letterSpacing: 0.4)),
-                  const SizedBox(height: 4),
-                  TextField(controller: _locationController),
-                  const SizedBox(height: 20),
-                  const Text('CORE COMPETENCIES',
-                      style: TextStyle(
-                          color: BrandColors.muted,
-                          fontSize: 10.5,
-                          letterSpacing: 0.4)),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: _competencies
-                        .map((c) => Chip(
-                              label:
-                                  Text(c, style: const TextStyle(fontSize: 11)),
-                              onDeleted: () =>
-                                  setState(() => _competencies.remove(c)),
-                              backgroundColor: AppColors.surface,
-                              side: BorderSide.none,
-                            ))
-                        .toList(),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _competencyController,
-                          decoration: const InputDecoration(
-                              hintText: 'Add a competency'),
-                          onSubmitted: (_) => _addCompetency(),
-                        ),
-                      ),
-                      IconButton(
-                          onPressed: _addCompetency,
-                          icon: const Icon(Icons.add)),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: ElevatedButton(
-                      onPressed: _isSaving ? null : _save,
-                      style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.orange),
-                      child: Text(_isSaving ? 'Saving...' : 'Save Changes'),
+                        const SizedBox(width: 12),
+                        const Text('PNG, JPG or GIF. Max size 2MB.',
+                            style: TextStyle(
+                                color: BrandColors.muted, fontSize: 11)),
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 20),
+                    const Text('FULL NAME',
+                        style: TextStyle(
+                            color: BrandColors.muted,
+                            fontSize: 10.5,
+                            letterSpacing: 0.4)),
+                    const SizedBox(height: 4),
+                    TextField(controller: _nameController),
+                    const SizedBox(height: 16),
+                    const Text('BILLING COUNTRY',
+                        style: TextStyle(
+                            color: BrandColors.muted,
+                            fontSize: 10.5,
+                            letterSpacing: 0.4)),
+                    const SizedBox(height: 4),
+                    DropdownButtonFormField<String>(
+                      initialValue: _country,
+                      items: const [
+                        DropdownMenuItem(
+                            value: 'NG', child: Text('Nigeria — NGN')),
+                        DropdownMenuItem(
+                            value: 'US', child: Text('United States — USD')),
+                        DropdownMenuItem(
+                            value: 'GB', child: Text('United Kingdom — GBP')),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) setState(() => _country = value);
+                      },
+                      decoration: const InputDecoration(isDense: true),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('WORK EMAIL',
+                                  style: TextStyle(
+                                      color: BrandColors.muted,
+                                      fontSize: 10.5,
+                                      letterSpacing: 0.4)),
+                              const SizedBox(height: 4),
+                              TextField(
+                                controller:
+                                    TextEditingController(text: _user.email),
+                                enabled: false,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        TextButton(
+                          onPressed: _openEmailChangeDialog,
+                          child: const Text('Change'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('BIO',
+                        style: TextStyle(
+                            color: BrandColors.muted,
+                            fontSize: 10.5,
+                            letterSpacing: 0.4)),
+                    const SizedBox(height: 4),
+                    TextField(
+                        controller: _bioController,
+                        maxLines: 3,
+                        maxLength: 1000),
+                    const SizedBox(height: 8),
+                    const Text('LOCATION',
+                        style: TextStyle(
+                            color: BrandColors.muted,
+                            fontSize: 10.5,
+                            letterSpacing: 0.4)),
+                    const SizedBox(height: 4),
+                    TextField(controller: _locationController),
+                    const SizedBox(height: 20),
+                    const Text('CORE COMPETENCIES',
+                        style: TextStyle(
+                            color: BrandColors.muted,
+                            fontSize: 10.5,
+                            letterSpacing: 0.4)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: _competencies
+                          .map((c) => Chip(
+                                label: Text(c,
+                                    style: const TextStyle(fontSize: 11)),
+                                onDeleted: () =>
+                                    setState(() => _competencies.remove(c)),
+                                backgroundColor: AppColors.surface,
+                                side: BorderSide.none,
+                              ))
+                          .toList(),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _competencyController,
+                            decoration: const InputDecoration(
+                                hintText: 'Add a competency'),
+                            onSubmitted: (_) => _addCompetency(),
+                          ),
+                        ),
+                        IconButton(
+                            onPressed: _addCompetency,
+                            icon: const Icon(Icons.add)),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: ElevatedButton(
+                        onPressed: _isSaving ? null : _save,
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.orange),
+                        child: Text(_isSaving ? 'Saving...' : 'Save Changes'),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 16),
-          const Expanded(
-            flex: 2,
-            child: _Card(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Personal Information',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                          color: AppColors.orange)),
-                  SizedBox(height: 8),
-                  Text(
-                    'Update your profile details and contact email used for candidate communication.',
-                    style: TextStyle(color: BrandColors.muted, fontSize: 12),
-                  ),
-                ],
+            SizedBox(width: isWide ? 16 : 0, height: isWide ? 0 : 16),
+            Flexible(
+              fit: FlexFit.loose,
+              flex: isWide ? 2 : 0,
+              child: _Card(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Personal Information',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                            color: AppColors.orange)),
+                    SizedBox(height: 8),
+                    Text(
+                      'Update your profile details and contact email used for candidate communication.',
+                      style: TextStyle(color: BrandColors.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
+          ],
+        ),
+      );
+    });
   }
 }
 

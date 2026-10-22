@@ -6,12 +6,22 @@ class RecruiterDashboardRepository {
 
   final Dio _dio;
 
-  Future<RecruiterDashboardSummary> loadDashboard() async {
+  Future<RecruiterDashboardSummary> loadDashboard(
+      {DateTime? from, DateTime? to}) async {
+    final dateParams = <String, String>{};
+    if (from != null) dateParams['from'] = from.toUtc().toIso8601String();
+    if (to != null) {
+      dateParams['to'] = DateTime(to.year, to.month, to.day, 23, 59, 59)
+          .toUtc()
+          .toIso8601String();
+    }
     final responses = await Future.wait([
-      _dio.get('/dashboard/overview'),
-      _dio.get('/dashboard/top-jobs', queryParameters: {'limit': 5}),
+      _dio.get('/dashboard/overview', queryParameters: dateParams),
+      _dio.get('/dashboard/top-jobs',
+          queryParameters: {'limit': 5, ...dateParams}),
       _dio.get('/jobs/mine'),
-      _dio.get('/dashboard/applications-trend', queryParameters: {'months': 6}),
+      _dio.get('/dashboard/applications-trend',
+          queryParameters: {'months': 6, ...dateParams}),
     ]);
     Object? payloadOf(Response response) {
       final body = response.data;
@@ -24,7 +34,8 @@ class RecruiterDashboardRepository {
     Map<String, dynamic> dataOf(Response response) {
       final payload = payloadOf(response);
       if (payload is Map) return Map<String, dynamic>.from(payload);
-      throw const FormatException('Dashboard overview response was not an object');
+      throw const FormatException(
+          'Dashboard overview response was not an object');
     }
 
     List<Map<String, dynamic>> rowsOf(Response response) {
@@ -64,7 +75,7 @@ class RecruiterDashboardRepository {
       newApplicants: count('submitted'),
       newApplicantsNote: 'Awaiting initial review',
       hiredThisMonth: count('hired'),
-      hiredThisMonthNote: 'Applications in hired stage',
+      hiredThisMonthNote: 'Marked hired during the selected dates',
       averageAiScore: (overview['averageAiScore'] as num?)?.toDouble(),
       totalApplications: (overview['totalApplications'] as num?)?.toInt() ?? 0,
       pipelineCounts: {

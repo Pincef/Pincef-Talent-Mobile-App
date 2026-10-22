@@ -42,6 +42,7 @@ class _AssessmentCreateScreenState
   bool _reminder = true;
   bool _autoInviteShortlisted = true;
   bool _autoGenerateAfterDeadline = true;
+  bool _initialPipelineDefaultsApplied = false;
   DateTime? _availableFrom;
   DateTime? _availableUntil;
   DateTime? _reminderBefore;
@@ -362,15 +363,31 @@ class _AssessmentCreateScreenState
     _jobId ??= jobs.isNotEmpty ? jobs.first.id : null;
     final pipelineState = ref.watch(pipelinesProvider);
     final pipelines = pipelineState.value ?? const <HiringPipeline>[];
-    if (_pipelineId == null && pipelines.isNotEmpty) {
+    if (!_initialPipelineDefaultsApplied &&
+        widget.initialPipelineId != null &&
+        pipelineState.hasValue) {
+      final initialPipeline = pipelines
+          .where((pipeline) => pipeline.id == widget.initialPipelineId)
+          .firstOrNull;
+      if (initialPipeline != null) {
+        _applyPipelineDefaults(initialPipeline);
+        _initialPipelineDefaultsApplied = true;
+      }
+    }
+    if (_pipelineId == null &&
+        pipelines.isNotEmpty &&
+        widget.initialJobId == null) {
       _pipelineId = pipelines.first.id;
       _applyPipelineDefaults(pipelines.first);
+      _initialPipelineDefaultsApplied = true;
     }
     final selectedPipeline =
         pipelines.where((pipeline) => pipeline.id == _pipelineId).firstOrNull;
-    final assessmentStage = selectedPipeline?.stages
-        .where((stage) => isAssessmentType(stage.type))
-        .firstOrNull;
+    final assessmentStages = selectedPipeline?.stages
+            .where((stage) => isAssessmentType(stage.type))
+            .toList(growable: false) ??
+        const <PipelineStage>[];
+    final assessmentStage = assessmentStages.firstOrNull;
     if (_stageName == null && assessmentStage != null)
       _stageName = assessmentStage.name;
     final applicationsState =
@@ -450,8 +467,8 @@ class _AssessmentCreateScreenState
               }),
               const SizedBox(height: 18),
               LayoutBuilder(builder: (context, constraints) {
-                final config =
-                    _buildConfiguration(jobs, pipelines, applicationsState);
+                final config = _buildConfiguration(
+                    jobs, pipelines, applicationsState, assessmentStages);
                 final summary = _buildSummary(assessmentStage);
                 final main = Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -497,8 +514,11 @@ class _AssessmentCreateScreenState
     );
   }
 
-  Widget _buildConfiguration(List jobs, List<HiringPipeline> pipelines,
-          JobApplicantsState? applicationsState) =>
+  Widget _buildConfiguration(
+          List jobs,
+          List<HiringPipeline> pipelines,
+          JobApplicantsState? applicationsState,
+          List<PipelineStage> assessmentStages) =>
       Card(
           child: Padding(
               padding: const EdgeInsets.all(18),
@@ -510,7 +530,8 @@ class _AssessmentCreateScreenState
                             fontSize: 19, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 14),
                     DropdownButtonFormField<String>(
-                        value: _jobId,
+                        value:
+                            jobs.any((job) => job.id == _jobId) ? _jobId : null,
                         decoration: const InputDecoration(labelText: 'Job'),
                         items: [
                           for (final job in jobs)
@@ -544,7 +565,10 @@ class _AssessmentCreateScreenState
                             labelText: 'Evaluation purpose / instructions')),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                        value: _pipelineId,
+                        value: pipelines
+                                .any((pipeline) => pipeline.id == _pipelineId)
+                            ? _pipelineId
+                            : null,
                         decoration:
                             const InputDecoration(labelText: 'Hiring pipeline'),
                         items: [
@@ -566,16 +590,14 @@ class _AssessmentCreateScreenState
                             })),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                        value: _stageName,
+                        value: assessmentStages
+                                .any((stage) => stage.name == _stageName)
+                            ? _stageName
+                            : null,
                         decoration: const InputDecoration(
                             labelText: 'Assessment stage'),
                         items: [
-                          for (final stage in (pipelines
-                                      .where((p) => p.id == _pipelineId)
-                                      .firstOrNull
-                                      ?.stages ??
-                                  const <PipelineStage>[])
-                              .where((s) => isAssessmentType(s.type)))
+                          for (final stage in assessmentStages)
                             DropdownMenuItem(
                                 value: stage.name, child: Text(stage.name))
                         ],

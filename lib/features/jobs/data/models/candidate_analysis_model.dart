@@ -16,12 +16,16 @@ class CandidateJobAnalysis {
     required this.status,
     this.score,
     this.summary,
+    this.resumeSummary,
+    this.isStale = false,
     this.error,
   });
 
   final CandidateJobAnalysisStatus status;
   final int? score; // 0-100
   final String? summary;
+  final Map<String, dynamic>? resumeSummary;
+  final bool isStale;
   final String? error;
 
   factory CandidateJobAnalysis.fromJson(Map<String, dynamic> json) {
@@ -29,6 +33,10 @@ class CandidateJobAnalysis {
       status: _statusFromJson(json['status'] as String? ?? 'pending'),
       score: (json['score'] as num?)?.toInt(),
       summary: json['summary'] as String?,
+      resumeSummary: json['resumeSummary'] is Map
+          ? Map<String, dynamic>.from(json['resumeSummary'] as Map)
+          : null,
+      isStale: json['isStale'] == true,
       error: json['error'] as String?,
     );
   }
