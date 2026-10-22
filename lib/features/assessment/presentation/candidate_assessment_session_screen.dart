@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/brand_color.dart';
 import '../application/assessment_provider.dart';
+import 'widgets/assessment_hero.dart';
 
 class CandidateAssessmentSessionScreen extends ConsumerStatefulWidget {
   const CandidateAssessmentSessionScreen(
@@ -86,7 +87,10 @@ class _CandidateAssessmentSessionScreenState
           .toList();
       for (final answer in (_session!['answers'] as List? ?? const [])) {
         final item = Map<String, dynamic>.from(answer as Map);
-        _answers[item['questionId'].toString()] = item['answer'].toString();
+        final questionId = _idValue(item['questionId']);
+        if (questionId != null) {
+          _answers[questionId] = item['answer']?.toString() ?? '';
+        }
       }
       final deadline =
           DateTime.tryParse(_session!['deadlineAt']?.toString() ?? '')
@@ -112,6 +116,19 @@ class _CandidateAssessmentSessionScreenState
         });
     }
   }
+
+  String? _idValue(dynamic value) {
+    if (value is Map) {
+      final nested = value['_id'] ?? value['id'] ?? value['questionId'];
+      return nested?.toString();
+    }
+    final id = value?.toString();
+    return id == null || id.isEmpty || id == 'null' ? null : id;
+  }
+
+  String _questionKey(Map<String, dynamic> question, int index) =>
+      _idValue(question['questionId'] ?? question['_id'] ?? question['id']) ??
+      'question-$index';
 
   void _answer(String questionId, String value) {
     setState(() => _answers[questionId] = value);
@@ -242,7 +259,7 @@ class _CandidateAssessmentSessionScreenState
           child:
               Text('This assessment has no questions. Contact the recruiter.'));
     final question = _questions[_index];
-    final questionId = question['questionId'].toString();
+    final questionId = _questionKey(question, _index);
     return Shortcuts(
       shortcuts: const <ShortcutActivator, Intent>{
         SingleActivator(LogicalKeyboardKey.escape): _AssessmentEscapeIntent()
@@ -258,23 +275,43 @@ class _CandidateAssessmentSessionScreenState
                       child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(children: [
-                              Expanded(
-                                  child: Text(
-                                      _test?['title']?.toString() ??
-                                          'Competency assessment',
-                                      style: const TextStyle(
-                                          fontSize: 23,
-                                          fontWeight: FontWeight.w800,
-                                          color: BrandColors.navy))),
-                              Text(_clockLabel(),
-                                  style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w800,
-                                      color: _secondsLeft < 300
-                                          ? Colors.red
-                                          : BrandColors.navy))
-                            ]),
+                            AssessmentHero(
+                              eyebrow: 'Assessment in progress',
+                              title: _test?['title']?.toString() ??
+                                  'Competency assessment',
+                              description:
+                                  'Take each question one step at a time. Your progress is saved as you go.',
+                              metrics: [
+                                AssessmentHeroMetric('Question',
+                                    '${_index + 1}/${_questions.length}'),
+                                AssessmentHeroMetric('Answered',
+                                    '${_answers.length}/${_questions.length}'),
+                              ],
+                              action: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 13, vertical: 9),
+                                decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: .1),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                        color: Colors.white
+                                            .withValues(alpha: .16))),
+                                child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.timer_outlined,
+                                          color: Color(0xFFFFC58E), size: 17),
+                                      const SizedBox(width: 7),
+                                      Text(_clockLabel(),
+                                          style: TextStyle(
+                                              color: _secondsLeft < 300
+                                                  ? const Color(0xFFFF9B8D)
+                                                  : Colors.white,
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w800)),
+                                    ]),
+                              ),
+                            ),
                             const SizedBox(height: 8),
                             LinearProgressIndicator(
                                 value: (_index + 1) / _questions.length,
