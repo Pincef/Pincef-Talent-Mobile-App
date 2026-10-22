@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:talentbridge/core/application/location_provider.dart';
@@ -10,6 +11,9 @@ import 'package:talentbridge/core/widgets/searchable_fields_widget.dart';
 import 'package:talentbridge/features/auth/application/auth_provider.dart';
 import 'package:talentbridge/features/jobs/application/job_management_provider.dart';
 import 'package:talentbridge/features/jobs/data/models/job_management_model.dart';
+import 'package:talentbridge/features/hiring_pipeline/application/hiring_pipeline_provider.dart';
+import 'package:talentbridge/features/hiring_pipeline/data/models/hiring_pipeline_model.dart';
+import '../widgets/custom_hiring_pipeline_picker.dart';
 
 class PostJobScreen extends ConsumerStatefulWidget {
   const PostJobScreen({super.key});
@@ -42,6 +46,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
   String _currency = 'USD';
   String _industry = 'Technology';
   String _pipelineTier = 'Standard';
+  String? _selectedPipelineId;
   String _planTier = 'Premium';
   String? _pendingAction;
   double _rankingLimit = 20;
@@ -492,6 +497,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
         TextFormField(
           controller: _minYears,
           keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           validator: _minYearsValidator,
           decoration: _input('e.g. 3'),
         ),
@@ -541,7 +547,37 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
         ),
         const SizedBox(height: 10),
         _pipelineTierChoices(),
+        if (_pipelineTier == 'Custom') ...[
+          const SizedBox(height: 12),
+          _customPipelineSelection(),
+        ],
       ]));
+
+  Widget _customPipelineSelection() {
+    final pipeline = _selectedPipelineId == null
+        ? null
+        : (ref.read(pipelinesProvider).value ?? const <HiringPipeline>[])
+            .where((item) => item.id == _selectedPipelineId)
+            .firstOrNull;
+    return OutlinedButton.icon(
+      onPressed: () async {
+        final selected = await _showCustomPipelinePicker();
+        if (!mounted || selected == null) return;
+        setState(() => _selectedPipelineId = selected.id);
+      },
+      icon: Icon(
+        pipeline == null ? Icons.add_rounded : Icons.alt_route_rounded,
+        size: 16,
+      ),
+      label: Text(pipeline?.name ?? 'Choose a saved custom workflow'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: BrandColors.navy,
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        side: const BorderSide(color: Color(0xFFDCE4EF)),
+      ),
+    );
+  }
 
   bool get _premiumPipelineAvailable {
     final user = ref.read(authProvider).user;
@@ -678,9 +714,26 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
       ),
     );
     if (selected != null && mounted) {
-      setState(() => _pipelineTier = selected);
+      if (selected == 'Custom') {
+        final selectedPipeline = await _showCustomPipelinePicker();
+        if (!mounted || selectedPipeline == null) return;
+        setState(() {
+          _pipelineTier = 'Custom';
+          _selectedPipelineId = selectedPipeline.id;
+        });
+        _showToast('${selectedPipeline.name} selected.', isError: false);
+        return;
+      }
+      setState(() {
+        _pipelineTier = selected;
+        _selectedPipelineId = null;
+      });
       _showToast('$selected pipeline selected.', isError: false);
     }
+  }
+
+  Future<HiringPipeline?> _showCustomPipelinePicker() async {
+    return showCustomHiringPipelinePicker(context);
   }
 
   Widget _planAutomationCard() {
@@ -884,7 +937,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
           ),
         ],
         _setting(
-          'AI candidate ranking',
+          'Enable AI screening',
           _aiRanking,
           changed: (v) => setState(() {
             _aiRanking = v;
@@ -896,18 +949,6 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
                   ?.hasModule(ModuleCodes.aiCandidateMatch) ??
               false,
         ),
-        _setting(
-          'AI resume summary',
-          _aiSummary,
-          changed: (v) => setState(() => _aiSummary = v),
-          enabled: ref
-                  .read(authProvider)
-                  .user
-                  ?.hasModule(ModuleCodes.aiCandidateSummary) ??
-              false,
-        ),
-        _setting('Requires management experience', _requiresManagement,
-            changed: (v) => setState(() => _requiresManagement = v)),
       ]));
 
   Widget _locationFields() {
@@ -1523,6 +1564,50 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
     }
   }
 
+  bool get _canStartAssessmentAfterPublish {
+    final user = ref.read(authProvider).user;
+    if (user?.hasModule(ModuleCodes.hiringStageAssessment) != true) {
+      return false;
+    }
+    if (_pipelineTier == 'Premium') return true;
+    if (_pipelineTier != 'Custom' || _selectedPipelineId == null) return false;
+    final pipeline = (ref.read(pipelinesProvider).value ?? const [])
+        .where((item) => item.id == _selectedPipelineId)
+        .firstOrNull;
+    return pipeline?.stages.any((stage) => isAssessmentType(stage.type)) ??
+        false;
+  }
+
+  Future<bool> _askToSetUpAssessment() async =>
+      await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          icon: const Icon(Icons.assignment_outlined,
+              color: BrandColors.orange, size: 28),
+          title: const Text('Add an assessment to this hiring flow?'),
+          content: const Text(
+            'Your selected pipeline includes an assessment stage. You can set up the assessment now and choose whether to invite shortlisted candidates automatically.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Maybe later'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              icon: const Icon(Icons.arrow_forward, size: 16),
+              label: const Text('Set up assessment'),
+              style: FilledButton.styleFrom(
+                backgroundColor: BrandColors.orange,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+
   /// Builds the full [JobDraft] from the current form state and persists
   /// it in a single call. Now that the form is one screen instead of a
   /// multi-step wizard, there's no reason to save in stages — the whole
@@ -1582,6 +1667,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
       aiRanking: _aiRanking,
       aiSummary: _aiSummary,
       pipelineTier: _pipelineTier,
+      pipelineId: _selectedPipelineId,
       rankingPlanTier: _planTier,
       assessmentEmailCount: _planQuota(
         ModuleCodes.hiringStageAssessment,
@@ -1641,11 +1727,28 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
       final published = await ref.read(postJobProvider.notifier).publish();
       if (!mounted) return;
       if (published) {
+        final jobId = ref.read(postJobProvider).draft.id;
+        final pipelineId = _selectedPipelineId;
+        final shouldOfferAssessment = _canStartAssessmentAfterPublish;
         ref.invalidate(
             jobManagementProvider); // forces a fresh load() next time /jobs is shown
         _showToast('Job post published successfully.', isError: false);
         ref.read(postJobProvider.notifier).reset();
-        context.go('/jobs');
+        if (shouldOfferAssessment && jobId != null) {
+          final setUpAssessment = await _askToSetUpAssessment();
+          if (!mounted) return;
+          if (setUpAssessment) {
+            final query = Uri(queryParameters: {
+              'jobId': jobId,
+              if (pipelineId != null) 'pipelineId': pipelineId,
+            }).query;
+            context.go('/competency-assessments/new?$query');
+          } else {
+            context.go('/jobs');
+          }
+        } else {
+          context.go('/jobs');
+        }
       } else {
         _showError('Could not publish the job. Please try again.');
       }
@@ -1754,22 +1857,17 @@ class _HiringPipelinePickerDialogState
                     _pipelineCard(
                       tier: 'Custom',
                       level: 'TIER 3 • ENTERPRISE',
-                      title: 'CUSTOM PIPELINE',
+                      title: 'CUSTOM WORKFLOWS',
                       description:
-                          'Build a tailored hiring process based on bespoke multi-stage recruitment requirements.',
+                          'Choose a saved workflow created by your team. Its stages define the process for this role.',
                       steps: const [
-                        'Post',
-                        'Parse',
-                        'Match',
-                        'Rank',
-                        'Summarise',
-                        'Assess 1..3',
-                        'Compare',
-                        'Interview',
-                        'Hire',
+                        'Select',
+                        'Workflow',
+                        'Stages',
+                        'Apply',
                       ],
                       recommended:
-                          'Global enterprise hiring teams with multi-stakeholder panel rounds.',
+                          'Teams with their own saved stages and recruitment flow.',
                     ),
                   ];
                   final content = wide
