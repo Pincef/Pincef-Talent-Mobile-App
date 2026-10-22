@@ -248,7 +248,7 @@ class _Header extends StatelessWidget {
               if (job.minYearsOfExperience != null)
                 _MetaItem(
                     icon: Icons.timeline_outlined,
-                    label: '${job.minYearsOfExperience}+ yrs experience'),
+                    label: '${job.minYearsOfExperience} experience'),
               if (job.educationLevelLabel != null)
                 _MetaItem(
                     icon: Icons.school_outlined,
@@ -762,17 +762,9 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
     });
   }
 
-  // Same bug as the original post_job_screen.dart minYears field (fixed
-  // earlier in this conversation): a validator that only checks
-  // non-empty lets int.tryParse() fail silently and the field vanish from
-  // the payload. Applying the same fix here from the start.
   String? _minYearsValidator(String? value) {
     final trimmed = value?.trim() ?? '';
-    if (trimmed.isEmpty) return 'Enter minimum years of experience';
-    final parsed = int.tryParse(trimmed);
-    if (parsed == null) return 'Enter a whole number (e.g. 3)';
-    if (parsed < 0) return 'Years of experience cannot be negative';
-    return null;
+    return trimmed.isEmpty ? 'Describe the experience required' : null;
   }
 
   Future<void> _save() async {
@@ -802,7 +794,7 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
       requiredSkills: _skills,
       responsibilities: _responsibilities,
       benefits: _benefits,
-      minYearsOfExperience: int.tryParse(_minYears.text.trim()),
+      minYearsOfExperience: _minYears.text.trim(),
       educationLevel: _educationLevel,
       fieldOfStudy: _fieldOfStudy.text.trim(),
       requiresManagementExperience: _requiresManagement,
@@ -1148,11 +1140,9 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const _FieldLabel(
-                                    'Minimum Years of Experience'),
+                                const _FieldLabel('Experience Requirement'),
                                 TextFormField(
                                   controller: _minYears,
-                                  keyboardType: TextInputType.number,
                                   validator: _minYearsValidator,
                                 ),
                               ],
