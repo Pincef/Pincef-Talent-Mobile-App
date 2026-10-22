@@ -6,6 +6,7 @@ import '../../../core/theme/brand_color.dart';
 import '../../../core/widgets/paged_list_view.dart';
 import '../../auth/application/auth_provider.dart';
 import '../application/assessment_provider.dart';
+import 'widgets/assessment_hero.dart';
 
 class AssessmentListScreen extends ConsumerWidget {
   const AssessmentListScreen({super.key});
@@ -26,49 +27,54 @@ class AssessmentListScreen extends ConsumerWidget {
         error: (error, _) => _ErrorState(
             error: error.toString(),
             onRetry: () => ref.invalidate(recruiterAssessmentsProvider)),
-        data: (items) => Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              const Expanded(
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                    Text('Competency Assessments',
-                        style: TextStyle(
-                            fontSize: 23,
-                            fontWeight: FontWeight.w800,
-                            color: BrandColors.navy)),
-                    SizedBox(height: 5),
-                    Text(
-                        'Create assessments, invite candidates and review their results.',
-                        style: TextStyle(color: BrandColors.muted)),
-                  ])),
-              FilledButton.icon(
-                onPressed: () => context.go('/competency-assessments/new'),
-                icon: const Icon(Icons.add),
-                label: const Text('Create assessment'),
-                style:
-                    FilledButton.styleFrom(backgroundColor: BrandColors.orange),
+        data: (items) {
+          final submitted = items.fold<int>(0, (total, item) {
+            final analytics = item['analytics'] is Map
+                ? Map<String, dynamic>.from(item['analytics'] as Map)
+                : const <String, dynamic>{};
+            return total +
+                (int.tryParse('${analytics['submittedCount'] ?? 0}') ?? 0);
+          });
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AssessmentHero(
+                eyebrow: 'Hiring toolkit',
+                title: 'Build a stronger shortlist.',
+                description:
+                    'Create assessments, invite candidates and review results in one place.',
+                metrics: [
+                  AssessmentHeroMetric('Assessments', '${items.length}'),
+                  AssessmentHeroMetric('Submissions', '$submitted'),
+                ],
+                action: FilledButton.icon(
+                  onPressed: () => context.go('/competency-assessments/new'),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Create assessment'),
+                  style: FilledButton.styleFrom(
+                      backgroundColor: BrandColors.orange,
+                      foregroundColor: Colors.white),
+                ),
               ),
-            ]),
-            const SizedBox(height: 24),
-            Expanded(
-              child: items.isEmpty
-                  ? _EmptyState(
-                      onCreate: () => context.go('/competency-assessments/new'))
-                  : PagedListView<Map<String, dynamic>>(
-                      items: items,
-                      pageSize: 8,
-                      itemBuilder: (context, item, index) => _AssessmentCard(
-                        item: item,
-                        onTap: () => context.go(
-                            '/competency-assessments/${item['_id'] ?? item['id']}'),
+              const SizedBox(height: 20),
+              Expanded(
+                child: items.isEmpty
+                    ? _EmptyState(
+                        onCreate: () =>
+                            context.go('/competency-assessments/new'))
+                    : PagedListView<Map<String, dynamic>>(
+                        items: items,
+                        pageSize: 8,
+                        itemBuilder: (context, item, index) => _AssessmentCard(
+                          item: item,
+                          onTap: () => context.go(
+                              '/competency-assessments/${item['_id'] ?? item['id']}'),
+                        ),
                       ),
-                    ),
-            ),
-          ],
-        ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
