@@ -19,6 +19,7 @@ import 'package:talentbridge/features/interviews/presentation/candidate_intervie
 import 'package:talentbridge/features/jobs/presentation/screens/my_applications_screen.dart';
 import 'package:talentbridge/features/recruiter_dashboard/presentation/screens/recruitment_report_screen.dart';
 import 'package:talentbridge/features/support/presentation/support_center_screen.dart';
+import 'package:talentbridge/features/messages/presentation/screens/email_templates_screen.dart';
 import '../../features/auth/application/auth_provider.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/onboarding/presentation/screens/shared/signup_screen.dart';
@@ -26,6 +27,7 @@ import '../../features/jobs/presentation/screens/job_management_screen.dart';
 import '../../features/jobs/presentation/screens/post_job_screen.dart';
 import '../../features/jobs/presentation/screens/browse_jobs_screen.dart';
 import '../../features/jobs/presentation/screens/job_details_screen.dart';
+import '../../features/jobs/presentation/screens/public_job_screen.dart';
 import '../../features/jobs/presentation/screens/job_candidates_screen.dart';
 import '../../features/jobs/presentation/screens/candidate_profile_preview_screen.dart';
 import '../../features/jobs/presentation/screens/ai_candidate_ranking_screen.dart';
@@ -53,6 +55,17 @@ const _publicRoutes = {
   '/signup',
   '/auth/callback',
 };
+
+const _authEntryRoutes = {
+  '/welcome',
+  '/forgot-password',
+  '/login',
+  '/choose-role',
+  '/signup',
+};
+
+bool _isPublicRoute(String location) =>
+    _publicRoutes.contains(location) || location.startsWith('/shared/jobs/');
 
 /// These routes are valid immediately after registration. Keeping `/signup`
 /// here prevents the auth-state refresh from redirecting to the dashboard
@@ -105,7 +118,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final authState = ref.read(authProvider); // fresh every call, never stale
       final isLoggedIn = authState.isAuthenticated;
-      final isPublicRoute = _publicRoutes.contains(state.matchedLocation);
+      final isPublicRoute = _isPublicRoute(state.matchedLocation);
 
       // The logout-success dialog intentionally remains over the current
       // workspace until its user chooses a destination.
@@ -116,8 +129,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       // still be allowed through their role-specific setup. The setup screens
       // provide the explicit "Skip for now" path to /dashboard.
       if (isLoggedIn &&
-          isPublicRoute &&
-          state.matchedLocation != '/auth/callback' &&
+          _authEntryRoutes.contains(state.matchedLocation) &&
           !_postSignupRoutes.contains(state.matchedLocation)) {
         return '/dashboard';
       }
@@ -168,6 +180,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
           path: '/signup', builder: (context, state) => const SignUpScreen()),
+      GoRoute(
+        path: '/shared/jobs/:jobId',
+        builder: (context, state) => PublicJobScreen(
+          jobId: state.pathParameters['jobId']!,
+        ),
+      ),
       GoRoute(
           path: '/recruiter-company-setup',
           builder: (context, state) => const RecruiterProfileSetupScreen()),
@@ -235,7 +253,11 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                   path: 'new',
-                  builder: (context, state) => const AssessmentCreateScreen()),
+                  builder: (context, state) => AssessmentCreateScreen(
+                        initialJobId: state.uri.queryParameters['jobId'],
+                        initialPipelineId:
+                            state.uri.queryParameters['pipelineId'],
+                      )),
               GoRoute(
                   path: ':testId',
                   builder: (context, state) => AssessmentDetailsScreen(
@@ -339,6 +361,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => _isRecruiter(ref.read(authProvider))
                 ? const MessagesScreen()
                 : const CandidateMessagesScreen(),
+          ),
+          GoRoute(
+            path: '/email-templates',
+            builder: (context, state) => const EmailTemplatesScreen(),
           ),
           GoRoute(
             path: '/notification',
