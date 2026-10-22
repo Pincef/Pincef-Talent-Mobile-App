@@ -161,7 +161,7 @@ class _PublicJobContent extends StatelessWidget {
             ]),
             if (job.minYearsOfExperience != null) ...[
               const SizedBox(height: 8),
-              _Bullet(text: '${job.minYearsOfExperience}+ years of experience'),
+              _Bullet(text: '${job.minYearsOfExperience} experience'),
             ],
             if (job.educationLevelLabel != null)
               _Bullet(text: 'Education: ${job.educationLevelLabel}'),
