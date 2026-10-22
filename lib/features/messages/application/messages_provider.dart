@@ -113,6 +113,7 @@ class ConversationNotifier
   StreamSubscription? _newSub;
   StreamSubscription? _ackSub;
   StreamSubscription? _readSub;
+  final List<Map<String, dynamic>> _pendingIncoming = [];
 
   ChatSocketService get _socket => _ref.read(chatSocketProvider);
   // TODO: confirm this is where the logged-in user's id actually lives —
@@ -122,13 +123,9 @@ class ConversationNotifier
 
   Future<void> _init() async {
     try {
-      final repo = _ref.read(messagesRepositoryProvider);
-      final history = await repo.getConversation(conversationId, _myUserId);
-      state = AsyncValue.data(history);
-
-      _socket.joinConversation(conversationId);
-      _socket.markRead(conversationId);
-
+      // Listen before fetching history: the socket can deliver a new message
+      // while the REST request is in flight, and that event must not be lost
+      // when the history response initializes state.
       _newSub = _socket.onNewMessage
           .where((m) => m['conversationId'] == conversationId)
           .listen(_onIncoming);
@@ -138,12 +135,29 @@ class ConversationNotifier
       _readSub = _socket.onReadReceipt
           .where((m) => m['conversationId'] == conversationId)
           .listen((_) => _markAllMineAsRead());
+
+      _socket.joinConversation(conversationId);
+      final history = await _ref
+          .read(messagesRepositoryProvider)
+          .getConversation(conversationId, _myUserId);
+      final loaded = [...history];
+      for (final json in _pendingIncoming) {
+        final message = ChatMessage.fromJson(json, myUserId: _myUserId);
+        if (!loaded.any((item) => item.id == message.id)) loaded.add(message);
+      }
+      _pendingIncoming.clear();
+      state = AsyncValue.data(loaded);
+      _socket.markRead(conversationId);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
     }
   }
 
   void _onIncoming(Map<String, dynamic> json) {
+    if (state.isLoading) {
+      _pendingIncoming.add(json);
+      return;
+    }
     final message = ChatMessage.fromJson(json, myUserId: _myUserId);
     final current = state.valueOrNull ?? [];
     if (current.any((m) => m.id == message.id)) return; // already have it

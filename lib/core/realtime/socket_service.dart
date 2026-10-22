@@ -26,6 +26,7 @@ class ChatSocketService {
 
   final SecureStorageService _storage;
   io.Socket? _socket;
+  final Set<String> _joinedConversationIds = <String>{};
 
   final _newMessageController =
       StreamController<Map<String, dynamic>>.broadcast();
@@ -104,7 +105,16 @@ class ChatSocketService {
     );
 
     _socket!
-      ..onConnect((_) => _connectionController.add(true))
+      ..onConnect((_) {
+        _connectionController.add(true);
+        // Socket.IO may connect after a conversation screen has already
+        // requested a join, or reconnect after a network interruption.
+        // Rejoin every room that is still active in the UI.
+        for (final conversationId in _joinedConversationIds) {
+          _socket
+              ?.emit('conversation:join', {'conversationId': conversationId});
+        }
+      })
       ..onDisconnect((_) => _connectionController.add(false))
       ..onConnectError((_) => reconnectWithFreshToken())
       ..on('message:new',
@@ -143,11 +153,19 @@ class ChatSocketService {
     _socket?.emit('presence:unsubscribe', {'userIds': userIds});
   }
 
-  void joinConversation(String conversationId) =>
+  void joinConversation(String conversationId) {
+    _joinedConversationIds.add(conversationId);
+    if (isConnected) {
       _socket?.emit('conversation:join', {'conversationId': conversationId});
+    }
+  }
 
-  void leaveConversation(String conversationId) =>
+  void leaveConversation(String conversationId) {
+    _joinedConversationIds.remove(conversationId);
+    if (isConnected) {
       _socket?.emit('conversation:leave', {'conversationId': conversationId});
+    }
+  }
 
   /// [clientId] is a locally generated uuid so the optimistic bubble the UI
   /// already shows can be matched against the ack that comes back, instead
@@ -169,6 +187,7 @@ class ChatSocketService {
       _socket?.emit('message:read', {'conversationId': conversationId});
 
   void dispose() {
+    _joinedConversationIds.clear();
     _socket?.dispose();
     _newMessageController.close();
     _ackController.close();

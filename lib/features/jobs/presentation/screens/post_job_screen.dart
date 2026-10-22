@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:talentbridge/core/application/location_provider.dart';
@@ -10,6 +11,9 @@ import 'package:talentbridge/core/widgets/searchable_fields_widget.dart';
 import 'package:talentbridge/features/auth/application/auth_provider.dart';
 import 'package:talentbridge/features/jobs/application/job_management_provider.dart';
 import 'package:talentbridge/features/jobs/data/models/job_management_model.dart';
+import 'package:talentbridge/features/hiring_pipeline/application/hiring_pipeline_provider.dart';
+import 'package:talentbridge/features/hiring_pipeline/data/models/hiring_pipeline_model.dart';
+import '../widgets/custom_hiring_pipeline_picker.dart';
 
 class PostJobScreen extends ConsumerStatefulWidget {
   const PostJobScreen({super.key});
@@ -42,6 +46,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
   String _currency = 'USD';
   String _industry = 'Technology';
   String _pipelineTier = 'Standard';
+  String? _selectedPipelineId;
   String _planTier = 'Premium';
   String? _pendingAction;
   double _rankingLimit = 20;
@@ -487,13 +492,12 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
 
   Widget _minYearsField() =>
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _label('MINIMUM YEARS IN THIS FIELD'),
+        _label('EXPERIENCE REQUIREMENT'),
         const SizedBox(height: 6),
         TextFormField(
           controller: _minYears,
-          keyboardType: TextInputType.number,
           validator: _minYearsValidator,
-          decoration: _input('e.g. 3'),
+          decoration: _input('e.g. 3+ years, or entry level'),
         ),
       ]);
 
@@ -541,25 +545,44 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
         ),
         const SizedBox(height: 10),
         _pipelineTierChoices(),
+        if (_pipelineTier == 'Custom') ...[
+          const SizedBox(height: 12),
+          _customPipelineSelection(),
+        ],
       ]));
 
+  Widget _customPipelineSelection() {
+    final pipeline = _selectedPipelineId == null
+        ? null
+        : (ref.read(pipelinesProvider).value ?? const <HiringPipeline>[])
+            .where((item) => item.id == _selectedPipelineId)
+            .firstOrNull;
+    return OutlinedButton.icon(
+      onPressed: () async {
+        final selected = await _showCustomPipelinePicker();
+        if (!mounted || selected == null) return;
+        setState(() => _selectedPipelineId = selected.id);
+      },
+      icon: Icon(
+        pipeline == null ? Icons.add_rounded : Icons.alt_route_rounded,
+        size: 16,
+      ),
+      label: Text(pipeline?.name ?? 'Choose a saved custom workflow'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: BrandColors.navy,
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        side: const BorderSide(color: Color(0xFFDCE4EF)),
+      ),
+    );
+  }
+
   bool get _premiumPipelineAvailable {
-    final user = ref.read(authProvider).user;
-    final explicit = user?.capabilities['allowsPremiumPipeline'];
-    if (explicit is bool) return explicit;
-    return user?.hasModule(ModuleCodes.jobPipelinePremium) ?? false;
+    return true;
   }
 
   bool get _customPipelineAvailable {
-    final user = ref.read(authProvider).user;
-    final maxCustom =
-        (user?.capabilities['maxCustomPipelines'] as num?)?.toInt() ?? 0;
-    final hasCustomModule =
-        user?.hasModule(ModuleCodes.jobPipelineCustom) == true ||
-            user?.hasModule(ModuleCodes.hiringPipeline) == true;
-    return hasCustomModule &&
-        user?.capabilities['allowsCustomPipelines'] == true &&
-        maxCustom > 0;
+    return true;
   }
 
   bool get _planAutomationAvailable {
@@ -588,11 +611,11 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
         children: [
           _pipelineTierChoice('Standard', enabled: true),
           const SizedBox(width: 7),
-          _pipelineTierChoice('Premium', enabled: _premiumPipelineAvailable),
+          _pipelineTierChoice('Premium', enabled: true),
           const SizedBox(width: 7),
           _pipelineTierChoice(
             'Custom',
-            enabled: _customPipelineAvailable,
+            enabled: true,
             opensModal: true,
           ),
         ],
@@ -678,9 +701,26 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
       ),
     );
     if (selected != null && mounted) {
-      setState(() => _pipelineTier = selected);
+      if (selected == 'Custom') {
+        final selectedPipeline = await _showCustomPipelinePicker();
+        if (!mounted || selectedPipeline == null) return;
+        setState(() {
+          _pipelineTier = 'Custom';
+          _selectedPipelineId = selectedPipeline.id;
+        });
+        _showToast('${selectedPipeline.name} selected.', isError: false);
+        return;
+      }
+      setState(() {
+        _pipelineTier = selected;
+        _selectedPipelineId = null;
+      });
       _showToast('$selected pipeline selected.', isError: false);
     }
+  }
+
+  Future<HiringPipeline?> _showCustomPipelinePicker() async {
+    return showCustomHiringPipelinePicker(context);
   }
 
   Widget _planAutomationCard() {
@@ -884,7 +924,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
           ),
         ],
         _setting(
-          'AI candidate ranking',
+          'Enable AI screening',
           _aiRanking,
           changed: (v) => setState(() {
             _aiRanking = v;
@@ -896,18 +936,6 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
                   ?.hasModule(ModuleCodes.aiCandidateMatch) ??
               false,
         ),
-        _setting(
-          'AI resume summary',
-          _aiSummary,
-          changed: (v) => setState(() => _aiSummary = v),
-          enabled: ref
-                  .read(authProvider)
-                  .user
-                  ?.hasModule(ModuleCodes.aiCandidateSummary) ??
-              false,
-        ),
-        _setting('Requires management experience', _requiresManagement,
-            changed: (v) => setState(() => _requiresManagement = v)),
       ]));
 
   Widget _locationFields() {
@@ -1291,19 +1319,9 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
       value != null && values.contains(value) ? value : null;
   String? Function(String?) _required(String message) =>
       (value) => value == null || value.trim().isEmpty ? message : null;
-  // Unlike _required, this also checks the text is actually a valid
-  // non-negative integer — int.tryParse() returns null on bad input, and
-  // that null was previously being dropped from the payload silently
-  // (JobDraft.toJson() only sends the key when it's non-null), so the job
-  // would save without minYearsOfExperience even though the field looked
-  // "filled" and passed the old emptiness-only validator.
   String? _minYearsValidator(String? value) {
     final trimmed = value?.trim() ?? '';
-    if (trimmed.isEmpty) return 'Enter minimum years of experience';
-    final parsed = int.tryParse(trimmed);
-    if (parsed == null) return 'Enter a whole number (e.g. 3)';
-    if (parsed < 0) return 'Years of experience cannot be negative';
-    return null;
+    return trimmed.isEmpty ? 'Describe the experience required' : null;
   }
 
   String get _jobLocation => [
@@ -1523,6 +1541,33 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
     }
   }
 
+  String _nextPipelineRoute({required String? jobId}) {
+    String? nextStage;
+    if (_pipelineTier == 'Premium') {
+      nextStage = 'ASSESSMENT';
+    } else if (_pipelineTier == 'Custom' && _selectedPipelineId != null) {
+      final pipeline = (ref.read(pipelinesProvider).value ?? const [])
+          .where((item) => item.id == _selectedPipelineId)
+          .firstOrNull;
+      final stages = [...?pipeline?.stages]
+        ..sort((a, b) => a.order.compareTo(b.order));
+      nextStage = stages
+          .where((stage) => stage.type.toUpperCase() != 'APPLIED')
+          .firstOrNull
+          ?.type
+          .toUpperCase();
+    }
+    if (nextStage != null && isAssessmentType(nextStage)) {
+      final query = Uri(queryParameters: {
+        if (jobId != null) 'jobId': jobId,
+        if (_selectedPipelineId != null) 'pipelineId': _selectedPipelineId!,
+      }).query;
+      return '/competency-assessments/new${query.isEmpty ? '' : '?$query'}';
+    }
+    if (nextStage?.contains('INTERVIEW') == true) return '/interviews';
+    return jobId == null ? '/jobs' : '/jobs/$jobId/candidates';
+  }
+
   /// Builds the full [JobDraft] from the current form state and persists
   /// it in a single call. Now that the form is one screen instead of a
   /// multi-step wizard, there's no reason to save in stages — the whole
@@ -1571,7 +1616,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
         if (_wellness) 'Wellness',
         ..._customBenefits,
       ],
-      minYearsOfExperience: int.tryParse(_minYears.text.trim()),
+      minYearsOfExperience: _minYears.text.trim(),
       educationLevel: _educationLevel,
       fieldOfStudy:
           _fieldOfStudy.text.trim().isEmpty ? null : _fieldOfStudy.text.trim(),
@@ -1582,6 +1627,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
       aiRanking: _aiRanking,
       aiSummary: _aiSummary,
       pipelineTier: _pipelineTier,
+      pipelineId: _selectedPipelineId,
       rankingPlanTier: _planTier,
       assessmentEmailCount: _planQuota(
         ModuleCodes.hiringStageAssessment,
@@ -1641,11 +1687,13 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
       final published = await ref.read(postJobProvider.notifier).publish();
       if (!mounted) return;
       if (published) {
+        final jobId = ref.read(postJobProvider).draft.id;
+        final nextRoute = _nextPipelineRoute(jobId: jobId);
         ref.invalidate(
             jobManagementProvider); // forces a fresh load() next time /jobs is shown
         _showToast('Job post published successfully.', isError: false);
         ref.read(postJobProvider.notifier).reset();
-        context.go('/jobs');
+        context.go(nextRoute);
       } else {
         _showError('Could not publish the job. Please try again.');
       }
@@ -1754,22 +1802,17 @@ class _HiringPipelinePickerDialogState
                     _pipelineCard(
                       tier: 'Custom',
                       level: 'TIER 3 • ENTERPRISE',
-                      title: 'CUSTOM PIPELINE',
+                      title: 'CUSTOM WORKFLOWS',
                       description:
-                          'Build a tailored hiring process based on bespoke multi-stage recruitment requirements.',
+                          'Choose a saved workflow created by your team. Its stages define the process for this role.',
                       steps: const [
-                        'Post',
-                        'Parse',
-                        'Match',
-                        'Rank',
-                        'Summarise',
-                        'Assess 1..3',
-                        'Compare',
-                        'Interview',
-                        'Hire',
+                        'Select',
+                        'Workflow',
+                        'Stages',
+                        'Apply',
                       ],
                       recommended:
-                          'Global enterprise hiring teams with multi-stakeholder panel rounds.',
+                          'Teams with their own saved stages and recruitment flow.',
                     ),
                   ];
                   final content = wide

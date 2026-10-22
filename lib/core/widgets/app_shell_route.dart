@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,7 +10,7 @@ import 'package:talentbridge/features/jobs/application/job_management_provider.d
 import 'package:talentbridge/features/jobs/application/application_provider.dart'
     show myApplicationsListProvider;
 import 'package:talentbridge/features/notifications/application/notifications_provider.dart'
-    show notificationsProvider;
+    show notificationsProvider, unreadNotificationCountProvider;
 import 'package:talentbridge/features/messages/application/messages_provider.dart'
     show messageThreadsProvider;
 import 'package:talentbridge/features/messages/application/candidate_messages_provider.dart'
@@ -74,9 +75,50 @@ class AppShellRoute extends ConsumerStatefulWidget {
 }
 
 class _AppShellRouteState extends ConsumerState<AppShellRoute> {
+  StreamSubscription<Map<String, dynamic>>? _messageAlertSubscription;
   String? _manualSelectionLocation;
   int? _manualTopIndex;
   int? _manualSubIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _messageAlertSubscription =
+        ref.read(chatSocketProvider).onThreadUpdate.listen((event) {
+      final unread = (event['unreadCount'] as num?)?.toInt() ?? 0;
+      if (unread <= 0 || !mounted) return;
+      // The API persists a messages-category notification for the recipient.
+      // Refresh the badge and any open notification center as soon as the
+      // chat event arrives instead of waiting for the 30-second poll.
+      ref.invalidate(unreadNotificationCountProvider);
+      ref.invalidate(notificationsProvider);
+      final preview = event['lastMessagePreview']?.toString().trim() ?? '';
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          content: Text(
+              preview.isEmpty
+                  ? 'You received a new message.'
+                  : 'New message · $preview',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis),
+          action: SnackBarAction(
+            label: 'View',
+            onPressed: () {
+              if (!mounted) return;
+              context.go('/messages');
+            },
+          ),
+          duration: const Duration(seconds: 6),
+        ));
+    });
+  }
+
+  @override
+  void dispose() {
+    _messageAlertSubscription?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -158,26 +200,18 @@ class _AppShellRouteState extends ConsumerState<AppShellRoute> {
       },
 
       // --- Everything below differs by role ---
-      // Candidate mockup shows the sidebar user card (name/role/email/
-      // location) with no topbar name; recruiter mockup is the opposite.
-      // The candidate values here are the same placeholder mock data
-      // candidate_dashboard_screen.dart used to hardcode — UserModel
-      // doesn't carry a job title/location field yet, so there's nothing
-      // real to source them from until that lands.
       showSidebarUserCard: isCandidate,
       topBarUserName: isRecruiter || isAdmin
           ? (user != null ? '${user.firstName} ${user.lastName}' : 'User')
           : null,
       topBarUserRole: isRecruiter || isAdmin ? _roleLabel(user?.role) : null,
-      userName:
-          isRecruiter || isAdmin ? (user?.firstName ?? 'User') : 'ALEX RIVERA',
+      userName: user?.firstName ?? 'User',
       userRole: isRecruiter || isAdmin
           ? _roleLabel(user?.role)
-          : 'Senior UI/UX Designer',
-      userEmail: isRecruiter || isAdmin
-          ? (user?.email ?? '')
-          : 'alex.rivera@design.io',
-      userLocation: isRecruiter || isAdmin ? '' : 'San Francisco, CA',
+          : (user?.role == UserRole.candidate ? 'Candidate' : 'User'),
+      userEmail: user?.email ?? '',
+      userLocation: user?.location ?? user?.country ?? '',
+      profileImageUrl: user?.profileImage?.url,
       primaryActionLabel: isAdmin
           ? 'Admin Overview'
           : isRecruiter

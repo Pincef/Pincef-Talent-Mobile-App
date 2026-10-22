@@ -325,30 +325,58 @@ class CreateInterviewRequest {
 // ---------------------------------------------------------------------------
 class JoinInfo {
   const JoinInfo({
-    required this.token,
-    required this.url,
+    this.token,
+    this.url,
     required this.roomName,
     required this.identity,
     required this.role,
-    required this.expiresAt,
+    this.expiresAt,
+    this.waiting = false,
+    this.isHost = false,
   });
 
-  final String token;
-  final String url; // LiveKit server (wss://...)
+  final String? token;
+  final String? url; // LiveKit server (wss://...)
   final String roomName;
   final String identity;
   final String role; // 'interviewer' | 'candidate'
-  final DateTime expiresAt;
+  final DateTime? expiresAt;
+  final bool waiting;
+  final bool isHost;
 
   bool get isInterviewer => role == 'interviewer';
 
   factory JoinInfo.fromJson(Map<String, dynamic> j) => JoinInfo(
-        token: j['token'] as String,
-        url: j['url'] as String,
+        token: j['token'] as String?,
+        url: j['url'] as String?,
         roomName: j['roomName'] as String,
         identity: j['identity'] as String,
         role: (j['role'] as String?) ?? 'interviewer',
-        expiresAt: _dt(j['expiresAt'])!,
+        expiresAt: _dt(j['expiresAt']),
+        waiting: j['waiting'] == true,
+        isHost: j['isHost'] == true,
+      );
+}
+
+class InterviewWaitingCandidate {
+  const InterviewWaitingCandidate({
+    required this.id,
+    required this.name,
+    required this.email,
+    required this.waitingAt,
+  });
+
+  final String id;
+  final String name;
+  final String email;
+  final DateTime waitingAt;
+
+  factory InterviewWaitingCandidate.fromJson(Map<String, dynamic> json) =>
+      InterviewWaitingCandidate(
+        id: json['id'] as String,
+        name: json['name'] as String? ?? 'Candidate',
+        email: json['email'] as String? ?? '',
+        waitingAt: _dt(json['waitingAt']) ?? DateTime.now(),
       );
 }
 

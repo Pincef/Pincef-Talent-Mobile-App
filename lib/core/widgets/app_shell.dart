@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talentbridge/core/theme/brand_color.dart';
 import 'package:talentbridge/features/notifications/application/notifications_provider.dart';
+import 'package:talentbridge/features/notifications/presentation/widgets/notification_bell_button.dart';
 import '../theme/app_theme.dart';
 import '../utils/breakpoints.dart';
 
@@ -86,6 +87,10 @@ const List<NavItem> kRecruiterNavItems = [
   NavItem(label: 'Message', icon: Icons.chat_bubble_outline, children: [
     NavItem(
         label: 'Recruiters Message', icon: Icons.circle, route: '/messages'),
+    NavItem(
+        label: 'Email Templates',
+        icon: Icons.mark_email_read_outlined,
+        route: '/email-templates'),
   ]),
   NavItem(
       label: 'Interview and schedule',
@@ -820,20 +825,7 @@ class _TopBar extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          Consumer(builder: (context, ref, _) {
-            final unread =
-                ref.watch(unreadNotificationCountProvider).valueOrNull ?? 0;
-            return IconButton(
-              onPressed: onNotifications,
-              tooltip:
-                  unread > 0 ? '$unread unread notifications' : 'Notifications',
-              icon: Badge(
-                  isLabelVisible: unread > 0,
-                  label: Text(unread > 99 ? '99+' : '$unread'),
-                  child: const Icon(Icons.notifications_none,
-                      color: BrandColors.navy)),
-            );
-          }),
+          NotificationBellButton(onPressed: onNotifications),
           const SizedBox(width: 12),
           if (userName != null) ...[
             Column(
@@ -1022,21 +1014,7 @@ class _MobileShell extends StatelessWidget {
                 const SizedBox(width: 4),
               ]
             : [
-                Consumer(builder: (context, ref, _) {
-                  final unread =
-                      ref.watch(unreadNotificationCountProvider).valueOrNull ??
-                          0;
-                  return IconButton(
-                    onPressed: onNotifications,
-                    tooltip: unread > 0
-                        ? '$unread unread notifications'
-                        : 'Notifications',
-                    icon: Badge(
-                        isLabelVisible: unread > 0,
-                        label: Text(unread > 99 ? '99+' : '$unread'),
-                        child: const Icon(Icons.notifications_none)),
-                  );
-                }),
+                NotificationBellButton(onPressed: onNotifications),
                 IconButton(
                   onPressed: onProfileTap,
                   tooltip: 'Profile',

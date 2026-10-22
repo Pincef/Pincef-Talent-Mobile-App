@@ -640,7 +640,9 @@ class _JobMatchRow extends StatelessWidget {
                 ),
               ),
               _Pill(
-                label: '${match.matchPercent}% Match',
+                label: match.matchPercent == null
+                    ? 'Suggested for you'
+                    : '${match.matchPercent}% Match',
                 background: const Color(0xFF16A34A),
                 foreground: Colors.white,
               ),

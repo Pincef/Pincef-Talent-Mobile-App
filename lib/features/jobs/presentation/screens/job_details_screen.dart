@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:talentbridge/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +12,9 @@ import '../../../auth/data/models/user_model.dart';
 import '../../application/application_provider.dart';
 import '../../data/models/application_model.dart';
 import '../../../candidate_dashboard/presentation/widgets/cv_upload_modal.dart';
+import 'package:talentbridge/features/hiring_pipeline/application/hiring_pipeline_provider.dart';
+import 'package:talentbridge/features/hiring_pipeline/data/models/hiring_pipeline_model.dart';
+import 'package:talentbridge/features/jobs/presentation/widgets/custom_hiring_pipeline_picker.dart';
 
 /// Shared Job Detail screen — GET /jobs/:jobId (job.service.ts's
 /// getJobById, public/unauthenticated) is the same for every viewer; this
@@ -190,7 +194,11 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final actions = isRecruiter
-        ? _RecruiterActions(jobId: jobId, onEdit: onEdit)
+        ? _RecruiterActions(
+            jobId: jobId,
+            onEdit: onEdit,
+            canShare: job.status == JobBackendStatus.published,
+          )
         : _CandidateActions(job: job, jobId: jobId);
 
     return Container(
@@ -240,7 +248,7 @@ class _Header extends StatelessWidget {
               if (job.minYearsOfExperience != null)
                 _MetaItem(
                     icon: Icons.timeline_outlined,
-                    label: '${job.minYearsOfExperience}+ yrs experience'),
+                    label: '${job.minYearsOfExperience} experience'),
               if (job.educationLevelLabel != null)
                 _MetaItem(
                     icon: Icons.school_outlined,
@@ -320,15 +328,33 @@ class _MetaItem extends StatelessWidget {
 // ============================================================
 
 class _RecruiterActions extends StatelessWidget {
-  const _RecruiterActions({required this.jobId, required this.onEdit});
+  const _RecruiterActions(
+      {required this.jobId, required this.onEdit, required this.canShare});
   final String jobId;
   final VoidCallback onEdit;
+  final bool canShare;
 
   @override
   Widget build(BuildContext context) {
     return Wrap(
       spacing: 8,
       children: [
+        if (canShare)
+          OutlinedButton.icon(
+            onPressed: () async {
+              final shareUrl = Uri.base
+                  .replace(
+                      path: '/shared/jobs/$jobId', query: null, fragment: null)
+                  .toString();
+              await Clipboard.setData(ClipboardData(text: shareUrl));
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Public job link copied')),
+              );
+            },
+            icon: const Icon(Icons.share_outlined, size: 16),
+            label: const Text('Share job'),
+          ),
         OutlinedButton.icon(
           onPressed: onEdit,
           icon: const Icon(Icons.edit_outlined, size: 16),
@@ -399,6 +425,7 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
   late String _workplaceType;
   late String _industry;
   late String _pipelineTier;
+  String? _selectedPipelineId;
   late String _rankingPlanTier;
   late double _rankingLimit;
   String? _educationLevel;
@@ -473,6 +500,7 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
         const ['Standard', 'Premium', 'Custom'].contains(job.pipelineTier)
             ? job.pipelineTier
             : 'Standard';
+    _selectedPipelineId = job.pipelineId;
     _rankingPlanTier =
         const ['Standard', 'Premium', 'Custom'].contains(job.rankingPlanTier)
             ? job.rankingPlanTier
@@ -725,17 +753,18 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
         maxCustom > 0;
   }
 
-  // Same bug as the original post_job_screen.dart minYears field (fixed
-  // earlier in this conversation): a validator that only checks
-  // non-empty lets int.tryParse() fail silently and the field vanish from
-  // the payload. Applying the same fix here from the start.
+  Future<void> _chooseCustomPipeline() async {
+    final pipeline = await showCustomHiringPipelinePicker(context);
+    if (pipeline == null || !mounted) return;
+    setState(() {
+      _pipelineTier = 'Custom';
+      _selectedPipelineId = pipeline.id;
+    });
+  }
+
   String? _minYearsValidator(String? value) {
     final trimmed = value?.trim() ?? '';
-    if (trimmed.isEmpty) return 'Enter minimum years of experience';
-    final parsed = int.tryParse(trimmed);
-    if (parsed == null) return 'Enter a whole number (e.g. 3)';
-    if (parsed < 0) return 'Years of experience cannot be negative';
-    return null;
+    return trimmed.isEmpty ? 'Describe the experience required' : null;
   }
 
   Future<void> _save() async {
@@ -765,7 +794,7 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
       requiredSkills: _skills,
       responsibilities: _responsibilities,
       benefits: _benefits,
-      minYearsOfExperience: int.tryParse(_minYears.text.trim()),
+      minYearsOfExperience: _minYears.text.trim(),
       educationLevel: _educationLevel,
       fieldOfStudy: _fieldOfStudy.text.trim(),
       requiresManagementExperience: _requiresManagement,
@@ -775,6 +804,7 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
       aiRanking: _aiRanking,
       aiSummary: _aiSummary,
       pipelineTier: _pipelineTier,
+      pipelineId: _selectedPipelineId,
       rankingPlanTier: _rankingPlanTier,
       rankingLimit: _planQuota(
         ModuleCodes.aiCandidateMatch,
@@ -813,48 +843,122 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 760;
+        final compactHeader = constraints.maxWidth < 740;
         return SingleChildScrollView(
-          padding: EdgeInsets.all(isWide ? 24 : 16),
+          padding:
+              EdgeInsets.fromLTRB(isWide ? 28 : 16, 22, isWide ? 28 : 16, 32),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    const Expanded(
-                      child: Text('Edit Job Posting',
-                          style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              color: BrandColors.navy)),
-                    ),
-                    TextButton(
+                LayoutBuilder(builder: (context, headerConstraints) {
+                  final actions = Wrap(
+                    spacing: 9,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton.icon(
                         onPressed: _isSaving ? null : widget.onCancel,
-                        child: const Text('Cancel')),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: _isSaving ? null : _save,
-                      style: ElevatedButton.styleFrom(
+                        icon: const Icon(Icons.close, size: 16),
+                        label: const Text('Cancel'),
+                      ),
+                      FilledButton.icon(
+                        onPressed: _isSaving ? null : _save,
+                        icon: _isSaving
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.save_outlined, size: 16),
+                        label: Text(_isSaving ? 'Saving...' : 'Save Changes'),
+                        style: FilledButton.styleFrom(
                           backgroundColor: BrandColors.orange,
                           foregroundColor: Colors.white,
-                          elevation: 0),
-                      child: _isSaving
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white))
-                          : const Text('Save Changes'),
-                    ),
-                  ],
-                ),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 18, vertical: 15),
+                        ),
+                      ),
+                    ],
+                  );
+                  final titleBlock = Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 9, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFEEE7),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'JOB POSTING EDITOR',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            color: BrandColors.orange,
+                            letterSpacing: .6,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Edit Job Posting',
+                        style: TextStyle(
+                          fontSize: 30,
+                          fontWeight: FontWeight.w800,
+                          color: BrandColors.navy,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      const Text(
+                        'Update the details candidates see when they discover this role.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: BrandColors.muted,
+                        ),
+                      ),
+                    ],
+                  );
+                  if (compactHeader) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        titleBlock,
+                        const SizedBox(height: 14),
+                        actions,
+                      ],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Expanded(child: titleBlock),
+                      const SizedBox(width: 16),
+                      actions,
+                    ],
+                  );
+                }),
                 if (_error != null) ...[
-                  const SizedBox(height: 8),
-                  Text(_error!,
-                      style: const TextStyle(fontSize: 12, color: Colors.red)),
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF1F0),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFFFD6D2)),
+                    ),
+                    child: Text(
+                      _error!,
+                      style: const TextStyle(
+                          fontSize: 12, color: Color(0xFFB42318)),
+                    ),
+                  ),
                 ],
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 _SectionCard(
                   title: 'Basic Information',
                   child: Column(
@@ -1036,11 +1140,9 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const _FieldLabel(
-                                    'Minimum Years of Experience'),
+                                const _FieldLabel('Experience Requirement'),
                                 TextFormField(
                                   controller: _minYears,
-                                  keyboardType: TextInputType.number,
                                   validator: _minYearsValidator,
                                 ),
                               ],
@@ -1137,20 +1239,51 @@ class _EditJobFormState extends ConsumerState<_EditJobForm> {
                 const SizedBox(height: 16),
                 _SectionCard(
                   title: 'Hiring Pipeline',
-                  child: DropdownButtonFormField<String>(
-                    initialValue: _pipelineTier,
-                    decoration:
-                        const InputDecoration(labelText: 'Pipeline tier'),
-                    items: const ['Standard', 'Premium', 'Custom']
-                        .map((v) => DropdownMenuItem(
-                              value: v,
-                              enabled: _pipelineTierAvailable(v) ||
-                                  v == _pipelineTier,
-                              child: Text(v),
-                            ))
-                        .toList(),
-                    onChanged: (v) =>
-                        setState(() => _pipelineTier = v ?? _pipelineTier),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      DropdownButtonFormField<String>(
+                        initialValue: _pipelineTier,
+                        decoration:
+                            const InputDecoration(labelText: 'Pipeline tier'),
+                        items: const ['Standard', 'Premium', 'Custom']
+                            .map((v) => DropdownMenuItem(
+                                  value: v,
+                                  enabled: _pipelineTierAvailable(v) ||
+                                      v == _pipelineTier,
+                                  child: Text(
+                                      v == 'Custom' ? 'Custom workflow' : v),
+                                ))
+                            .toList(),
+                        onChanged: (v) {
+                          if (v == null || v == _pipelineTier) return;
+                          if (v == 'Custom') {
+                            _chooseCustomPipeline();
+                          } else {
+                            setState(() {
+                              _pipelineTier = v;
+                              _selectedPipelineId = null;
+                            });
+                          }
+                        },
+                      ),
+                      if (_pipelineTier == 'Custom') ...[
+                        const SizedBox(height: 12),
+                        Builder(builder: (context) {
+                          final pipelines =
+                              ref.watch(pipelinesProvider).value ??
+                                  const <HiringPipeline>[];
+                          final selected = pipelines
+                              .where((p) => p.id == _selectedPipelineId)
+                              .firstOrNull;
+                          return OutlinedButton.icon(
+                            onPressed: _chooseCustomPipeline,
+                            icon: const Icon(Icons.account_tree_outlined),
+                            label: Text(selected?.name ?? 'Choose a workflow'),
+                          );
+                        }),
+                      ],
+                    ],
                   ),
                 ),
                 const SizedBox(height: 16),

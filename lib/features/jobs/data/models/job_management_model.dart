@@ -70,6 +70,7 @@ class JobDraft {
     this.aiRanking = false,
     this.aiSummary = false,
     this.pipelineTier = 'Standard',
+    this.pipelineId,
     this.rankingPlanTier = 'Premium',
     this.rankingLimit = 20,
     this.assessmentEmailCount = 15,
@@ -100,7 +101,7 @@ class JobDraft {
 
   // Experience & Requirements
   final List<String> requiredSkills;
-  final int? minYearsOfExperience;
+  final String? minYearsOfExperience;
   final String?
       educationLevel; // high_school | associate | bachelors | masters | doctorate
   final String? fieldOfStudy;
@@ -109,6 +110,7 @@ class JobDraft {
   final bool aiRanking;
   final bool aiSummary;
   final String pipelineTier;
+  final String? pipelineId;
   final String rankingPlanTier;
   final int rankingLimit;
   final int assessmentEmailCount;
@@ -151,7 +153,7 @@ class JobDraft {
     double? maximumSalary,
     String? currency,
     List<String>? requiredSkills,
-    int? minYearsOfExperience,
+    String? minYearsOfExperience,
     String? educationLevel,
     String? fieldOfStudy,
     bool? requiresManagementExperience,
@@ -165,6 +167,7 @@ class JobDraft {
     bool? autoRejectNonMatches,
     int? autoRejectBelowScore,
     String? pipelineTier,
+    String? pipelineId,
     String? rankingPlanTier,
     int? rankingLimit,
     int? assessmentEmailCount,
@@ -196,6 +199,7 @@ class JobDraft {
         autoRejectNonMatches: autoRejectNonMatches ?? this.autoRejectNonMatches,
         autoRejectBelowScore: autoRejectBelowScore ?? this.autoRejectBelowScore,
         pipelineTier: pipelineTier ?? this.pipelineTier,
+        pipelineId: pipelineId ?? this.pipelineId,
         rankingPlanTier: rankingPlanTier ?? this.rankingPlanTier,
         rankingLimit: rankingLimit ?? this.rankingLimit,
         assessmentEmailCount: assessmentEmailCount ?? this.assessmentEmailCount,
@@ -224,6 +228,7 @@ class JobDraft {
         'benefits': benefits,
         'autoRejectNonMatches': autoRejectNonMatches,
         'autoRejectBelowScore': autoRejectBelowScore,
+        if (pipelineId != null) 'pipelineId': pipelineId,
         if (rankingLimit > 0 ||
             assessmentEmailCount > 0 ||
             interviewEmailCount > 0)
@@ -678,6 +683,7 @@ class JobDetail {
     this.aiRanking = false,
     this.aiSummary = false,
     this.pipelineTier = 'Standard',
+    this.pipelineId,
     this.rankingPlanTier = 'Premium',
     this.rankingLimit = 20,
     this.assessmentEmailCount = 15,
@@ -692,7 +698,7 @@ class JobDetail {
   final String? employmentType;
   final JobBackendStatus status;
   final List<String> requiredSkills;
-  final int? minYearsOfExperience;
+  final String? minYearsOfExperience;
   final String? educationLevel;
   final String? fieldOfStudy;
   final double? minSalary;
@@ -710,6 +716,7 @@ class JobDetail {
   final bool aiRanking;
   final bool aiSummary;
   final String pipelineTier;
+  final String? pipelineId;
   final String rankingPlanTier;
   final int rankingLimit;
   final int assessmentEmailCount;
@@ -781,7 +788,7 @@ class JobDetail {
               ?.map((e) => e.toString())
               .toList() ??
           const [],
-      minYearsOfExperience: (json['minYearsOfExperience'] as num?)?.toInt(),
+      minYearsOfExperience: json['minYearsOfExperience']?.toString(),
       educationLevel: json['educationLevel'] as String?,
       fieldOfStudy: json['fieldOfStudy'] as String?,
       minSalary: (json['minSalary'] as num?)?.toDouble(),
@@ -808,6 +815,7 @@ class JobDetail {
       aiRanking: (json['aiConfig'] as Map?)?['ranking'] as bool? ?? false,
       aiSummary: (json['aiConfig'] as Map?)?['summary'] as bool? ?? false,
       pipelineTier: json['pipelineTier'] as String? ?? 'Standard',
+      pipelineId: json['pipelineId']?.toString(),
       rankingPlanTier: json['rankingPlanTier'] as String? ?? 'Premium',
       rankingLimit: (automation?['rankingLimit'] as num?)?.toInt() ?? 20,
       assessmentEmailCount:

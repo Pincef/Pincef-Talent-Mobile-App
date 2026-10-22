@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 // Prefixed: LiveKit also exports a `ConnectionState` that clashes with Flutter's.
 import 'package:livekit_client/livekit_client.dart' as lk;
 
@@ -22,7 +23,7 @@ Future<void> openInterviewRoom(BuildContext context, Interview interview) =>
       builder: (_) => InterviewRoomScreen(interview: interview),
     ));
 
-enum _Phase { connecting, live, failed }
+enum _Phase { connecting, waiting, live, failed }
 
 class InterviewRoomScreen extends ConsumerStatefulWidget {
   const InterviewRoomScreen({super.key, required this.interview});
@@ -41,6 +42,12 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
   String? _mediaWarning;
   DateTime? _connectedAt;
   Timer? _ticker;
+  Timer? _waitingPoll;
+  Timer? _hostPoll;
+  InterviewWaitingCandidate? _waitingCandidate;
+  bool _waitingPollBusy = false;
+  bool _hostPollBusy = false;
+  bool _admitting = false;
   bool _leaving = false;
 
   // Screen sharing on phones needs extra native setup (Android foreground
@@ -59,6 +66,8 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
   @override
   void dispose() {
     _leaving = true;
+    _waitingPoll?.cancel();
+    _hostPoll?.cancel();
     unawaited(_cleanup());
     super.dispose();
   }
@@ -81,7 +90,37 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
           .joinToken(widget.interview.id);
       if (!mounted) return;
 
-      final room = lk.Room();
+      if (info.waiting) {
+        setState(() {
+          _info = info;
+          _phase = _Phase.waiting;
+        });
+        _waitingPoll?.cancel();
+        _waitingPoll = Timer.periodic(const Duration(seconds: 3), (_) {
+          unawaited(_checkWaitingAdmission());
+        });
+        return;
+      }
+
+      await _connectWithInfo(info);
+    } catch (e) {
+      await _cleanup();
+      if (!mounted) return;
+      setState(() {
+        _phase = _Phase.failed;
+        _error = e is InterviewException
+            ? e.message
+            : 'Couldn\'t connect to the call. Check your connection and try again.';
+      });
+    }
+  }
+
+  Future<void> _connectWithInfo(JoinInfo info) async {
+    if (info.token == null || info.url == null) return;
+    try {
+      final room = lk.Room(
+        roomOptions: const lk.RoomOptions(adaptiveStream: true, dynacast: true),
+      );
       _room = room; // assigned early so _cleanup can always release it
       room.addListener(_onRoomChanged);
       _events = room.createListener()
@@ -93,11 +132,7 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
           });
         });
 
-      await room.connect(
-        info.url,
-        info.token,
-        roomOptions: const lk.RoomOptions(adaptiveStream: true, dynacast: true),
-      );
+      await room.connect(info.url!, info.token!);
       if (!mounted) return; // dispose() already released the room
 
       await _enableMedia(room);
@@ -108,10 +143,18 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
         _phase = _Phase.live;
         _connectedAt = DateTime.now();
       });
+      _waitingPoll?.cancel();
       _ticker?.cancel();
       _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
         if (mounted) setState(() {});
       });
+      if (info.isHost) {
+        _hostPoll?.cancel();
+        _hostPoll = Timer.periodic(const Duration(seconds: 3), (_) {
+          unawaited(_refreshWaitingCandidate());
+        });
+        unawaited(_refreshWaitingCandidate());
+      }
     } catch (e) {
       await _cleanup();
       if (!mounted) return;
@@ -121,6 +164,48 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
             ? e.message
             : 'Couldn\'t connect to the call. Check your connection and try again.';
       });
+    }
+  }
+
+  Future<void> _checkWaitingAdmission() async {
+    if (_waitingPollBusy || !mounted || _phase != _Phase.waiting) return;
+    _waitingPollBusy = true;
+    try {
+      final info = await ref
+          .read(interviewRepositoryProvider)
+          .joinToken(widget.interview.id);
+      if (!mounted || _phase != _Phase.waiting) return;
+      if (!info.waiting) {
+        _waitingPoll?.cancel();
+        setState(() => _phase = _Phase.connecting);
+        await _connectWithInfo(info);
+      }
+    } catch (e) {
+      if (e is InterviewException && e.statusCode == 409 && mounted) {
+        _waitingPoll?.cancel();
+        setState(() {
+          _phase = _Phase.failed;
+          _error = e.message;
+        });
+      }
+      // Keep the lobby visible during a brief network interruption.
+    } finally {
+      _waitingPollBusy = false;
+    }
+  }
+
+  Future<void> _refreshWaitingCandidate() async {
+    if (_hostPollBusy || !mounted || _phase != _Phase.live) return;
+    _hostPollBusy = true;
+    try {
+      final candidate = await ref
+          .read(interviewRepositoryProvider)
+          .waitingCandidate(widget.interview.id);
+      if (mounted) setState(() => _waitingCandidate = candidate);
+    } catch (_) {
+      // The host controls remain available if the waiting-room check times out.
+    } finally {
+      _hostPollBusy = false;
     }
   }
 
@@ -145,6 +230,10 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
   Future<void> _cleanup() async {
     _ticker?.cancel();
     _ticker = null;
+    _waitingPoll?.cancel();
+    _waitingPoll = null;
+    _hostPoll?.cancel();
+    _hostPoll = null;
     final events = _events;
     final room = _room;
     _events = null;
@@ -208,14 +297,17 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
     final i = widget.interview;
     final canFinalize =
         (_info?.isInterviewer ?? false) && i.isActive && i.hasStarted;
+    final isWaiting = _phase == _Phase.waiting;
 
     final choice = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Leave the call?'),
-        content: Text(canFinalize
-            ? 'You can also mark this interview as completed now.'
-            : 'You can rejoin while the room is open.'),
+        title: Text(isWaiting ? 'Leave the waiting room?' : 'Leave the call?'),
+        content: Text(isWaiting
+            ? 'You will leave the lobby and need to request entry again.'
+            : canFinalize
+                ? 'You can also mark this interview as completed now.'
+                : 'You can rejoin while the room is open.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx), child: const Text('Stay')),
@@ -242,9 +334,224 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
         if (mounted) toast(context, errorMessage(e));
       }
     }
+    if (isWaiting) {
+      try {
+        await ref.read(interviewRepositoryProvider).cancelWaitingRequest(i.id);
+      } catch (_) {}
+    }
     _leaving = true;
     await _cleanup();
     if (mounted) Navigator.of(context).pop();
+  }
+
+  Future<void> _admitWaitingCandidate() async {
+    if (_waitingCandidate == null || _admitting) return;
+    setState(() => _admitting = true);
+    try {
+      await ref
+          .read(interviewRepositoryProvider)
+          .admitWaitingCandidate(widget.interview.id);
+      if (!mounted) return;
+      setState(() => _waitingCandidate = null);
+      toast(context, 'Candidate admitted to the interview.');
+    } catch (e) {
+      if (mounted) toast(context, errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _admitting = false);
+    }
+  }
+
+  Future<void> _showWaitingRoom() async {
+    await _refreshWaitingCandidate();
+    if (!mounted) return;
+    final candidate = _waitingCandidate;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: _panel,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 8, 18, 20),
+          child: candidate == null
+              ? const SizedBox(
+                  height: 150,
+                  child: Center(
+                    child: Text('No one is waiting to join.',
+                        style: TextStyle(color: Colors.white70)),
+                  ),
+                )
+              : Column(mainAxisSize: MainAxisSize.min, children: [
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Waiting to join',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                  const SizedBox(height: 12),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: IvAvatar(name: candidate.name, radius: 22),
+                    title: Text(candidate.name,
+                        style: const TextStyle(color: Colors.white)),
+                    subtitle: Text(candidate.email,
+                        style: const TextStyle(color: Colors.white60)),
+                    trailing: const Icon(Icons.hourglass_top,
+                        color: Color(0xFFFFC58E)),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _admitting
+                          ? null
+                          : () async {
+                              await _admitWaitingCandidate();
+                              if (sheetContext.mounted &&
+                                  _waitingCandidate == null) {
+                                Navigator.of(sheetContext).pop();
+                              }
+                            },
+                      style: FilledButton.styleFrom(
+                          backgroundColor: ivOrange,
+                          foregroundColor: Colors.white),
+                      icon: _admitting
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.login),
+                      label: const Text('Admit to interview'),
+                    ),
+                  ),
+                ]),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showInvitePanel() async {
+    try {
+      final interviewers = await ref
+          .read(interviewRepositoryProvider)
+          .companyInterviewers(widget.interview.id);
+      if (!mounted) return;
+      if (interviewers.isEmpty) {
+        toast(context, 'There are no other company recruiters to invite.');
+        return;
+      }
+      final selectedIds = <String>{};
+      var saving = false;
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: _panel,
+        showDragHandle: true,
+        builder: (sheetContext) => StatefulBuilder(
+          builder: (context, setModalState) => SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 8, 18, 20),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Invite company recruiters',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700)),
+                ),
+                const SizedBox(height: 8),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                      'They will receive an in-app interview invitation.',
+                      style: TextStyle(color: Colors.white60, fontSize: 12)),
+                ),
+                const SizedBox(height: 10),
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: interviewers.length,
+                    itemBuilder: (context, index) {
+                      final person = interviewers[index];
+                      return CheckboxListTile(
+                        value: selectedIds.contains(person.id),
+                        activeColor: ivOrange,
+                        onChanged: saving
+                            ? null
+                            : (checked) => setModalState(() {
+                                  if (checked == true) {
+                                    selectedIds.add(person.id);
+                                  } else {
+                                    selectedIds.remove(person.id);
+                                  }
+                                }),
+                        secondary: IvAvatar(name: person.name, radius: 18),
+                        title: Text(person.name,
+                            style: const TextStyle(color: Colors.white)),
+                        subtitle: Text(person.email,
+                            style: const TextStyle(color: Colors.white60)),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: selectedIds.isEmpty || saving
+                        ? null
+                        : () async {
+                            setModalState(() => saving = true);
+                            try {
+                              final invited = await ref
+                                  .read(interviewRepositoryProvider)
+                                  .inviteInterviewers(widget.interview.id,
+                                      selectedIds.toList());
+                              if (!mounted || !sheetContext.mounted) return;
+                              Navigator.of(sheetContext).pop();
+                              toast(context,
+                                  'Invited ${invited.length} company member${invited.length == 1 ? '' : 's'}.');
+                            } catch (e) {
+                              if (!mounted || !sheetContext.mounted) return;
+                              setModalState(() => saving = false);
+                              toast(context, errorMessage(e));
+                            }
+                          },
+                    style: FilledButton.styleFrom(
+                        backgroundColor: ivOrange,
+                        foregroundColor: Colors.white),
+                    icon: saving
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.person_add_alt_1_outlined),
+                    label: Text(
+                        saving ? 'Sending invitations…' : 'Invite selected'),
+                  ),
+                ),
+              ]),
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) toast(context, errorMessage(e));
+    }
+  }
+
+  Future<void> _switchInterview(Interview interview) async {
+    _leaving = true;
+    await _cleanup();
+    if (!mounted) return;
+    await Navigator.of(context).pushReplacement(MaterialPageRoute<void>(
+      fullscreenDialog: true,
+      builder: (_) => InterviewRoomScreen(interview: interview),
+    ));
   }
 
   void _showParticipants() {
@@ -321,12 +628,12 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final wide = MediaQuery.sizeOf(context).width >= 900;
+    final wide = MediaQuery.sizeOf(context).width >= 1180;
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        if (_phase == _Phase.live) {
+        if (_phase == _Phase.live || _phase == _Phase.waiting) {
           _leave();
         } else {
           _leaving = true;
@@ -362,12 +669,88 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
                       child: const Text('Close'),
                     ),
                   ]),
+            _Phase.waiting => _waiting(),
             _Phase.live => _live(wide),
           },
         ),
       ),
     );
   }
+
+  Widget _waiting() => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Container(
+              padding: const EdgeInsets.all(28),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(22),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF171E4A), Color(0xFF273B68)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                border: Border.all(color: Colors.white.withValues(alpha: .1)),
+              ),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Container(
+                  width: 76,
+                  height: 76,
+                  decoration: BoxDecoration(
+                    color: ivOrange.withValues(alpha: .16),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.hourglass_top_rounded,
+                      color: Color(0xFFFFC58E), size: 36),
+                ),
+                const SizedBox(height: 18),
+                const Text('You’re in the waiting room',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800)),
+                const SizedBox(height: 8),
+                Text(
+                  'The recruiter has been notified. You’ll join the call as soon as they let you in.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      color: Colors.white.withValues(alpha: .75), height: 1.45),
+                ),
+                const SizedBox(height: 18),
+                const Row(mainAxisSize: MainAxisSize.min, children: [
+                  SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Color(0xFFFFC58E))),
+                  SizedBox(width: 10),
+                  Text('Waiting for the host…',
+                      style: TextStyle(
+                          color: Color(0xFFFFC58E),
+                          fontWeight: FontWeight.w700)),
+                ]),
+                const SizedBox(height: 20),
+                Text(
+                    '${widget.interview.roundName} · ${widget.interview.jobTitle}',
+                    textAlign: TextAlign.center,
+                    style:
+                        const TextStyle(color: Colors.white60, fontSize: 12)),
+                const SizedBox(height: 18),
+                OutlinedButton.icon(
+                  onPressed: _leave,
+                  style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: const BorderSide(color: Colors.white38)),
+                  icon: const Icon(Icons.close),
+                  label: const Text('Leave waiting room'),
+                ),
+              ]),
+            ),
+          ),
+        ),
+      );
 
   Widget _status(
       {IconData? icon,
@@ -442,7 +825,13 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
       Expanded(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
-          child: _stage(local, remotes, wide),
+          child: wide
+              ? Row(children: [
+                  Expanded(child: _stage(local, remotes, true)),
+                  const SizedBox(width: 12),
+                  SizedBox(width: 270, child: _scheduledRail()),
+                ])
+              : _stage(local, remotes, false),
         ),
       ),
       // Controls
@@ -481,6 +870,19 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
               label: 'People (${remotes.length + 1})',
               onTap: _showParticipants,
             ),
+            if (_info?.isHost == true) ...[
+              _CtrlButton(
+                icon: Icons.hourglass_top_rounded,
+                label: _waitingCandidate == null ? 'Waiting room' : 'Admit (1)',
+                active: _waitingCandidate != null,
+                onTap: _showWaitingRoom,
+              ),
+              _CtrlButton(
+                icon: Icons.person_add_alt_1_outlined,
+                label: 'Invite team',
+                onTap: _showInvitePanel,
+              ),
+            ],
             _CtrlButton(
               icon: Icons.call_end,
               label: 'Leave',
@@ -491,6 +893,97 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
         ),
       ),
     ]);
+  }
+
+  Widget _scheduledRail() {
+    final now = DateTime.now();
+    final monday = DateTime(now.year, now.month, now.day - (now.weekday - 1));
+    final range = (from: monday, to: monday.add(const Duration(days: 7)));
+    return Container(
+      decoration:
+          BoxDecoration(color: _panel, borderRadius: BorderRadius.circular(14)),
+      padding: const EdgeInsets.all(12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Upcoming interviews',
+            style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 14)),
+        const SizedBox(height: 10),
+        Expanded(
+            child: ref.watch(interviewsProvider(range)).when(
+                  loading: () => const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2)),
+                  error: (_, __) => const Text('Could not load your schedule.',
+                      style: TextStyle(color: Colors.white70, fontSize: 12)),
+                  data: (items) {
+                    final upcoming = items
+                        .where((item) =>
+                            item.id != widget.interview.id &&
+                            item.isActive &&
+                            item.endsAt.isAfter(now))
+                        .toList()
+                      ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+                    if (upcoming.isEmpty) {
+                      return const Center(
+                          child: Text('No other scheduled meetings this week.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                  color: Colors.white60, fontSize: 12)));
+                    }
+                    return ListView.separated(
+                      itemCount: upcoming.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final item = upcoming[index];
+                        return Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                              color: const Color(0xFF202957),
+                              borderRadius: BorderRadius.circular(10)),
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(item.candidate.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 12)),
+                                const SizedBox(height: 3),
+                                Text('${item.jobTitle} · ${item.roundName}',
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        color: Colors.white60, fontSize: 10)),
+                                const SizedBox(height: 6),
+                                Row(children: [
+                                  Expanded(
+                                      child: Text(
+                                          DateFormat('EEE · h:mm a')
+                                              .format(item.startsAt),
+                                          style: const TextStyle(
+                                              color: Colors.white70,
+                                              fontSize: 10))),
+                                  if (item.canJoinNow)
+                                    TextButton(
+                                        onPressed: () => _switchInterview(item),
+                                        style: TextButton.styleFrom(
+                                            foregroundColor: ivOrange,
+                                            padding: EdgeInsets.zero,
+                                            minimumSize: const Size(44, 28)),
+                                        child: const Text('Join',
+                                            style: TextStyle(fontSize: 11))),
+                                ]),
+                              ]),
+                        );
+                      },
+                    );
+                  },
+                )),
+      ]),
+    );
   }
 
   Widget _banner(String text, Color color) => Container(

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:file_saver/file_saver.dart';
+import 'package:pdf/widgets.dart' as pw;
 
 import '../../application/recruitment_report_provider.dart';
 import '../../data/model/recruitment_report_model.dart';
@@ -166,7 +168,7 @@ class _ReportContent extends StatefulWidget {
 }
 
 class _ReportContentState extends State<_ReportContent> {
-  String _period = 'Q';
+  bool _exporting = false;
 
   @override
   Widget build(BuildContext context) {
@@ -188,7 +190,9 @@ class _ReportContentState extends State<_ReportContent> {
           const SizedBox(height: 21),
           _FunnelCard(stages: data.stages),
           const SizedBox(height: 17),
-          _DiagnosticCard(reasons: data.dropOffReasons),
+          if (data.dropOffReasons.isNotEmpty) ...[
+            _DiagnosticCard(reasons: data.dropOffReasons),
+          ],
           const SizedBox(height: 24),
         ],
       ),
@@ -215,7 +219,7 @@ class _ReportContentState extends State<_ReportContent> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Senior Product Manager\nAnalytics and Report',
+                'Recruiter Report',
                 style: TextStyle(
                   fontSize: 32,
                   height: 1.25,
@@ -225,7 +229,7 @@ class _ReportContentState extends State<_ReportContent> {
               ),
               SizedBox(height: 8),
               Text(
-                'Measuring recruitment efficiency across 12 global regions.',
+                'Recruitment activity and candidate pipeline from your workspace.',
                 style: TextStyle(color: _muted, fontSize: 15),
               ),
             ],
@@ -236,25 +240,10 @@ class _ReportContentState extends State<_ReportContent> {
           runSpacing: 10,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            _buildPeriodSwitcher(),
-            OutlinedButton.icon(
-              onPressed: () {},
-              icon: const Icon(Icons.calendar_today_outlined, size: 16),
-              label: const Text('Oct 1 - Dec 31'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: _ink,
-                backgroundColor: Colors.white,
-                minimumSize: const Size(0, 39),
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                side: const BorderSide(color: _controlBorder),
-                shape: buttonShape,
-                textStyle: buttonText,
-              ),
-            ),
             FilledButton.icon(
-              onPressed: () {},
+              onPressed: _exporting ? null : _exportPdf,
               icon: const Icon(Icons.download, size: 17),
-              label: const Text('Export PDF'),
+              label: Text(_exporting ? 'Preparing…' : 'Export PDF'),
               style: FilledButton.styleFrom(
                 backgroundColor: _navy,
                 foregroundColor: Colors.white,
@@ -270,42 +259,78 @@ class _ReportContentState extends State<_ReportContent> {
     );
   }
 
-  Widget _buildPeriodSwitcher() {
-    const periods = ['W', 'M', 'Q', 'Y'];
-
-    return Container(
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF3F5FA),
-        border: Border.all(color: _controlBorder),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: periods.map((p) {
-          final selected = _period == p;
-          return InkWell(
-            borderRadius: BorderRadius.circular(4),
-            onTap: () => setState(() => _period = p),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-              decoration: BoxDecoration(
-                color: selected ? Colors.white : Colors.transparent,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                p,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: selected ? _navy : _muted,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
+  Future<void> _exportPdf() async {
+    setState(() => _exporting = true);
+    try {
+      final report = widget.data;
+      final document = pw.Document();
+      document.addPage(pw.MultiPage(
+        build: (_) => [
+          pw.Text('Recruiter Report',
+              style:
+                  pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 8),
+          pw.Text('Generated ${DateTime.now().toLocal()}'),
+          pw.SizedBox(height: 20),
+          pw.Table.fromTextArray(
+            headers: const ['Metric', 'Value'],
+            data: [
+              ['Applicants', _withCommas(report.totalApplicants)],
+              ['Hires', _withCommas(report.totalHires)],
+              [
+                'Average days to fill',
+                report.avgDaysToFill == 0
+                    ? 'Not available'
+                    : '${report.avgDaysToFill} days'
+              ],
+              [
+                'Pipeline health',
+                report.pipelineHealth == 0
+                    ? 'Not available'
+                    : '${report.pipelineHealth}%'
+              ],
+            ],
+          ),
+          pw.SizedBox(height: 20),
+          pw.Text('Application pipeline',
+              style:
+                  pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 8),
+          pw.Table.fromTextArray(
+            headers: const ['Stage', 'Applications'],
+            data: report.stages
+                .map((stage) => [stage.name, _withCommas(stage.volume)])
+                .toList(),
+          ),
+          if (report.sources.isNotEmpty) ...[
+            pw.SizedBox(height: 20),
+            pw.Text('Candidate sources',
+                style:
+                    pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+            pw.Table.fromTextArray(
+                headers: const ['Source', 'Share'],
+                data: report.sources
+                    .map((source) => [source.name, '${source.percent}%'])
+                    .toList()),
+          ],
+        ],
+      ));
+      await FileSaver.instance.saveFile(
+        name:
+            'recruiter-report-${DateTime.now().toIso8601String().substring(0, 10)}.pdf',
+        bytes: await document.save(),
+        mimeType: MimeType.pdf,
+      );
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Recruiter report downloaded.')));
+    } catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not export the report: $error')));
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
   }
 
   // ── Metric cards ──────────────────────────────────────────────────────────
@@ -326,30 +351,29 @@ class _ReportContentState extends State<_ReportContent> {
             mainAxisExtent: 178,
           ),
           children: [
-            const _MetricCard(
+            _MetricCard(
               title: 'TOTAL APPLICANTS',
-              value: '42.8k',
+              value: _withCommas(data.totalApplicants),
               icon: Icons.face_outlined,
               dark: true,
             ),
             _MetricCard(
               title: 'AVG. TIME TO FILL',
-              value: '${data.avgDaysToFill} Days',
+              value: data.avgDaysToFill == 0
+                  ? 'Unavailable'
+                  : '${data.avgDaysToFill} Days',
               icon: Icons.schedule,
               iconColor: const Color(0xFF5B6B9A),
               iconBg: const Color(0xFFEEF0FB),
-              badge: '↘ -2d',
-              badgeColor: _orange,
             ),
             _MetricCard(
               title: 'PIPELINE HEALTH',
-              value: '${data.pipelineHealth}%',
+              value: data.pipelineHealth == 0
+                  ? 'Unavailable'
+                  : '${data.pipelineHealth}%',
               icon: Icons.health_and_safety_outlined,
               iconColor: _green,
               iconBg: const Color(0xFFE3F8EC),
-              badge: 'OPTIMAL',
-              badgeColor: _green,
-              badgePill: true,
             ),
             _MetricCard(
               title: 'TOTAL HIRES',
@@ -357,8 +381,6 @@ class _ReportContentState extends State<_ReportContent> {
               icon: Icons.person_add_alt,
               iconColor: _orange,
               iconBg: const Color(0xFFFFF1E8),
-              badge: '↗ +12%',
-              badgeColor: _green,
             ),
           ],
         );
@@ -673,28 +695,34 @@ class _SourceCard extends StatelessWidget {
         children: [
           const Text('Source Effectiveness', style: _panelTitleStyle),
           const SizedBox(height: 22),
-          ...items.map(_buildSourceRow),
+          if (items.isEmpty)
+            const Text(
+                'Source attribution is not available from the current analytics data.',
+                style: _panelSubtitleStyle)
+          else
+            ...items.map(_buildSourceRow),
           const SizedBox(height: 4),
-          Center(
-            child: InkWell(
-              onTap: () {},
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'View Detailed Breakdown',
-                    style: TextStyle(
-                      color: _orange,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
+          if (items.isNotEmpty)
+            Center(
+              child: InkWell(
+                onTap: () {},
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'View Detailed Breakdown',
+                      style: TextStyle(
+                        color: _orange,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                  SizedBox(width: 6),
-                  Icon(Icons.arrow_forward, size: 16, color: _orange),
-                ],
+                    SizedBox(width: 6),
+                    Icon(Icons.arrow_forward, size: 16, color: _orange),
+                  ],
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -874,7 +902,7 @@ class _FunnelCard extends StatelessWidget {
           _cell(
             1,
             Text(
-              '${s.days} Days',
+              s.days == 0 ? 'Unavailable' : '${s.days} Days',
               style: const TextStyle(color: _ink, fontSize: 14),
             ),
           ),
@@ -893,7 +921,7 @@ class _FunnelCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '${s.passThrough}%',
+                  s.passThrough == 0 ? 'Unavailable' : '${s.passThrough}%',
                   style: const TextStyle(
                     color: _ink,
                     fontSize: 14,
@@ -921,7 +949,9 @@ class _FunnelCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
-                s.congested ? 'CONGESTED' : 'OPTIMAL',
+                s.days == 0
+                    ? 'NO DATA'
+                    : (s.congested ? 'CONGESTED' : 'OPTIMAL'),
                 style: TextStyle(
                   fontSize: 10,
                   color: statusColor,

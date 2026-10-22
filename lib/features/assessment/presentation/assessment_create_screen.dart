@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/entitlements/module_codes.dart';
 import '../../../core/theme/brand_color.dart';
-import '../../auth/application/auth_provider.dart';
 import '../../hiring_pipeline/application/hiring_pipeline_provider.dart';
 import '../../hiring_pipeline/data/models/hiring_pipeline_model.dart';
 import '../../jobs/application/application_provider.dart';
@@ -12,8 +10,15 @@ import '../../jobs/data/models/application_model.dart';
 import '../application/assessment_provider.dart';
 
 class AssessmentCreateScreen extends ConsumerStatefulWidget {
-  const AssessmentCreateScreen({super.key, this.testId});
+  const AssessmentCreateScreen({
+    super.key,
+    this.testId,
+    this.initialJobId,
+    this.initialPipelineId,
+  });
   final String? testId;
+  final String? initialJobId;
+  final String? initialPipelineId;
   @override
   ConsumerState<AssessmentCreateScreen> createState() =>
       _AssessmentCreateScreenState();
@@ -49,6 +54,8 @@ class _AssessmentCreateScreenState
   void initState() {
     super.initState();
     _testId = widget.testId;
+    _jobId = widget.initialJobId;
+    _pipelineId = widget.initialPipelineId;
     _availableFrom = DateTime.now().add(const Duration(minutes: 5));
     _availableUntil = DateTime.now().add(const Duration(days: 3));
     _reminderBefore = DateTime.now().add(const Duration(days: 2));
@@ -122,7 +129,8 @@ class _AssessmentCreateScreenState
               .toList()
           : <Map<String, dynamic>>[],
       'autoInviteShortlisted': _mode == 'full_ai' && _autoInviteShortlisted,
-      'autoGenerateAfterDeadline': _mode == 'full_ai' && _autoGenerateAfterDeadline,
+      'autoGenerateAfterDeadline':
+          _mode == 'full_ai' && _autoGenerateAfterDeadline,
     };
     if (_stageName != null && _stageName!.trim().isNotEmpty) {
       payload['pipelineStageName'] = _stageName!.trim();
@@ -154,7 +162,8 @@ class _AssessmentCreateScreenState
         'skillCategory': question['skillCategory']?.toString() ?? 'General',
         'points': (question['points'] as num?)?.toInt() ?? 10,
         if (question['type'] != 'multiple_choice') ...{
-          'referenceAnswer': question['referenceAnswer']?.toString().trim() ?? '',
+          'referenceAnswer':
+              question['referenceAnswer']?.toString().trim() ?? '',
           'gradingRubric': question['gradingRubric']?.toString().trim() ?? '',
         },
         if (question['type'] == 'multiple_choice') ...{
@@ -266,12 +275,14 @@ class _AssessmentCreateScreenState
 
   Future<void> _publish() async {
     if (!_validateBasics()) return;
-    if (_kind == 'internal' && _mode == 'ai_assisted' &&
+    if (_kind == 'internal' &&
+        _mode == 'ai_assisted' &&
         (_testId == null || _questions.isEmpty)) {
       await _generate();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('AI questions generated. Review and accept them before publishing.'),
+          content: Text(
+              'AI questions generated. Review and accept them before publishing.'),
         ));
       }
       return;
@@ -307,7 +318,8 @@ class _AssessmentCreateScreenState
         ref.invalidate(recruiterAssessmentsProvider);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Automatic assessment scheduled for the job application deadline.'),
+            content: Text(
+                'Automatic assessment scheduled for the job application deadline.'),
           ));
           context.go('/competency-assessments/$_testId');
         }
@@ -345,15 +357,6 @@ class _AssessmentCreateScreenState
 
   @override
   Widget build(BuildContext context) {
-    if (ref
-            .watch(authProvider)
-            .user
-            ?.hasModule(ModuleCodes.hiringStageAssessment) !=
-        true) {
-      return const Center(
-          child: Text(
-              'Competency assessments require a Professional or Business plan.'));
-    }
     final jobsState = ref.watch(jobManagementProvider);
     final jobs = jobsState.summary?.postings ?? const [];
     _jobId ??= jobs.isNotEmpty ? jobs.first.id : null;
@@ -688,16 +691,19 @@ class _AssessmentCreateScreenState
                           contentPadding: EdgeInsets.zero,
                           title: const Text(
                               'Generate assessment after job application deadline'),
-                          subtitle: const Text('At the job deadline, questions are created from its requirements and shortlisted candidates are invited. The assessment stays open for 7 days.'),
+                          subtitle: const Text(
+                              'At the job deadline, questions are created from its requirements and shortlisted candidates are invited. The assessment stays open for 7 days.'),
                           value: _autoGenerateAfterDeadline,
-                          onChanged: (value) => setState(() => _autoGenerateAfterDeadline = value)),
+                          onChanged: (value) => setState(
+                              () => _autoGenerateAfterDeadline = value)),
                       if (!_autoGenerateAfterDeadline)
                         SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('Automatically invite shortlisted candidates on publish'),
-                          value: _autoInviteShortlisted,
-                          onChanged: (value) =>
-                              setState(() => _autoInviteShortlisted = value)),
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text(
+                                'Automatically invite shortlisted candidates on publish'),
+                            value: _autoInviteShortlisted,
+                            onChanged: (value) =>
+                                setState(() => _autoInviteShortlisted = value)),
                     ],
                     const Divider(height: 24),
                     SwitchListTile(
@@ -771,7 +777,7 @@ class _AssessmentCreateScreenState
           final action = FilledButton.icon(
             onPressed: _busy
                 ? null
-                      : () {
+                : () {
                     if (_mode == 'manual') {
                       setState(() => _mode = 'ai_assisted');
                     }
@@ -865,13 +871,16 @@ class _AssessmentCreateScreenState
                       label: Text(_questions.isEmpty
                           ? 'Generate questions'
                           : 'Generate more')),
-                if (_mode == 'ai_assisted' && _questions.any((q) => q['accepted'] == false))
+                if (_mode == 'ai_assisted' &&
+                    _questions.any((q) => q['accepted'] == false))
                   TextButton.icon(
-                    onPressed: _busy ? null : () => setState(() {
-                      for (final question in _questions) {
-                        question['accepted'] = true;
-                      }
-                    }),
+                    onPressed: _busy
+                        ? null
+                        : () => setState(() {
+                              for (final question in _questions) {
+                                question['accepted'] = true;
+                              }
+                            }),
                     icon: const Icon(Icons.done_all),
                     label: const Text('Accept all'),
                   ),
@@ -1260,10 +1269,12 @@ class _QuestionEditorState extends State<_QuestionEditor> {
                 maxLines: 3,
                 decoration: const InputDecoration(
                   labelText: 'Reference answer (recruiter only)',
-                  helperText: 'Used to guide AI scoring; candidates will not see it.',
+                  helperText:
+                      'Used to guide AI scoring; candidates will not see it.',
                   alignLabelWithHint: true,
                 ),
-                onChanged: (value) => widget.onChanged('referenceAnswer', value),
+                onChanged: (value) =>
+                    widget.onChanged('referenceAnswer', value),
               ),
               const SizedBox(height: 10),
               TextFormField(

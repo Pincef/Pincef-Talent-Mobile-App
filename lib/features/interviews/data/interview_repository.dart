@@ -173,6 +173,45 @@ class InterviewRepository {
         return JoinInfo.fromJson(Map<String, dynamic>.from(_data(r) as Map));
       });
 
+  Future<InterviewWaitingCandidate?> waitingCandidate(String interviewId) =>
+      _guard(() async {
+        final r = await _dio.get('$_base/$interviewId/waiting-candidate');
+        final data = _data(r);
+        return data == null
+            ? null
+            : InterviewWaitingCandidate.fromJson(
+                Map<String, dynamic>.from(data as Map));
+      });
+
+  Future<void> admitWaitingCandidate(String interviewId) => _guard(() async {
+        await _dio.post('$_base/$interviewId/admit');
+      });
+
+  Future<void> cancelWaitingRequest(String interviewId) => _guard(() async {
+        await _dio.delete('$_base/$interviewId/waiting');
+      });
+
+  Future<List<InterviewPerson>> companyInterviewers(String interviewId) =>
+      _guard(() async {
+        final r = await _dio.get('$_base/$interviewId/company-interviewers');
+        return (_data(r) as List)
+            .map((item) => InterviewPerson.fromJson(
+                Map<String, dynamic>.from(item as Map)))
+            .toList();
+      });
+
+  Future<List<InterviewPerson>> inviteInterviewers(
+          String interviewId, List<String> userIds) =>
+      _guard(() async {
+        final r = await _dio.post('$_base/$interviewId/interviewers',
+            data: {'userIds': userIds});
+        final data = Map<String, dynamic>.from(_data(r) as Map);
+        return (data['invited'] as List)
+            .map((item) => InterviewPerson.fromJson(
+                Map<String, dynamic>.from(item as Map)))
+            .toList();
+      });
+
   Future<List<Interview>> myInterviews() =>
       _guard(() async => _many(await _dio.get('$_base/me')));
 

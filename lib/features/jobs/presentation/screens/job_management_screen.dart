@@ -18,6 +18,7 @@ class _JobManagementScreenState extends ConsumerState<JobManagementScreen> {
   // Wire these to actually refetch once the real endpoint supports
   // filtering/pagination server-side.
   JobPostingTab _tab = JobPostingTab.active;
+  int _postingPage = 1;
   String? _lastRouteStatus;
 
   @override
@@ -34,6 +35,7 @@ class _JobManagementScreenState extends ConsumerState<JobManagementScreen> {
     };
     if (nextTab != _tab) {
       _tab = nextTab;
+      _postingPage = 1;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         ref
@@ -50,6 +52,8 @@ class _JobManagementScreenState extends ConsumerState<JobManagementScreen> {
     return _Body(
       state: state,
       tab: _tab,
+      currentPage: _postingPage,
+      onPageChanged: (page) => setState(() => _postingPage = page),
       onTabChanged: (tab) {
         final status = switch (tab) {
           JobPostingTab.active => 'active',
@@ -58,6 +62,7 @@ class _JobManagementScreenState extends ConsumerState<JobManagementScreen> {
         };
         setState(() {
           _tab = tab;
+          _postingPage = 1;
           _lastRouteStatus = status;
         });
         ref
@@ -81,12 +86,16 @@ class _Body extends StatelessWidget {
   const _Body(
       {required this.state,
       required this.tab,
+      required this.currentPage,
+      required this.onPageChanged,
       required this.onTabChanged,
       required this.onRetry,
       required this.onPostJob});
 
   final JobManagementState state;
   final JobPostingTab tab;
+  final int currentPage;
+  final ValueChanged<int> onPageChanged;
   final ValueChanged<JobPostingTab> onTabChanged;
   final VoidCallback onRetry;
   final VoidCallback onPostJob;
@@ -112,6 +121,12 @@ class _Body extends StatelessWidget {
 
     final summary = state.summary;
     if (summary == null) return const SizedBox.shrink();
+    const pageSize = 6;
+    final totalPages =
+        (summary.postings.length / pageSize).ceil().clamp(1, 1 << 30).toInt();
+    final page = currentPage.clamp(1, totalPages).toInt();
+    final start = (page - 1) * pageSize;
+    final postings = summary.postings.skip(start).take(pageSize);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -191,19 +206,17 @@ class _Body extends StatelessWidget {
                 mainAxisSpacing: 14,
                 childAspectRatio: 1.35,
                 children: [
-                  ...summary.postings.map((job) => JobPostingCard(job: job)),
+                  ...postings.map((job) => JobPostingCard(job: job)),
                   PostNewJobCard(onTap: onPostJob),
                 ],
               ),
               const SizedBox(height: 20),
               JobPostingsFooter(
-                shownCount: summary.postings.length,
-                totalCount: summary.totalActivePostingsCount,
-                currentPage: summary.currentPage,
-                totalPages: summary.totalPages,
-                onPageChanged: (page) {
-                  // TODO: wire once pagination actually refetches
-                },
+                shownCount: postings.length,
+                totalCount: summary.postings.length,
+                currentPage: page,
+                totalPages: totalPages,
+                onPageChanged: onPageChanged,
               ),
               const SizedBox(height: 24),
             ],
