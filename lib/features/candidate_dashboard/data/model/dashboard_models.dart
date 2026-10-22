@@ -37,7 +37,7 @@ class JobMatch {
   final String company;
   final String workMode; // e.g. "Remote", "Hybrid"
   final String salaryRange;
-  final int matchPercent;
+  final int? matchPercent;
   final List<String> tags;
 
   const JobMatch({
