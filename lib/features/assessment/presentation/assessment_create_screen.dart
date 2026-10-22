@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/entitlements/module_codes.dart';
 import '../../../core/theme/brand_color.dart';
-import '../../auth/application/auth_provider.dart';
 import '../../hiring_pipeline/application/hiring_pipeline_provider.dart';
 import '../../hiring_pipeline/data/models/hiring_pipeline_model.dart';
 import '../../jobs/application/application_provider.dart';
@@ -359,15 +357,6 @@ class _AssessmentCreateScreenState
 
   @override
   Widget build(BuildContext context) {
-    if (ref
-            .watch(authProvider)
-            .user
-            ?.hasModule(ModuleCodes.hiringStageAssessment) !=
-        true) {
-      return const Center(
-          child: Text(
-              'Competency assessments require a Professional or Business plan.'));
-    }
     final jobsState = ref.watch(jobManagementProvider);
     final jobs = jobsState.summary?.postings ?? const [];
     _jobId ??= jobs.isNotEmpty ? jobs.first.id : null;
