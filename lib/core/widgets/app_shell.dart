@@ -86,6 +86,10 @@ const List<NavItem> kRecruiterNavItems = [
   NavItem(label: 'Message', icon: Icons.chat_bubble_outline, children: [
     NavItem(
         label: 'Recruiters Message', icon: Icons.circle, route: '/messages'),
+    NavItem(
+        label: 'Email Templates',
+        icon: Icons.mark_email_read_outlined,
+        route: '/email-templates'),
   ]),
   NavItem(
       label: 'Interview and schedule',
