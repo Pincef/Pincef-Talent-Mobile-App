@@ -158,26 +158,18 @@ class _AppShellRouteState extends ConsumerState<AppShellRoute> {
       },
 
       // --- Everything below differs by role ---
-      // Candidate mockup shows the sidebar user card (name/role/email/
-      // location) with no topbar name; recruiter mockup is the opposite.
-      // The candidate values here are the same placeholder mock data
-      // candidate_dashboard_screen.dart used to hardcode — UserModel
-      // doesn't carry a job title/location field yet, so there's nothing
-      // real to source them from until that lands.
       showSidebarUserCard: isCandidate,
       topBarUserName: isRecruiter || isAdmin
           ? (user != null ? '${user.firstName} ${user.lastName}' : 'User')
           : null,
       topBarUserRole: isRecruiter || isAdmin ? _roleLabel(user?.role) : null,
-      userName:
-          isRecruiter || isAdmin ? (user?.firstName ?? 'User') : 'ALEX RIVERA',
+      userName: user?.firstName ?? 'User',
       userRole: isRecruiter || isAdmin
           ? _roleLabel(user?.role)
-          : 'Senior UI/UX Designer',
-      userEmail: isRecruiter || isAdmin
-          ? (user?.email ?? '')
-          : 'alex.rivera@design.io',
-      userLocation: isRecruiter || isAdmin ? '' : 'San Francisco, CA',
+          : (user?.role == UserRole.candidate ? 'Candidate' : 'User'),
+      userEmail: user?.email ?? '',
+      userLocation: user?.location ?? user?.country ?? '',
+      profileImageUrl: user?.profileImage?.url,
       primaryActionLabel: isAdmin
           ? 'Admin Overview'
           : isRecruiter
