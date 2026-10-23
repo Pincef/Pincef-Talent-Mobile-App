@@ -43,6 +43,7 @@ class _AssessmentCreateScreenState
   bool _autoInviteShortlisted = true;
   bool _autoGenerateAfterDeadline = true;
   bool _initialPipelineDefaultsApplied = false;
+  bool _pipelineGenerationQueued = false;
   DateTime? _availableFrom;
   DateTime? _availableUntil;
   DateTime? _reminderBefore;
@@ -181,7 +182,12 @@ class _AssessmentCreateScreenState
     if (!_validateBasics()) return;
     setState(() => _busy = true);
     try {
-      final payload = _payload()..['appendQuestions'] = append;
+      // Full AI mode can also schedule publication after the deadline. Generate
+      // the assessment content now so recruiters can review it before saving
+      // the draft or scheduling shortlist invitations.
+      final payload = _payload()
+        ..['appendQuestions'] = append
+        ..['autoGenerateAfterDeadline'] = false;
       final generated =
           await ref.read(assessmentRepositoryProvider).generate(payload);
       final existingAcceptance = {
@@ -251,17 +257,21 @@ class _AssessmentCreateScreenState
     try {
       final repo = ref.read(assessmentRepositoryProvider);
       if (_mode == 'manual' || _kind == 'external') {
-        final payload = _payload()..['generationMode'] = _mode;
+        final payload = _payload()
+          ..['generationMode'] = _mode
+          ..['autoGenerateAfterDeadline'] = false;
         final saved = _testId == null
             ? await repo.createManual(payload)
-            : await repo.update(_testId!, _payload(forUpdate: true));
+            : await repo.update(_testId!, payload);
         _testId = (saved['_id'] ?? saved['id'] ?? _testId).toString();
       } else {
+        if (_testId == null) await _generate();
         if (_testId == null) {
-          await _generate();
-          return;
+          throw StateError('The assessment could not be generated. Try again.');
         }
-        await repo.update(_testId!, _payload(forUpdate: true));
+        final draftPayload = _payload(forUpdate: true)
+          ..['autoGenerateAfterDeadline'] = false;
+        await repo.update(_testId!, draftPayload);
       }
       ref.invalidate(recruiterAssessmentsProvider);
       if (mounted)
@@ -304,8 +314,10 @@ class _AssessmentCreateScreenState
               await repo.createManual(_payload()..['generationMode'] = _mode);
           _testId = (saved['_id'] ?? saved['id']).toString();
         } else {
-          final saved =
-              await repo.generate(_payload()..['generationMode'] = _mode);
+          final payload = _payload()
+            ..['generationMode'] = _mode
+            ..['autoGenerateAfterDeadline'] = false;
+          final saved = await repo.generate(payload);
           _testId = (saved['_id'] ?? saved['id']).toString();
           _questions = (saved['questions'] as List? ?? const [])
               .map((q) => Map<String, dynamic>.from(q as Map)
@@ -390,6 +402,28 @@ class _AssessmentCreateScreenState
     final assessmentStage = assessmentStages.firstOrNull;
     if (_stageName == null && assessmentStage != null)
       _stageName = assessmentStage.name;
+    if (assessmentStage?.assessmentMode.toLowerCase() == 'auto' &&
+        !_pipelineGenerationQueued &&
+        _testId == null) {
+      _pipelineGenerationQueued = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        final job = jobs.where((item) => item.id == _jobId).firstOrNull;
+        if (job == null) {
+          _pipelineGenerationQueued = false;
+          return;
+        }
+        setState(() {
+          _title.text = _title.text.trim().isEmpty
+              ? '${job.title} assessment'
+              : _title.text;
+          _purpose.text = _purpose.text.trim().isEmpty
+              ? 'Evaluate candidates for ${job.title} using the role requirements.'
+              : _purpose.text;
+        });
+        await _generate();
+      });
+    }
     final applicationsState =
         _jobId == null ? null : ref.watch(jobApplicantsProvider(_jobId!));
 
@@ -440,8 +474,14 @@ class _AssessmentCreateScreenState
                       label: Text(_busy
                           ? 'Saving…'
                           : isEditing
-                              ? 'Save & publish'
-                              : 'Publish & invite'),
+                              ? (_mode == 'full_ai' &&
+                                      _autoGenerateAfterDeadline
+                                  ? 'Schedule assessment'
+                                  : 'Save & publish')
+                              : (_mode == 'full_ai' &&
+                                      _autoGenerateAfterDeadline
+                                  ? 'Schedule & invite shortlist'
+                                  : 'Publish & invite')),
                       style: FilledButton.styleFrom(
                           backgroundColor: BrandColors.orange),
                     ),
@@ -714,7 +754,7 @@ class _AssessmentCreateScreenState
                           title: const Text(
                               'Generate assessment after job application deadline'),
                           subtitle: const Text(
-                              'At the job deadline, questions are created from its requirements and shortlisted candidates are invited. The assessment stays open for 7 days.'),
+                              'Questions are generated now for your review. At the job deadline, the assessment is published to shortlisted candidates and stays open for 7 days.'),
                           value: _autoGenerateAfterDeadline,
                           onChanged: (value) => setState(
                               () => _autoGenerateAfterDeadline = value)),
