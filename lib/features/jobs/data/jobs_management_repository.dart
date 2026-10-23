@@ -90,6 +90,17 @@ class JobManagementRepository {
     );
   }
 
+  Future<Map<String, dynamic>?> getPendingInterviewAutomation(String jobId) =>
+      _request(
+        () => _dio.get('/jobs/$jobId/automation/interview-invites'),
+        (data) => data == null ? null : Map<String, dynamic>.from(data as Map),
+      );
+
+  Future<void> takeOverInterviewAutomation(String jobId) => _request(
+        () => _dio.post('/jobs/$jobId/automation/interview-invites/override'),
+        (_) {},
+      );
+
   /// Candidate-facing browse. Maps to: GET /jobs -> listPublishedJobs(query).
   /// Unlike /jobs/mine, this route is already paginated/filterable
   /// server-side (job.dto.ts's listJobsQuerySchema), so filters are sent as
@@ -112,7 +123,8 @@ class JobManagementRepository {
   /// top of the same fetched job.
   Future<JobDetail> getJobDetail(String jobId) {
     return _request(
-      () => _dio.get('/jobs/$jobId'),
+      () =>
+          _dio.get('/jobs/$jobId', options: Options(extra: {'skipAuth': true})),
       (data) => JobDetail.fromApiJson(data as Map<String, dynamic>),
     );
   }
