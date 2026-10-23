@@ -12,7 +12,9 @@ import '../../../../auth/data/models/user_model.dart';
 import '../../../../../core/widgets/app_toast.dart';
 
 class SignUpScreen extends ConsumerStatefulWidget {
-  const SignUpScreen({super.key});
+  const SignUpScreen({super.key, this.returnTo});
+
+  final String? returnTo;
 
   @override
   ConsumerState<SignUpScreen> createState() => _SignUpScreenState();
@@ -78,7 +80,12 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       context.go(
         role == UserRole.recruiter
             ? '/recruiter-company-setup'
-            : '/candidate-profile-setup',
+            : Uri(
+                path: '/candidate-profile-setup',
+                queryParameters: {
+                  if (widget.returnTo != null) 'returnTo': widget.returnTo!,
+                },
+              ).toString(),
       );
     } catch (e) {
       if (mounted) {
@@ -94,10 +101,13 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   Future<void> _continueWithGoogle() async {
     final role = ref.read(selectedRoleProvider);
     if (role == null) {
-      setState(() => _errorText = 'Please choose a role before continuing with Google.');
+      setState(() =>
+          _errorText = 'Please choose a role before continuing with Google.');
       return;
     }
-    final uri = ref.read(authRepositoryProvider).googleOAuthUrl(role: role, country: _country);
+    final uri = ref
+        .read(authRepositoryProvider)
+        .googleOAuthUrl(role: role, country: _country);
     if (!await launchUrl(uri, mode: LaunchMode.platformDefault) && mounted) {
       AppToast.error(context, 'Could not open Google sign-in.');
     }
