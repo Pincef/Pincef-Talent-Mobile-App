@@ -44,6 +44,27 @@ class _RecruiterDashboardBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (needsCompanySetup) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _CompanySetupBanner(
+              onComplete: () => context.push('/recruiter-company-setup'),
+            ),
+            const SizedBox(height: 20),
+            const _CompanySetupRequiredCard(),
+            if (state.error != null) ...[
+              const SizedBox(height: 12),
+              Text(state.error!, style: const TextStyle(color: Colors.red)),
+              TextButton(onPressed: onRetry, child: const Text('Retry')),
+            ]
+          ],
+        ),
+      );
+    }
+
     if (state.isLoading && state.summary == null) {
       return const Center(child: CircularProgressIndicator());
     }
