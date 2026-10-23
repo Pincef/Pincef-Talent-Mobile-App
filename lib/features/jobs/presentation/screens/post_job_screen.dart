@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:talentbridge/core/application/location_provider.dart';
@@ -16,7 +15,12 @@ import 'package:talentbridge/features/hiring_pipeline/data/models/hiring_pipelin
 import '../widgets/custom_hiring_pipeline_picker.dart';
 
 class PostJobScreen extends ConsumerStatefulWidget {
-  const PostJobScreen({super.key});
+  const PostJobScreen(
+      {super.key, this.initialJob, this.onCancel, this.onSaved});
+
+  final JobDetail? initialJob;
+  final VoidCallback? onCancel;
+  final VoidCallback? onSaved;
 
   @override
   ConsumerState<PostJobScreen> createState() => _PostJobScreenState();
@@ -84,9 +88,71 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
   @override
   void initState() {
     super.initState();
+    _populateFromJob(widget.initialJob);
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => ref.read(locationsProvider.notifier).loadCountries(),
     );
+  }
+
+  void _populateFromJob(JobDetail? job) {
+    if (job == null) return;
+    _title.text = job.title;
+    _streetAddress.text = job.location;
+    _minimum.text = job.minSalary?.toStringAsFixed(0) ?? '';
+    _maximum.text = job.maxSalary?.toStringAsFixed(0) ?? '';
+    _companyOverview.text = job.companyOverview ?? '';
+    _overview.text = job.description;
+    _minYears.text = job.minYearsOfExperience ?? '';
+    _fieldOfStudy.text = job.fieldOfStudy ?? '';
+    _assessmentEmailCount.text = job.assessmentEmailCount.toString();
+    _interviewEmailCount.text = job.interviewEmailCount.toString();
+    _employment = switch (job.employmentType) {
+      'part_time' => 'Part-time',
+      'contract' => 'Contract',
+      'internship' => 'Internship',
+      _ => 'Full-time',
+    };
+    _workplace = switch (job.workplaceType) {
+      'hybrid' => 'Hybrid',
+      'remote' => 'Remote',
+      _ => 'On-site',
+    };
+    _industry = const [
+      'Technology',
+      'Finance',
+      'Healthcare',
+      'Education',
+      'Retail',
+      'Other',
+    ].contains(job.industry)
+        ? job.industry!
+        : 'Technology';
+    _currency = job.currency ?? 'USD';
+    _requirements.addAll(job.requiredSkills);
+    _responsibilities.addAll(job.responsibilities);
+    _health = job.benefits.contains('Health Insurance');
+    _equity = job.benefits.contains('Equity/RSUs');
+    _learning = job.benefits.contains('Learning Stipend');
+    _wellness = job.benefits.contains('Wellness');
+    _customBenefits.addAll(job.benefits.where((item) => !const {
+          'Health Insurance',
+          'Equity/RSUs',
+          'Learning Stipend',
+          'Wellness',
+        }.contains(item)));
+    _educationLevel = job.educationLevel;
+    _requiresManagement = job.requiresManagementExperience;
+    _autoReject = job.autoRejectNonMatches;
+    _autoRejectBelowScore = job.autoRejectBelowScore.toDouble();
+    _aiRanking = job.aiRanking;
+    _aiSummary = job.aiSummary;
+    _deadline = job.applicationDeadline;
+    _deadlineController.text =
+        _deadline == null ? '' : _formatDeadline(_deadline!);
+    _pipelineTier = job.pipelineTier;
+    _selectedPipelineId = job.pipelineId;
+    _planTier = job.rankingPlanTier;
+    _rankingLimit = job.rankingLimit.toDouble();
   }
 
   @override
@@ -198,22 +264,28 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
                 decoration: BoxDecoration(
                     color: const Color(0xFFFFEEE7),
                     borderRadius: BorderRadius.circular(8)),
-                child: const Text('JOB CREATION WIZARD',
-                    style: TextStyle(
+                child: Text(
+                    widget.initialJob == null
+                        ? 'JOB CREATION WIZARD'
+                        : 'JOB POSTING EDITOR',
+                    style: const TextStyle(
                         fontSize: 8,
                         fontWeight: FontWeight.w800,
                         color: BrandColors.orange,
                         letterSpacing: .5))),
             const SizedBox(height: 7),
-            const Text('Post New Job',
-                style: TextStyle(
+            Text(
+                widget.initialJob == null ? 'Post New Job' : 'Edit Job Posting',
+                style: const TextStyle(
                     fontSize: 30,
                     fontWeight: FontWeight.w800,
                     color: BrandColors.navy)),
             const SizedBox(height: 2),
-            const Text(
-                'Define the future of your organization by attracting top-tier global talent.',
-                style: TextStyle(fontSize: 14, color: BrandColors.muted)),
+            Text(
+                widget.initialJob == null
+                    ? 'Define the future of your organization by attracting top-tier global talent.'
+                    : 'Update the role details candidates see when they discover this job.',
+                style: const TextStyle(fontSize: 14, color: BrandColors.muted)),
           ]);
           final actions = Wrap(
             spacing: 9,
@@ -226,32 +298,52 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
                 label: const Text('View Email Templates'),
                 style: _draftButtonStyle,
               ),
-              OutlinedButton.icon(
-                onPressed: saving ? null : _saveDraft,
-                icon: saving && _pendingAction == 'draft'
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.save_outlined, size: 15),
-                label: Text(saving && _pendingAction == 'draft'
-                    ? 'Saving...'
-                    : 'Save as Draft'),
-                style: _draftButtonStyle,
-              ),
+              if (widget.initialJob == null)
+                OutlinedButton.icon(
+                  onPressed: saving ? null : _saveDraft,
+                  icon: saving && _pendingAction == 'draft'
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.save_outlined, size: 15),
+                  label: Text(saving && _pendingAction == 'draft'
+                      ? 'Saving...'
+                      : 'Save as Draft'),
+                  style: _draftButtonStyle,
+                )
+              else
+                OutlinedButton.icon(
+                  onPressed: saving ? null : widget.onCancel,
+                  icon: const Icon(Icons.close, size: 15),
+                  label: const Text('Cancel'),
+                  style: _draftButtonStyle,
+                ),
               FilledButton.icon(
-                onPressed: saving || !canPublish ? null : _publishJob,
-                icon: saving && _pendingAction == 'publish'
+                onPressed: saving || !canPublish
+                    ? null
+                    : widget.initialJob == null
+                        ? _publishJob
+                        : _saveDraft,
+                icon: saving &&
+                        _pendingAction ==
+                            (widget.initialJob == null ? 'publish' : 'draft')
                     ? const SizedBox(
                         width: 14,
                         height: 14,
                         child: CircularProgressIndicator(
                             strokeWidth: 2, color: Colors.white))
                     : const Icon(Icons.bolt, size: 15),
-                label: Text(saving && _pendingAction == 'publish'
-                    ? 'Publishing...'
-                    : 'Publish Job'),
+                label: Text(saving &&
+                        _pendingAction ==
+                            (widget.initialJob == null ? 'publish' : 'draft')
+                    ? (widget.initialJob == null
+                        ? 'Publishing...'
+                        : 'Saving...')
+                    : widget.initialJob == null
+                        ? 'Publish Job'
+                        : 'Save Changes'),
                 style: FilledButton.styleFrom(
                   backgroundColor: BrandColors.orange,
                   foregroundColor: Colors.white,
@@ -835,7 +927,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
               const SizedBox(height: 10),
               _quotaRow(
                 'Interview Invitation Emails',
-                'Targeting top 10 prepared candidates',
+                'Maximum candidates invited after AI ranking when the selected pipeline uses automatic interviews',
                 _interviewEmailCount,
               ),
               const SizedBox(height: 12),
@@ -1315,8 +1407,6 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
       focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: BrandColors.orange, width: 1.2)));
-  String? _safeValue(String? value, Iterable<String> values) =>
-      value != null && values.contains(value) ? value : null;
   String? Function(String?) _required(String message) =>
       (value) => value == null || value.trim().isEmpty ? message : null;
   String? _minYearsValidator(String? value) {
@@ -1570,6 +1660,14 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
     required String failureMessage,
     required bool validateForPublish,
   }) async {
+    if (ref.read(authProvider).user?.needsCompanySetup == true) {
+      _showToast(
+        'Add or connect a company profile before saving or publishing a job.',
+        isError: true,
+      );
+      context.go('/recruiter-company-setup');
+      return false;
+    }
     if (validateForPublish && !_formKey.currentState!.validate()) {
       _showToast('Please fix the highlighted fields before continuing.',
           isError: true);
@@ -1590,6 +1688,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
     }
 
     final draft = JobDraft(
+      id: widget.initialJob?.id,
       title: _title.text.trim(),
       employmentType: _employmentTypeValues[_employment]!,
       workplaceType: _workplaceTypeValues[_workplace]!,
@@ -1640,11 +1739,24 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
     );
 
     try {
+      if (widget.initialJob != null) {
+        await ref
+            .read(jobManagementRepositoryProvider)
+            .updateJobDraft(widget.initialJob!.id, draft);
+        return true;
+      }
       final saved = await ref.read(postJobProvider.notifier).saveJob(draft);
       if (!saved) _showError(failureMessage);
       return saved;
-    } catch (_) {
-      _showError(failureMessage);
+    } catch (error) {
+      if (widget.initialJob != null) {
+        _showToast(
+          error.toString().replaceFirst(RegExp(r'^Exception:\s*'), ''),
+          isError: true,
+        );
+      } else {
+        _showError(failureMessage);
+      }
       return false;
     }
   }
@@ -1661,7 +1773,14 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
       if (saved) {
         ref.invalidate(
             jobManagementProvider); // forces a fresh load() next time /jobs is shown
-        _showToast('Job saved as a draft.', isError: false);
+        _showToast(
+            widget.initialJob == null
+                ? 'Job saved as a draft.'
+                : 'Job changes saved.',
+            isError: false);
+        if (widget.initialJob != null) {
+          widget.onSaved?.call();
+        }
       }
     } finally {
       if (mounted) setState(() => _pendingAction = null);
@@ -1754,7 +1873,7 @@ class _HiringPipelinePickerDialogState
               Expanded(
                 child: LayoutBuilder(builder: (context, constraints) {
                   final wide = constraints.maxWidth >= 850;
-                  final gap = 14.0;
+                  const gap = 14.0;
                   final cards = [
                     _pipelineCard(
                       tier: 'Standard',
@@ -1813,7 +1932,7 @@ class _HiringPipelinePickerDialogState
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             for (var i = 0; i < cards.length; i++) ...[
-                              if (i > 0) SizedBox(width: gap),
+                              if (i > 0) const SizedBox(width: gap),
                               Expanded(child: cards[i]),
                             ],
                           ],
@@ -1821,7 +1940,7 @@ class _HiringPipelinePickerDialogState
                       : Column(
                           children: [
                             for (var i = 0; i < cards.length; i++) ...[
-                              if (i > 0) SizedBox(height: gap),
+                              if (i > 0) const SizedBox(height: gap),
                               cards[i],
                             ],
                           ],
@@ -2223,19 +2342,6 @@ class _HiringPipelinePickerDialogState
                 ),
         );
       });
-}
-
-class _Tag extends StatelessWidget {
-  const _Tag(this.label);
-  final String label;
-  @override
-  Widget build(BuildContext context) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      decoration: BoxDecoration(
-          color: const Color(0xFFF5F6FA),
-          borderRadius: BorderRadius.circular(8)),
-      child: Text(label,
-          style: const TextStyle(fontSize: 7.5, color: BrandColors.muted)));
 }
 
 final _draftButtonStyle = OutlinedButton.styleFrom(
