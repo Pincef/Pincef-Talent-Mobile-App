@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter/services.dart';
 import '../../../../core/theme/brand_color.dart';
 import '../../application/job_management_provider.dart';
 // NOTE: adjust this path if the applications feature folder is named
@@ -11,7 +10,6 @@ import '../../application/job_management_provider.dart';
 // application_provider.dart itself (same depth as job_management_provider.dart).
 import '../../application/application_provider.dart';
 import '../../data/models/application_model.dart';
-import '../../../interviews/presentation/schedule_interview_sheet_screen.dart';
 // Reused for the "AI CV-to-Job Matching" bulk action below — same
 // repository/provider CandidateProfilePreviewScreen already uses for the
 // single-candidate "Run AI Match" action. If that provider is already
@@ -21,6 +19,8 @@ import 'package:talentbridge/features/jobs/data/candidate_profile_repository.dar
 import 'package:talentbridge/features/jobs/presentation/widgets/download_cv_button.dart';
 import 'package:talentbridge/core/network/dio_provider.dart'; // adjust to wherever dioProvider actually lives
 import 'package:talentbridge/core/widgets/app_toast.dart';
+import 'package:talentbridge/features/jobs/presentation/widgets/candidate_email_dialog.dart';
+import 'package:talentbridge/features/jobs/presentation/widgets/send_invite_widget.dart';
 import 'package:talentbridge/features/auth/application/auth_provider.dart'
     hide dioProvider;
 // "Message" button — reuses the same socket-backed messaging repository/
@@ -35,27 +35,6 @@ import 'package:talentbridge/features/messages/application/messages_provider.dar
 final _candidateProfileViewRepositoryProvider =
     Provider<CandidateProfileViewRepository>(
         (ref) => CandidateProfileViewRepository(ref.watch(dioProvider)));
-
-/// Opens the device's mail client addressed to the candidate.
-Future<void> launchCandidateEmail(BuildContext context, String email) async {
-  final uri = Uri(scheme: 'mailto', path: email);
-  final launched = await _openExternalUrl(uri);
-  if (!launched && context.mounted) {
-    AppToast.error(context, "Couldn't open a mail client.");
-  }
-}
-
-Future<bool> _openExternalUrl(Uri uri) async {
-  try {
-    return await const MethodChannel('talentbridge/external_url')
-            .invokeMethod<bool>('openUrl', uri.toString()) ??
-        false;
-  } on PlatformException {
-    return false;
-  } on MissingPluginException {
-    return false;
-  }
-}
 
 /// The four "AI Candidate Tools" actions in the mockup's bulk-action bar.
 /// Summary and matching both use the existing job-scoped analysis endpoint.
@@ -300,7 +279,6 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
     final canMessageCandidates =
         user?.capabilities['allowsCandidateMessaging'] == true ||
             user?.hasModule('hiring.candidate.messaging') == true;
-    const canScheduleInterviews = true;
     final notifier = ref.read(jobApplicantsProvider(widget.jobId).notifier);
 
     final query = _search.trim().toLowerCase();
@@ -338,6 +316,10 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
                 _breadcrumb(jobTitle),
                 const SizedBox(height: 14),
                 _header(isWide, jobTitle, applicantsState.total, newCount),
+                const SizedBox(height: 12),
+                _interviewAutomationBanner(
+                  ref.watch(pendingInterviewAutomationProvider(widget.jobId)),
+                ),
                 const SizedBox(height: 20),
                 _insightsRow(jobAsync, applicantsState),
                 const SizedBox(height: 18),
@@ -346,7 +328,7 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
                 _aiToolsBar(applicantsState),
                 const SizedBox(height: 18),
                 _body(applicantsState, visible, columns, notifier,
-                    canMessageCandidates, canScheduleInterviews),
+                    canMessageCandidates),
                 const SizedBox(height: 24),
               ],
             ),
@@ -401,7 +383,6 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
     int columns,
     JobApplicantsNotifier notifier,
     bool canMessageCandidates,
-    bool canScheduleInterviews,
   ) {
     if (state.isLoading && state.applications.isEmpty) {
       return const Padding(
@@ -450,22 +431,33 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
                 '/jobs/${widget.jobId}/candidates/${visible[index].candidate.id}',
                 extra: visible[index],
               ),
-              onSendInvite: () async {
-                await showScheduleInterview(
+              onSendEmail: () async {
+                final sent = await showCandidateEmailDialog(
                   context,
-                  applicationId: visible[index].id,
+                  applicant: visible[index],
                 );
-                if (context.mounted) {
-                  ref
-                      .read(jobApplicantsProvider(widget.jobId).notifier)
-                      .refresh();
+                if (sent == true && context.mounted) {
+                  AppToast.success(context,
+                      'Email sent to ${visible[index].candidate.fullName}.');
+                }
+              },
+              onInvite: () async {
+                final sent = await showSendInterviewInviteDialog(
+                  context,
+                  applicant: visible[index],
+                );
+                if (sent == true && context.mounted) {
+                  await ref.read(jobApplicantsProvider(widget.jobId).notifier).refresh();
+                  if (context.mounted) {
+                    AppToast.success(context,
+                        'Interview invitation sent to ${visible[index].candidate.fullName}.');
+                  }
                 }
               },
               onMessage: () => _startMessage(visible[index]),
               onDecision: (status) =>
                   _setCandidateDecision(visible[index], status),
               canMessage: canMessageCandidates,
-              canInvite: canScheduleInterviews,
             );
           },
         ),
@@ -489,6 +481,67 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
         ),
       ],
     );
+  }
+
+  Widget _interviewAutomationBanner(
+    AsyncValue<Map<String, dynamic>?> pending,
+  ) {
+    return pending.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (action) {
+        if (action == null) return const SizedBox.shrink();
+        final count = action['candidateCount'] ?? 0;
+        final stage = action['stageName'] ?? 'Interview';
+        final due = DateTime.tryParse('${action['dueAt']}')?.toLocal();
+        final dueText = due == null ? 'soon' : '${due.day}/${due.month} at ${due.hour.toString().padLeft(2, '0')}:${due.minute.toString().padLeft(2, '0')}';
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF7ED),
+            border: Border.all(color: const Color(0xFFFED7AA)),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(children: [
+            const Icon(Icons.auto_awesome, color: BrandColors.orange),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'AI plans to invite $count top-ranked candidates to $stage at $dueText. If you take no action, it will proceed automatically.',
+                style: const TextStyle(fontSize: 12, color: BrandColors.navy, height: 1.4),
+              ),
+            ),
+            const SizedBox(width: 10),
+            OutlinedButton(
+              onPressed: () => _takeOverInterviewAutomation(),
+              child: const Text('Take over'),
+            ),
+          ]),
+        );
+      },
+    );
+  }
+
+  Future<void> _takeOverInterviewAutomation() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Take over interview invitations?'),
+        content: const Text('This stops the pending automatic invitations. You can then send invitations manually from each candidate card.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Keep automation')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Take over')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ref.read(jobManagementRepositoryProvider).takeOverInterviewAutomation(widget.jobId);
+      ref.invalidate(pendingInterviewAutomationProvider(widget.jobId));
+      if (mounted) AppToast.success(context, 'Automatic invitations stopped. You are in control.');
+    } catch (error) {
+      if (mounted) AppToast.error(context, "Couldn't take over automation: $error");
+    }
   }
 
   // --- Header: title/subtitle + stat chips ----------------------------------
@@ -1129,22 +1182,22 @@ class _CandidateCard extends StatelessWidget {
     required this.selected,
     required this.onToggleSelected,
     required this.onViewProfile,
-    required this.onSendInvite,
+    required this.onSendEmail,
+    required this.onInvite,
     required this.onMessage,
     required this.onDecision,
     required this.canMessage,
-    required this.canInvite,
   });
   final JobApplicantSummary applicant;
   final Color avatarColor;
   final bool selected;
   final VoidCallback onToggleSelected;
   final VoidCallback onViewProfile;
-  final VoidCallback onSendInvite;
+  final VoidCallback onSendEmail;
+  final VoidCallback onInvite;
   final VoidCallback onMessage;
   final ValueChanged<ApplicationBackendStatus> onDecision;
   final bool canMessage;
-  final bool canInvite;
 
   Color get _stageColor => switch (applicant.status) {
         ApplicationBackendStatus.submitted => const Color(0xFF2F6FED),
@@ -1302,23 +1355,40 @@ class _CandidateCard extends StatelessWidget {
           SizedBox(
             width: 34,
             height: 34,
-            child: OutlinedButton(
-              // FIX: was launchCandidateEmail(context, candidate.email),
-              // which just opened the device's mail client with nothing
-              // pre-filled. The mockup for this icon is actually an
-              // in-app interview-invite compose/send flow, which also
-              // moves this application to INTERVIEWING on send — see
-              // send_interview_invite_dialog.dart.
-              onPressed: onSendInvite,
-              style: OutlinedButton.styleFrom(
-                padding: EdgeInsets.zero,
-                foregroundColor: BrandColors.navy,
-                side: const BorderSide(color: BrandColors.border),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
+            child: Tooltip(
+              message: 'Send interview invitation',
+              child: OutlinedButton(
+                onPressed: onInvite,
+                style: OutlinedButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  foregroundColor: BrandColors.orange,
+                  side: const BorderSide(color: BrandColors.border),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Icon(Icons.event_available_outlined, size: 16),
               ),
-              child: Icon(canInvite ? Icons.mail_outline : Icons.lock_outline,
-                  size: 16),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 34,
+            height: 34,
+            child: Tooltip(
+              message: 'Email candidate',
+              child: OutlinedButton(
+                // Opens a template-based email composer. Sending email is
+                // separate from messaging and does not change pipeline stage.
+                onPressed: onSendEmail,
+                style: OutlinedButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  foregroundColor: BrandColors.navy,
+                  side: const BorderSide(color: BrandColors.border),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Icon(Icons.mail_outline, size: 16),
+              ),
             ),
           ),
           const SizedBox(width: 8),
@@ -1327,8 +1397,7 @@ class _CandidateCard extends StatelessWidget {
             height: 34,
             child: OutlinedButton(
               // Opens/reopens a direct conversation with this candidate —
-              // distinct from onSendInvite's compose dialog above, which
-              // only ever sends the one interview-invite email.
+              // distinct from the email-template composer above.
               onPressed: canMessage
                   ? onMessage
                   : () => AppToast.info(context,
