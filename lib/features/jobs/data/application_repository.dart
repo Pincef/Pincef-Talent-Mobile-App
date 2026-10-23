@@ -21,14 +21,23 @@ class ApplicationsRepository {
   /// on file (application.service.ts's resolveCvForApplication) — the
   /// screen is expected to check getMyCvFiles() first and only prompt for
   /// a choice when there's actually more than one.
-  Future<ApplicationSummary> apply(String jobId, {String? cvPublicId}) {
-    return _request(
-      () => _dio.post('/applications', data: {
+  Future<ApplicationSummary> apply(String jobId, {String? cvPublicId}) async {
+    try {
+      final response = await _dio.post('/applications', data: {
         'jobId': jobId,
         if (cvPublicId != null) 'cvPublicId': cvPublicId,
-      }),
-      (data) => ApplicationSummary.fromApiJson(data as Map<String, dynamic>),
-    );
+      });
+      final body = response.data as Map<String, dynamic>;
+      final application = Map<String, dynamic>.from(body['data'] as Map);
+      application['receiptEmailSent'] =
+          (body['meta'] as Map?)?['receiptEmailSent'] == true;
+      return ApplicationSummary.fromApiJson(application);
+    } on DioException catch (e) {
+      final body = e.response?.data;
+      final message =
+          body is Map<String, dynamic> ? body['message'] as String? : null;
+      throw Exception(message ?? e.message ?? 'Request failed');
+    }
   }
 
   /// Maps to: GET /applications/me -> getMyApplications(candidateId, {page,limit}).
@@ -122,6 +131,27 @@ class ApplicationsRepository {
           'inviteType': inviteType,
       }),
       (data) => JobApplicantSummary.fromApiJson(data as Map<String, dynamic>),
+    );
+  }
+
+  /// Sends a selected recruiter's email template to the candidate without
+  /// changing the application status or hiring stage.
+  Future<void> sendCandidateEmail(
+    String applicationId, {
+    required String templateName,
+    required String subject,
+    required String body,
+  }) async {
+    await _request<bool>(
+      () => _dio.post('/applications/$applicationId/send-email', data: {
+        'templateName': templateName,
+        'subject': subject,
+        'body': body,
+      }),
+      (data) {
+        if (data is Map && data['sent'] == true) return true;
+        throw Exception('Email service did not confirm delivery');
+      },
     );
   }
 
