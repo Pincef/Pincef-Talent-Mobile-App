@@ -117,6 +117,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         GoRouterRefreshStream(ref.watch(authProvider.notifier).stream),
     redirect: (context, state) {
       final authState = ref.read(authProvider); // fresh every call, never stale
+      // Keep the current URL while saved credentials are being restored.
+      // TalentBridgeApp displays a loading/retry surface until this resolves.
+      if (authState.isRestoringSession || authState.sessionRestoreFailed) {
+        return null;
+      }
       final isLoggedIn = authState.isAuthenticated;
       final isPublicRoute = _isPublicRoute(state.matchedLocation);
 
@@ -179,7 +184,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
-          path: '/signup', builder: (context, state) => const SignUpScreen()),
+        path: '/signup',
+        builder: (context, state) => SignUpScreen(
+          returnTo: state.uri.queryParameters['returnTo'],
+        ),
+      ),
       GoRoute(
         path: '/shared/jobs/:jobId',
         builder: (context, state) => PublicJobScreen(
@@ -191,7 +200,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           builder: (context, state) => const RecruiterProfileSetupScreen()),
       GoRoute(
         path: '/candidate-profile-setup',
-        builder: (context, state) => const CandidateProfileSetupScreen(),
+        builder: (context, state) => CandidateProfileSetupScreen(
+          returnTo: state.uri.queryParameters['returnTo'],
+        ),
       ),
       GoRoute(
         path: '/profile-setup-complete',
