@@ -74,6 +74,7 @@ class DashboardSummary {
   final List<RecentUpload> recentUploads;
   final List<JobMatch> jobMatches;
   final String workspaceTip;
+  final bool profileSetupIncomplete;
 
   const DashboardSummary({
     required this.careerHighlights,
@@ -83,5 +84,6 @@ class DashboardSummary {
     required this.recentUploads,
     required this.jobMatches,
     required this.workspaceTip,
+    required this.profileSetupIncomplete,
   });
 }
