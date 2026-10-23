@@ -108,8 +108,14 @@ class _RecruiterProfileSetupScreenState
 
     if (success) {
       AppToast.success(context, 'Company profile saved.');
-      await ref.read(authProvider.notifier).logout();
-      if (mounted) context.go('/login');
+      try {
+        await ref.read(authProvider.notifier).refreshSession();
+      } catch (_) {
+        // The company was saved successfully. Keep the session active and
+        // let the dashboard's incomplete-setup banner offer a retry if the
+        // refreshed account data has not reached the client yet.
+      }
+      if (mounted) context.go('/dashboard');
     } else {
       final error = ref.read(recruiterProfileSetupProvider).saveError;
       AppToast.error(
