@@ -70,6 +70,12 @@ class _DashboardBody extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (summary.profileSetupIncomplete) ...[
+                  _IncompleteProfileBanner(
+                    onComplete: () => context.push('/candidate-profile-setup'),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 ProfileSummaryCard(
                   highlights: summary.careerHighlights,
                   strengths: summary.coreStrengths,
@@ -106,6 +112,13 @@ class _DashboardBody extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (summary.profileSetupIncomplete) ...[
+                      _IncompleteProfileBanner(
+                        onComplete: () =>
+                            context.push('/candidate-profile-setup'),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     ProfileSummaryCard(
                       highlights: summary.careerHighlights,
                       strengths: summary.coreStrengths,
@@ -142,4 +155,45 @@ class _DashboardBody extends StatelessWidget {
       },
     );
   }
+}
+
+class _IncompleteProfileBanner extends StatelessWidget {
+  const _IncompleteProfileBanner({required this.onComplete});
+
+  final VoidCallback onComplete;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF7ED),
+          border: Border.all(color: const Color(0xFFF3CBA5)),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline, color: Color(0xFFB45309)),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Your profile is incomplete. Add your professional details and CV to finish setup. A profile photo is optional.',
+                    style: TextStyle(color: Color(0xFF7C3E0A), fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: onComplete,
+                child: const Text('Complete profile'),
+              ),
+            ),
+          ],
+        ),
+      );
 }
