@@ -29,6 +29,13 @@ class DioClient {
   InterceptorsWrapper _authInterceptor() {
     return InterceptorsWrapper(
       onRequest: (options, handler) async {
+        // Public endpoints must remain usable without a session. In
+        // particular, an expired stored token must not turn a public job
+        // share into an unexpected login redirect.
+        if (options.extra['skipAuth'] == true) {
+          options.headers.remove('Authorization');
+          return handler.next(options);
+        }
         final token = await _storage.getAccessToken();
         if (token != null) {
           options.headers['Authorization'] = 'Bearer $token';
@@ -36,6 +43,9 @@ class DioClient {
         handler.next(options);
       },
       onError: (error, handler) async {
+        if (error.requestOptions.extra['skipAuth'] == true) {
+          return handler.next(error);
+        }
         final isUnauthorized = _isAuthFailure(error);
         final alreadyRetried = error.requestOptions.extra['retried'] == true;
         final isAuthRequest = _isAuthEndpoint(error.requestOptions.path);
@@ -123,7 +133,13 @@ class DioClient {
       // configured route is absent, not when the refresh credential is bad.
       if (error.response?.statusCode != 404 &&
           error.response?.statusCode != 405) {
-        return null;
+        if (error.response?.statusCode == 401 ||
+            error.response?.statusCode == 403) {
+          return null;
+        }
+        // A timeout, offline device, or server error is not proof that the
+        // refresh credential is invalid. Preserve it so restoration can retry.
+        rethrow;
       }
       try {
         final response = await _refreshDio.post(
@@ -141,11 +157,13 @@ class DioClient {
               : newRefreshToken,
         );
         return accessToken;
-      } catch (_) {
-        return null;
+      } on DioException catch (fallbackError) {
+        if (fallbackError.response?.statusCode == 401 ||
+            fallbackError.response?.statusCode == 403) {
+          return null;
+        }
+        rethrow;
       }
-    } catch (_) {
-      return null;
     }
   }
 
