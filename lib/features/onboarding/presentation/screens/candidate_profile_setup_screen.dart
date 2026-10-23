@@ -34,7 +34,9 @@ import '../widget/education_history_modal.dart';
 /// entirely — no such backend feature exists. Certificates stay PDF-only
 /// (backend constraint) with copy corrected to match.
 class CandidateProfileSetupScreen extends ConsumerStatefulWidget {
-  const CandidateProfileSetupScreen({super.key});
+  const CandidateProfileSetupScreen({super.key, this.returnTo});
+
+  final String? returnTo;
 
   @override
   ConsumerState<CandidateProfileSetupScreen> createState() =>
@@ -85,7 +87,37 @@ class _CandidateProfileSetupScreenState
     super.dispose();
   }
 
-  void _exitToDashboard() => context.go('/dashboard');
+  void _exitToDashboard() => context.go(widget.returnTo ?? '/dashboard');
+
+  Future<void> _skipProfileDetails() async {
+    final notifier = ref.read(profileSetupProvider.notifier);
+    notifier.updatePersonalInfo(
+      fullName: _fullNameController.text.trim(),
+      professionalTitle: _titleController.text.trim(),
+    );
+    notifier.updateBio(_bioController.text);
+    notifier.updatePersonalWebsiteUrl(_websiteController.text.trim());
+    notifier.updateDribbbleBehanceUrl(_dribbbleController.text.trim());
+
+    final state = ref.read(profileSetupProvider);
+    final hasDetails = state.fullName.trim().isNotEmpty ||
+        state.professionalTitle.trim().isNotEmpty ||
+        state.bio.trim().isNotEmpty ||
+        state.locationDisplay.isNotEmpty ||
+        state.workExperiences.isNotEmpty ||
+        state.educationHistory.isNotEmpty ||
+        state.portfolioLinks.isNotEmpty ||
+        state.certifications.isNotEmpty ||
+        state.cvBytes != null;
+    if (hasDetails && !await notifier.completeProfile()) {
+      if (!mounted) return;
+      AppToast.error(
+          context,
+          ref.read(profileSetupProvider).saveError ??
+              'Some profile details could not be saved. You can finish setup later.');
+    }
+    if (mounted) _exitToDashboard();
+  }
 
   Future<void> _pickProfilePhoto() async {
     final picked = await ImagePicker().pickImage(
@@ -152,6 +184,22 @@ class _CandidateProfileSetupScreenState
         .addCertification(bytes: bytes, filename: result.files.single.name);
   }
 
+  Future<void> _pickCv() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.single;
+    final bytes = file.bytes;
+    if (bytes == null) return;
+    ref.read(profileSetupProvider.notifier).setCv(
+          bytes: bytes,
+          filename: file.name,
+        );
+  }
+
   void _continueToExperience() {
     final notifier = ref.read(profileSetupProvider.notifier);
     notifier.updatePersonalInfo(
@@ -172,7 +220,14 @@ class _CandidateProfileSetupScreenState
 
     if (success) {
       AppToast.success(context, 'Profile completed successfully.');
-      context.go('/profile-setup-complete');
+      final saved = ref.read(profileSetupProvider);
+      final complete = saved.fullName.trim().isNotEmpty &&
+          saved.professionalTitle.trim().isNotEmpty &&
+          saved.bio.trim().isNotEmpty &&
+          saved.locationDisplay.isNotEmpty &&
+          saved.cvBytes != null;
+      context.go(widget.returnTo ??
+          (complete ? '/profile-setup-complete' : '/dashboard'));
     } else {
       final error = ref.read(profileSetupProvider).saveError;
       AppToast.error(
@@ -196,6 +251,7 @@ class _CandidateProfileSetupScreenState
         locationDisplay: _locationDisplay,
         onTapLocation: _openLocationPicker,
         onBack: _exitToDashboard,
+        onSkip: _skipProfileDetails,
         onContinue: _continueToExperience,
       );
     } else {
@@ -215,9 +271,13 @@ class _CandidateProfileSetupScreenState
         websiteController: _websiteController,
         dribbbleController: _dribbbleController,
         certifications: state.certifications,
+        cvFilename: state.cvFilename,
+        onUploadCv: _pickCv,
+        onRemoveCv: notifier.removeCv,
         onUploadCertificate: _pickCertificate,
         onRemoveCertificate: notifier.removeCertification,
         onBack: notifier.back,
+        onSkip: _skipProfileDetails,
         onComplete: state.isSaving ? null : _completeProfile,
         isSaving: state.isSaving,
       );
@@ -288,6 +348,7 @@ class _ProfileSummaryStep extends StatelessWidget {
     required this.locationDisplay,
     required this.onTapLocation,
     required this.onBack,
+    required this.onSkip,
     required this.onContinue,
   });
 
@@ -299,6 +360,7 @@ class _ProfileSummaryStep extends StatelessWidget {
   final String locationDisplay;
   final VoidCallback onTapLocation;
   final VoidCallback onBack;
+  final VoidCallback onSkip;
   final VoidCallback onContinue;
 
   static const _maxBioLength = 1000;
@@ -434,6 +496,7 @@ class _ProfileSummaryStep extends StatelessWidget {
         const SizedBox(height: 22),
         WizardFooterRow(
           onBack: onBack,
+          onSkip: onSkip,
           onPrimary: onContinue,
           primaryLabel: 'Continue to Experience',
         ),
@@ -473,9 +536,13 @@ class _ExperienceVerificationStep extends StatelessWidget {
     required this.websiteController,
     required this.dribbbleController,
     required this.certifications,
+    required this.cvFilename,
+    required this.onUploadCv,
+    required this.onRemoveCv,
     required this.onUploadCertificate,
     required this.onRemoveCertificate,
     required this.onBack,
+    required this.onSkip,
     required this.onComplete,
     required this.isSaving,
   });
@@ -489,9 +556,13 @@ class _ExperienceVerificationStep extends StatelessWidget {
   final TextEditingController websiteController;
   final TextEditingController dribbbleController;
   final List<CertificationEntry> certifications;
+  final String? cvFilename;
+  final VoidCallback onUploadCv;
+  final VoidCallback onRemoveCv;
   final VoidCallback onUploadCertificate;
   final ValueChanged<int> onRemoveCertificate;
   final VoidCallback onBack;
+  final VoidCallback onSkip;
   final VoidCallback? onComplete;
   final bool isSaving;
 
@@ -593,6 +664,12 @@ class _ExperienceVerificationStep extends StatelessWidget {
                 ]);
         }),
         const SizedBox(height: 14),
+        _CvUploadCard(
+          filename: cvFilename,
+          onUpload: onUploadCv,
+          onRemove: onRemoveCv,
+        ),
+        const SizedBox(height: 14),
         _CertificationsDropzone(
           certifications: certifications,
           onUpload: onUploadCertificate,
@@ -601,6 +678,7 @@ class _ExperienceVerificationStep extends StatelessWidget {
         const SizedBox(height: 22),
         WizardFooterRow(
           onBack: onBack,
+          onSkip: onSkip,
           onPrimary: onComplete ?? () {},
           primaryLabel: isSaving ? 'Saving...' : 'Complete Profile',
           primaryIcon: Icons.check,
@@ -608,6 +686,48 @@ class _ExperienceVerificationStep extends StatelessWidget {
       ],
     );
   }
+}
+
+class _CvUploadCard extends StatelessWidget {
+  const _CvUploadCard({
+    required this.filename,
+    required this.onUpload,
+    required this.onRemove,
+  });
+
+  final String? filename;
+  final VoidCallback onUpload;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: BrandColors.border),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(children: [
+          const Icon(Icons.description_outlined, color: BrandColors.orange),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              filename ??
+                  'Add a PDF CV to apply for roles (optional during setup)',
+              style: const TextStyle(color: BrandColors.navy, fontSize: 13),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (filename == null)
+            TextButton(onPressed: onUpload, child: const Text('Add CV'))
+          else
+            IconButton(
+              tooltip: 'Remove CV',
+              onPressed: onRemove,
+              icon: const Icon(Icons.close),
+            ),
+        ]),
+      );
 }
 
 class _ExperienceCard extends StatelessWidget {
