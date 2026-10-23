@@ -24,7 +24,7 @@ class CandidateDashboardRepository {
 
   Future<DashboardSummary> loadDashboard() async {
     final responses = await Future.wait([
-      _dio.get('/candidate-profile/me'),
+      _loadCandidateProfile(),
       _dio.get('/applications/me', queryParameters: {'limit': 100}),
       _dio.get('/jobs', queryParameters: {'page': 1, 'limit': 6}),
     ]);
@@ -55,6 +55,24 @@ class CandidateDashboardRepository {
     }
     final cvFiles =
         (profile['cvFiles'] as List? ?? const []).whereType<Map>().toList();
+    final locationParts = [
+      _object(profile['location'])['city'],
+      _object(profile['location'])['stateName'],
+      _object(profile['location'])['countryName'],
+    ].whereType<String>().where((part) => part.trim().isNotEmpty);
+    final locationComplete = locationParts.isNotEmpty;
+    final profileSetupIncomplete =
+        (profile['fullName'] ?? profile['name'] ?? '')
+                .toString()
+                .trim()
+                .isEmpty ||
+            (profile['professionalTitle'] ?? '').toString().trim().isEmpty ||
+            (profile['bio'] ?? profile['aiSummary'] ?? '')
+                .toString()
+                .trim()
+                .isEmpty ||
+            !locationComplete ||
+            cvFiles.isEmpty;
     final applications = rawApplications.whereType<Map>().map((row) {
       final job = _object(row['jobId']);
       final company = _object(job['companyId']);
@@ -139,11 +157,28 @@ class CandidateDashboardRepository {
       workspaceTip: locationLabel.isEmpty
           ? 'Add your location to help recruiters find relevant opportunities.'
           : 'Your profile location is $locationLabel.',
+      profileSetupIncomplete: profileSetupIncomplete,
     );
   }
 
   static dynamic _payload(dynamic body) =>
       body is Map && body.containsKey('data') ? body['data'] : body;
+
+  Future<Response<dynamic>> _loadCandidateProfile() async {
+    try {
+      return await _dio.get('/candidate-profile/me');
+    } on DioException {
+      // A new candidate may not have a profile document yet. Keep the
+      // dashboard available so the incomplete-profile banner can guide
+      // them back into setup.
+      return Response<dynamic>(
+        requestOptions: RequestOptions(path: '/candidate-profile/me'),
+        data: const <String, dynamic>{},
+        statusCode: 200,
+      );
+    }
+  }
+
   static Map<String, dynamic> _object(dynamic value) =>
       value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
   static ApplicationStage _stageFor(String status) => switch (status) {
