@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,8 +9,16 @@ import 'package:talentbridge/features/auth/data/models/user_model.dart';
 import 'package:talentbridge/features/admin/application/admin_provider.dart';
 import 'package:talentbridge/features/candidate_dashboard/presentation/widgets/cv_upload_modal.dart';
 import 'package:talentbridge/features/jobs/application/job_management_provider.dart';
+import 'package:talentbridge/features/candidate_dashboard/application/candidate_dashboard_provider.dart'
+    show dashboardProvider;
+import 'package:talentbridge/features/recruiter_dashboard/application/recruiter_dashboard_provider.dart'
+    show recruiterDashboardProvider;
 import 'package:talentbridge/features/jobs/application/application_provider.dart'
     show myApplicationsListProvider;
+import 'package:talentbridge/features/assessment/application/assessment_provider.dart'
+    show candidateAssessmentsProvider, recruiterAssessmentsProvider;
+import 'package:talentbridge/features/profile/application/profile_provider.dart'
+    show recruiterActivityProvider, recruiterPerformanceProvider;
 import 'package:talentbridge/features/notifications/application/notifications_provider.dart'
     show notificationsProvider, unreadNotificationCountProvider;
 import 'package:talentbridge/features/messages/application/messages_provider.dart'
@@ -132,6 +142,7 @@ class _AppShellRouteState extends ConsumerState<AppShellRoute> {
             ? kRecruiterNavItems
             : kCandidateNavItems;
     final location = widget.state.uri.toString();
+    final routePath = Uri.parse(location).path;
     final manualSelection =
         _manualSelectionLocation == location && _manualTopIndex != null
             ? (_manualTopIndex!, _manualSubIndex)
@@ -145,11 +156,18 @@ class _AppShellRouteState extends ConsumerState<AppShellRoute> {
       context.go(route);
     }
 
+    final screenBody = _supportsMobilePullToRefresh(routePath)
+        ? RefreshIndicator(
+            onRefresh: _refreshCurrentScreen,
+            child: widget.child,
+          )
+        : widget.child;
+
     return AppShell(
       currentIndex: topIndex,
       currentSubIndex: subIndex,
       navItems: navItems,
-      body: widget.child,
+      body: screenBody,
       onNavTap: (index) {
         _clearManualSelection();
         navigate(navItems[index].route);
@@ -224,6 +242,117 @@ class _AppShellRouteState extends ConsumerState<AppShellRoute> {
               ? () => context.push('/jobs/new')
               : () => showCandidateCvUploadModal(context, ref),
     );
+  }
+
+  bool _supportsMobilePullToRefresh(String path) {
+    final isNativeMobile = !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS);
+    if (!isNativeMobile) return false;
+
+    // These pages already own a RefreshIndicator, or are forms where a
+    // downward drag should remain a normal scroll gesture.
+    if (path == '/notification' ||
+        path == '/hiring-pipelines' ||
+        path == '/interviews' ||
+        path == '/jobs/new' ||
+        path.startsWith('/assessments/')) {
+      return false;
+    }
+    final segments = path.split('/');
+    if (segments.length == 4 &&
+        segments[1] == 'jobs' &&
+        segments[3] == 'candidates') {
+      return false;
+    }
+
+    return path == '/dashboard' ||
+        path == '/jobs' ||
+        path == '/my-applications' ||
+        path == '/my-assessments' ||
+        path == '/competency-assessments' ||
+        path == '/profile' ||
+        path == '/messages' ||
+        path == '/admin' ||
+        path == '/admin/users' ||
+        path == '/admin/jobs' ||
+        path == '/admin/tickets' ||
+        path == '/admin/subscriptions' ||
+        (segments.length == 3 && segments[1] == 'jobs');
+  }
+
+  Future<void> _refreshCurrentScreen() async {
+    final path = widget.state.uri.path;
+    final role = ref.read(authProvider).user?.role;
+
+    if (path == '/dashboard') {
+      if (role == UserRole.recruiter || role == UserRole.admin) {
+        await ref.read(recruiterDashboardProvider.notifier).load();
+      } else {
+        await ref.read(dashboardProvider.notifier).load();
+      }
+      return;
+    }
+    if (path == '/jobs') {
+      if (role == UserRole.recruiter) {
+        await ref.read(jobManagementProvider.notifier).load();
+      } else {
+        await ref.read(browseJobsProvider.notifier).refresh();
+      }
+      return;
+    }
+    if (path == '/my-applications') {
+      await ref.read(myApplicationsListProvider.notifier).refresh();
+      return;
+    }
+    if (path == '/my-assessments') {
+      ref.invalidate(candidateAssessmentsProvider);
+      return;
+    }
+    if (path == '/competency-assessments') {
+      ref.invalidate(recruiterAssessmentsProvider);
+      return;
+    }
+    if (path == '/profile') {
+      ref.invalidate(recruiterPerformanceProvider);
+      ref.invalidate(recruiterActivityProvider);
+      return;
+    }
+    if (path == '/messages') {
+      if (role == UserRole.candidate) {
+        await ref.read(candidateContactsProvider.notifier).refresh();
+      } else {
+        await ref.read(messageThreadsProvider.notifier).refresh();
+      }
+      return;
+    }
+    if (path == '/admin') {
+      ref.invalidate(adminUsersProvider);
+      ref.invalidate(adminSubscriptionsProvider);
+      return;
+    }
+    if (path == '/admin/users') {
+      ref.invalidate(adminUsersProvider);
+      return;
+    }
+    if (path == '/admin/subscriptions') {
+      ref.invalidate(adminSubscriptionsProvider);
+      return;
+    }
+    if (path.startsWith('/admin/jobs')) {
+      ref.invalidate(adminJobsProvider);
+      return;
+    }
+    if (path.startsWith('/admin/tickets')) {
+      ref.invalidate(adminTicketsProvider);
+      return;
+    }
+    if (path.startsWith('/jobs/')) {
+      final segments = path.split('/');
+      if (segments.length > 2) {
+        ref.invalidate(jobDetailProvider(segments[2]));
+      }
+    }
   }
 
   void _clearManualSelection() {
