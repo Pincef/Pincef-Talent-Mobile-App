@@ -19,18 +19,23 @@ class AuthRepository {
 
   Future<UserModel> completeGoogleOAuth(String handoffCode) async {
     try {
-      final response = await _dio.post('/v1/oauth/exchange', data: {'code': handoffCode});
+      final response =
+          await _dio.post('/v1/oauth/exchange', data: {'code': handoffCode});
       final loginData = _sessionData(response.data);
       final accessToken = loginData['accessToken'] as String?;
       final refreshToken = loginData['refreshToken'] as String?;
       if (accessToken == null || refreshToken == null) {
-        throw const FormatException('The server returned an incomplete OAuth session.');
+        throw const FormatException(
+            'The server returned an incomplete OAuth session.');
       }
-      await _storage.saveTokens(accessToken: accessToken, refreshToken: refreshToken);
+      await _storage.saveTokens(
+          accessToken: accessToken, refreshToken: refreshToken);
       final me = await _dio.get('/auth/me');
       return UserModel.fromJson({...loginData, ..._sessionData(me.data)});
     } on DioException catch (e) {
-      try { await _storage.clearTokens(); } catch (_) {}
+      try {
+        await _storage.clearTokens();
+      } catch (_) {}
       throw ApiException.fromDioError(e);
     }
   }
@@ -162,8 +167,22 @@ class AuthRepository {
   }
 
   Future<bool> hasStoredSession() async {
-    final token = await _storage.getAccessToken();
-    return token != null;
+    final accessToken = await _storage.getAccessToken();
+    final refreshToken = await _storage.getRefreshToken();
+    return (accessToken != null && accessToken.isNotEmpty) ||
+        (refreshToken != null && refreshToken.isNotEmpty);
+  }
+
+  /// Restores the signed-in user after an app reload. `/auth/me` uses the
+  /// shared Dio auth interceptor, which rotates an expired access token with
+  /// the persisted refresh token and retries the request.
+  Future<UserModel> restoreSession() async {
+    try {
+      final response = await _dio.get('/auth/me');
+      return UserModel.fromJson(_sessionData(response.data));
+    } on DioException catch (e) {
+      throw ApiException.fromDioError(e);
+    }
   }
 
   /// Kicks off the reset email. Backend always returns 200 regardless of
