@@ -18,6 +18,12 @@ final jobDetailProvider =
   return ref.watch(jobManagementRepositoryProvider).getJobDetail(jobId);
 });
 
+final pendingInterviewAutomationProvider =
+    FutureProvider.autoDispose.family<Map<String, dynamic>?, String>(
+  (ref, jobId) =>
+      ref.watch(jobManagementRepositoryProvider).getPendingInterviewAutomation(jobId),
+);
+
 class JobManagementState {
   const JobManagementState({this.summary, this.isLoading = false, this.error});
 
