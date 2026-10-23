@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/brand_color.dart';
+import '../../../auth/application/auth_provider.dart';
+import '../../../auth/data/models/user_model.dart';
+import '../../../onboarding/application/selected_role_provider.dart';
 import '../../application/job_management_provider.dart';
 import '../../data/models/job_management_model.dart';
 
@@ -16,6 +19,7 @@ class PublicJobScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final jobAsync = ref.watch(jobDetailProvider(jobId));
+    final user = ref.watch(authProvider).user;
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
       body: SafeArea(
@@ -37,7 +41,37 @@ class PublicJobScreen extends ConsumerWidget {
                       title: 'Job unavailable',
                       message: 'This job is no longer accepting applications.',
                     )
-                  : _PublicJobContent(job: job),
+                  : _PublicJobContent(
+                      job: job,
+                      onApply: () {
+                        if (user?.role == UserRole.candidate) {
+                          context.go('/jobs/$jobId');
+                          return;
+                        }
+                        if (user != null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                  'Sign in with a candidate account to apply.'),
+                            ),
+                          );
+                          return;
+                        }
+                        ref.read(selectedRoleProvider.notifier).state =
+                            UserRole.candidate;
+                        context.go(Uri(
+                          path: '/signup',
+                          queryParameters: {
+                            'returnTo': '/shared/jobs/$jobId',
+                          },
+                        ).toString());
+                      },
+                      applyLabel: user == null
+                          ? 'Create an account to apply'
+                          : user.role == UserRole.candidate
+                              ? 'Continue to apply'
+                              : 'Candidate account required',
+                    ),
             ),
           ),
         ),
@@ -74,9 +108,15 @@ class _PublicState extends StatelessWidget {
 }
 
 class _PublicJobContent extends StatelessWidget {
-  const _PublicJobContent({required this.job});
+  const _PublicJobContent({
+    required this.job,
+    required this.onApply,
+    required this.applyLabel,
+  });
 
   final JobDetail job;
+  final VoidCallback onApply;
+  final String applyLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -271,9 +311,9 @@ class _PublicJobContent extends StatelessWidget {
               const SizedBox(height: 16),
               Center(
                 child: TextButton.icon(
-                  onPressed: () => context.go('/signup'),
+                  onPressed: onApply,
                   icon: const Icon(Icons.person_add_alt_1_outlined, size: 17),
-                  label: const Text('Create an account to apply'),
+                  label: Text(applyLabel),
                 ),
               ),
             ]),
