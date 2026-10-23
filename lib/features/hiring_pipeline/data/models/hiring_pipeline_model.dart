@@ -54,6 +54,8 @@ class PipelineStage {
     this.isRequired = true,
     this.description = '',
     this.assessmentMode = 'ai',
+    this.interviewMode = 'manual',
+    this.automationReviewHours = 24,
     this.passingScore = 75,
     this.durationMins = 60,
   });
@@ -67,6 +69,8 @@ class PipelineStage {
   final bool isRequired;
   final String description;
   final String assessmentMode; // ai | manual | auto
+  final String interviewMode; // manual | auto
+  final int automationReviewHours;
   final int passingScore;
   final int durationMins;
 
@@ -81,6 +85,9 @@ class PipelineStage {
       isRequired: json['required'] as bool? ?? true,
       description: (json['description'] ?? '').toString(),
       assessmentMode: (cfg['assessmentMode'] ?? 'ai').toString(),
+      interviewMode: (cfg['interviewMode'] ?? 'manual').toString(),
+      automationReviewHours:
+          (cfg['automationReviewHours'] as num?)?.toInt() ?? 24,
       passingScore: (cfg['passingScore'] as num?)?.toInt() ?? 75,
       durationMins: (cfg['durationMins'] as num?)?.toInt() ?? 60,
     );
@@ -97,6 +104,11 @@ class PipelineStage {
               'assessmentMode': assessmentMode,
               'passingScore': passingScore,
               'durationMins': durationMins,
+            },
+          if (type.toUpperCase() == 'INTERVIEW')
+            'config': {
+              'interviewMode': interviewMode,
+              'automationReviewHours': automationReviewHours,
             },
         },
       };
