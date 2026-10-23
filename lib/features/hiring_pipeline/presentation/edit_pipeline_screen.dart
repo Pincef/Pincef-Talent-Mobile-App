@@ -4,9 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talentbridge/core/widgets/app_toast.dart';
 
-import '../../../core/entitlements/module_codes.dart';
 import '../../auth/application/auth_provider.dart';
-import '../../auth/data/models/user_model.dart';
 import '../data/models/hiring_pipeline_model.dart';
 import '../data/hiring_pipline_repository.dart';
 import '../application/hiring_pipeline_provider.dart';
@@ -125,7 +123,6 @@ class _PipelineEditorScreenState extends ConsumerState<PipelineEditorScreen> {
   // ---------------------------------------------------------------- stages
 
   List<({String key, bool locked})> _catalogItems(PipelineCapabilities? caps) {
-    final user = ref.read(authProvider).user;
     final keys = <String>[...kStageTypeMeta.keys];
     for (final t in caps?.allowedStageTypes ?? const <String>[]) {
       if (!keys.contains(t.toUpperCase())) keys.add(t.toUpperCase());
@@ -134,34 +131,13 @@ class _PipelineEditorScreenState extends ConsumerState<PipelineEditorScreen> {
       for (final k in keys)
         (
           key: k,
-          locked:
-              (caps != null && !caps.allows(k)) || !_stageModuleAllows(user, k)
+          locked: false,
         )
     ];
   }
 
-  bool _stageModuleAllows(UserModel? user, String type) {
-    // Older API responses may omit modules; the capabilities endpoint remains
-    // the fallback in that case. An explicitly empty module list is restrictive.
-    if (user == null || user.modules == null) return true;
-    switch (type.toUpperCase()) {
-      case 'INTERVIEW':
-        return user.hasModule(ModuleCodes.hiringStageInterview);
-      case 'ASSESSMENT':
-        return user.hasModule(ModuleCodes.hiringStageAssessment);
-      default:
-        return true;
-    }
-  }
-
   void _addStage(String key, {required bool locked}) {
     if (_readOnly) return;
-    if (locked) {
-      showSnack(context,
-          "Your plan doesn't include this stage type. Upgrade to use it.",
-          kind: AppToastKind.error);
-      return;
-    }
     if (_stages.length >= 20) {
       showSnack(context, 'A pipeline can have at most 20 stages.',
           kind: AppToastKind.error);
@@ -580,8 +556,7 @@ class _PipelineEditorScreenState extends ConsumerState<PipelineEditorScreen> {
                       fontWeight: FontWeight.w700,
                       color: PT.ink)),
             ),
-            if (caps != null && caps.plan.isNotEmpty)
-              StatusBadge('${caps.plan.toUpperCase()} PLAN', PT.blue),
+            const StatusBadge('TEST MODE: UNRESTRICTED', PT.blue),
           ]),
           const SizedBox(height: 14),
           Row(children: [
