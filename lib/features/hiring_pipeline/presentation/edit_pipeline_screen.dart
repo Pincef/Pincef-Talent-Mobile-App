@@ -24,6 +24,8 @@ class _DraftStage {
     this.isRequired = true,
     this.description = '',
     this.assessmentMode = 'ai',
+    this.interviewMode = 'manual',
+    this.automationReviewHours = 24,
     this.passingScore = 75,
     this.durationMins = 60,
   }) : id = id ?? _next++;
@@ -37,6 +39,8 @@ class _DraftStage {
   bool isRequired;
   String description;
   String assessmentMode;
+  String interviewMode;
+  int automationReviewHours;
   int passingScore;
   int durationMins;
 
@@ -48,6 +52,8 @@ class _DraftStage {
         isRequired: isRequired,
         description: description,
         assessmentMode: assessmentMode,
+        interviewMode: interviewMode,
+        automationReviewHours: automationReviewHours,
         passingScore: passingScore,
         durationMins: durationMins,
       );
@@ -101,6 +107,8 @@ class _PipelineEditorScreenState extends ConsumerState<PipelineEditorScreen> {
                     ? stageMetaFor(s.type).blurb
                     : s.description,
                 assessmentMode: s.assessmentMode,
+                interviewMode: s.interviewMode,
+                automationReviewHours: s.automationReviewHours,
                 passingScore: s.passingScore,
                 durationMins: s.durationMins,
               ),
@@ -235,6 +243,8 @@ class _PipelineEditorScreenState extends ConsumerState<PipelineEditorScreen> {
         ..name = edited.name
         ..isRequired = edited.isRequired
         ..assessmentMode = edited.assessmentMode
+        ..interviewMode = edited.interviewMode
+        ..automationReviewHours = edited.automationReviewHours
         ..passingScore = edited.passingScore
         ..durationMins = edited.durationMins;
       _dirty = true;
@@ -302,6 +312,8 @@ class _PipelineEditorScreenState extends ConsumerState<PipelineEditorScreen> {
           isRequired: _stages[i].isRequired,
           description: _stages[i].description,
           assessmentMode: _stages[i].assessmentMode,
+          interviewMode: _stages[i].interviewMode,
+          automationReviewHours: _stages[i].automationReviewHours,
           passingScore: _stages[i].passingScore,
           durationMins: _stages[i].durationMins,
         ),
@@ -971,7 +983,10 @@ class _StageConfigPanelState extends State<_StageConfigPanel> {
       TextEditingController(text: '${widget.stage.passingScore}');
   late final TextEditingController _mins =
       TextEditingController(text: '${widget.stage.durationMins}');
+  late final TextEditingController _reviewHours =
+      TextEditingController(text: '${widget.stage.automationReviewHours}');
   late String _assessMode = widget.stage.assessmentMode;
+  late String _interviewMode = widget.stage.interviewMode;
   late bool _required = widget.stage.isRequired;
   String? _error;
 
@@ -980,6 +995,7 @@ class _StageConfigPanelState extends State<_StageConfigPanel> {
     _name.dispose();
     _score.dispose();
     _mins.dispose();
+    _reviewHours.dispose();
     super.dispose();
   }
 
@@ -993,6 +1009,9 @@ class _StageConfigPanelState extends State<_StageConfigPanel> {
       ..name = name
       ..isRequired = _required
       ..assessmentMode = _assessMode
+      ..interviewMode = _interviewMode
+      ..automationReviewHours =
+          (int.tryParse(_reviewHours.text) ?? 24).clamp(1, 168).toInt()
       ..passingScore = (int.tryParse(_score.text) ?? 75).clamp(0, 100).toInt()
       ..durationMins = (int.tryParse(_mins.text) ?? 60).clamp(1, 600).toInt();
     widget.onSave(s);
@@ -1002,6 +1021,7 @@ class _StageConfigPanelState extends State<_StageConfigPanel> {
   Widget build(BuildContext context) {
     final meta = stageMetaFor(widget.stage.type);
     final assessment = isAssessmentType(widget.stage.type);
+    final interview = widget.stage.type.toUpperCase() == 'INTERVIEW';
 
     return Column(
         mainAxisSize: MainAxisSize.min,
@@ -1138,6 +1158,36 @@ class _StageConfigPanelState extends State<_StageConfigPanel> {
                         Expanded(child: _numberField('Duration (min)', _mins)),
                       ]),
                     ],
+                    if (interview) ...[
+                      const SizedBox(height: 16),
+                      const _FieldLabel('Interview Stage Behavior'),
+                      const SizedBox(height: 8),
+                      _modeOption(
+                        'manual',
+                        'Recruiter controlled',
+                        'Keep candidates in the interview stage until a recruiter schedules or invites them.',
+                        selected: _interviewMode,
+                        onSelected: (mode) =>
+                            setState(() => _interviewMode = mode),
+                      ),
+                      _modeOption(
+                        'auto',
+                        'Automatically invite top ranked candidates',
+                        'Notify the recruiter first. If they take no action, email the top candidates up to the per-job invitation limit.',
+                        selected: _interviewMode,
+                        onSelected: (mode) =>
+                            setState(() => _interviewMode = mode),
+                      ),
+                      if (_interviewMode == 'auto') ...[
+                        const SizedBox(height: 4),
+                        _numberField('Wait before continuing (hours)', _reviewHours),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'The recruiter receives an email and in-app reminder. They can take over during this window; otherwise invitations are sent automatically.',
+                          style: TextStyle(fontSize: 10.5, color: PT.muted, height: 1.4),
+                        ),
+                      ],
+                    ],
                   ]),
             ),
           ),
@@ -1196,14 +1246,21 @@ class _StageConfigPanelState extends State<_StageConfigPanel> {
       ]);
 
   Widget _modeOption(String value, String title, String subtitle,
-      {bool pro = false}) {
-    final sel = _assessMode == value;
+      {bool pro = false, String? selected, ValueChanged<String>? onSelected}) {
+    final sel = (selected ?? _assessMode) == value;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
-        onTap:
-            widget.readOnly ? null : () => setState(() => _assessMode = value),
+        onTap: widget.readOnly
+            ? null
+            : () {
+                if (onSelected != null) {
+                  onSelected(value);
+                } else {
+                  setState(() => _assessMode = value);
+                }
+              },
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
