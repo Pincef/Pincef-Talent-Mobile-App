@@ -5,9 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talentbridge/core/widgets/app_toast.dart';
 
-import '../../../core/entitlements/module_codes.dart';
 import '../../auth/application/auth_provider.dart';
-import '../../auth/data/models/user_model.dart';
 import '../data/models/hiring_pipeline_model.dart';
 import '../data/hiring_pipline_repository.dart';
 import '../application/hiring_pipeline_provider.dart';
@@ -71,69 +69,7 @@ class _HiringPipelineScreenState extends ConsumerState<HiringPipelineScreen> {
     }
   }
 
-  void _create(List<HiringPipeline> all) {
-    final unavailable = _createDisabledReason(all);
-    if (unavailable != null) {
-      _upgrade(unavailable);
-      return;
-    }
-    _openEditor();
-  }
-
-  String? _createDisabledReason(List<HiringPipeline> all) {
-    final user = ref.read(authProvider).user;
-    final endpointCaps = ref.read(pipelineCapabilitiesProvider).value;
-    if (!_allowsCustomPipelines(user, endpointCaps)) {
-      return "Your current plan doesn't support custom hiring pipelines.";
-    }
-
-    final pipelineLimit = (user?.limits['pipelines'] as num?)?.toInt();
-    if (pipelineLimit != null && all.length >= pipelineLimit) {
-      return 'Your plan allows up to $pipelineLimit pipelines. '
-          'Delete one or upgrade to add more.';
-    }
-
-    final maxCustom =
-        (user?.capabilities['maxCustomPipelines'] as num?)?.toInt() ??
-            endpointCaps?.maxCustomPipelines;
-    final customCount = all.where((p) => !p.isSystemStandard).length;
-    if (maxCustom != null && customCount >= maxCustom) {
-      return 'Your plan allows up to $maxCustom custom pipeline(s). '
-          'Delete one or upgrade to add more.';
-    }
-    return null;
-  }
-
-  bool _allowsCustomPipelines(
-    UserModel? user,
-    PipelineCapabilities? endpointCaps,
-  ) {
-    // The explicit capability is the most specific entitlement. It must win
-    // over a stale or incomplete module list from /auth/me.
-    final explicit = user?.capabilities['allowsCustomPipelines'];
-    if (explicit is bool) return explicit;
-    if (endpointCaps != null) return endpointCaps.allowsCustomPipelines;
-    // Backward compatibility for older responses without capabilities.
-    if (user?.modules != null) {
-      return user!.hasModule(ModuleCodes.hiringPipeline) ||
-          user.hasModule(ModuleCodes.jobPipelineCustom);
-    }
-    return true;
-  }
-
-  void _upgrade(String message) {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Upgrade required'),
-        content: Text(message),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('OK'))
-        ],
-      ),
-    );
-  }
+  void _create() => _openEditor();
 
   Future<void> _export(List<HiringPipeline> all) async {
     if (all.isEmpty) {
@@ -153,12 +89,6 @@ class _HiringPipelineScreenState extends ConsumerState<HiringPipelineScreen> {
   }
 
   Future<void> _duplicate(HiringPipeline p) async {
-    final all = ref.read(pipelinesProvider).value ?? const <HiringPipeline>[];
-    final unavailable = _createDisabledReason(all);
-    if (unavailable != null) {
-      _upgrade(unavailable);
-      return;
-    }
     const suffix = ' (Copy)';
     final base = p.name.length > 80 - suffix.length
         ? p.name.substring(0, 80 - suffix.length)
@@ -257,12 +187,11 @@ class _HiringPipelineScreenState extends ConsumerState<HiringPipelineScreen> {
   }
 
   Widget _header(bool compact, List<HiringPipeline> all) {
-    final createDisabledReason = _createDisabledReason(all);
     final exportBtn = _actionButton(
         'Export Workflows', Icons.download_outlined, false, () => _export(all));
     final createBtn = _actionButton(
-        'Create Pipeline', Icons.add, true, () => _create(all),
-        enabled: createDisabledReason == null, tooltip: createDisabledReason);
+        'Create Pipeline', Icons.add, true, _create,
+        enabled: true);
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const Text.rich(
