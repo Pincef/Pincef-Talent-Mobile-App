@@ -40,6 +40,7 @@ class ApplicationSummary {
     this.jobTitle,
     this.companyName,
     this.location,
+    this.receiptEmailSent = false,
   });
 
   final String id;
@@ -55,6 +56,7 @@ class ApplicationSummary {
   final String? jobTitle;
   final String? companyName;
   final String? location;
+  final bool receiptEmailSent;
 
   /// application.model.ts's IApplication has no dedicated human-readable
   /// reference number — just the Mongo _id. This derives a short, stable,
@@ -83,6 +85,7 @@ class ApplicationSummary {
       companyName: companyRaw is Map<String, dynamic>
           ? companyRaw['name'] as String?
           : null,
+      receiptEmailSent: json['receiptEmailSent'] == true,
     );
   }
 
