@@ -9,7 +9,16 @@ final subscriptionPlansProvider = FutureProvider<List<SubscriptionPlan>>(
   (ref) => ref.watch(paymentRepositoryProvider).getPlans(),
 );
 final currentSubscriptionProvider = FutureProvider<CurrentSubscription?>(
-  (ref) => ref.watch(paymentRepositoryProvider).getCurrentSubscription(),
+  (ref) async {
+    // A subscription-summary failure should not hide the plan catalog. The
+    // billing screen can still show prices and checkout options; refresh or
+    // manage billing will surface their own errors when the user uses them.
+    try {
+      return await ref.watch(paymentRepositoryProvider).getCurrentSubscription();
+    } catch (_) {
+      return null;
+    }
+  },
 );
 
 class PaymentViewState {
