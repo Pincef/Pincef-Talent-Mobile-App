@@ -31,6 +31,8 @@ final authRepositoryProvider = Provider((ref) {
 class AuthState {
   final UserModel? user;
   final bool isLoading;
+  final bool isRestoringSession;
+  final bool sessionRestoreFailed;
   final String? error;
 
   /// Keeps the signed-out workspace visible behind the success modal until
@@ -40,6 +42,8 @@ class AuthState {
   const AuthState(
       {this.user,
       this.isLoading = false,
+      this.isRestoringSession = false,
+      this.sessionRestoreFailed = false,
       this.error,
       this.hasJustLoggedOut = false});
 
@@ -48,11 +52,15 @@ class AuthState {
   AuthState copyWith(
       {UserModel? user,
       bool? isLoading,
+      bool? isRestoringSession,
+      bool? sessionRestoreFailed,
       String? error,
       bool? hasJustLoggedOut}) {
     return AuthState(
       user: user ?? this.user,
       isLoading: isLoading ?? this.isLoading,
+      isRestoringSession: isRestoringSession ?? this.isRestoringSession,
+      sessionRestoreFailed: sessionRestoreFailed ?? this.sessionRestoreFailed,
       error: error,
       hasJustLoggedOut: hasJustLoggedOut ?? this.hasJustLoggedOut,
     );
@@ -60,12 +68,14 @@ class AuthState {
 }
 
 class AuthNotifier extends StateNotifier<AuthState> {
-  AuthNotifier(this._repository) : super(const AuthState()) {
+  AuthNotifier(this._repository)
+      : super(const AuthState(isRestoringSession: true)) {
     _sessionExpiredSubscription =
         SessionExpiredEvent.instance.stream.listen((_) {
       // Clearing the user causes GoRouter's auth refresh to redirect to login.
       state = const AuthState();
     });
+    unawaited(_restoreStoredSession());
   }
 
   final AuthRepository _repository;
@@ -133,6 +143,43 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// update, not a re-login.
   void setUser(UserModel user) {
     state = state.copyWith(user: user);
+  }
+
+  Future<void> retrySessionRestore() async {
+    state = const AuthState(isRestoringSession: true);
+    await _restoreStoredSession();
+  }
+
+  Future<void> clearFailedSession() async {
+    await _repository.logout();
+    state = const AuthState();
+  }
+
+  Future<void> _restoreStoredSession() async {
+    try {
+      if (!await _repository.hasStoredSession()) {
+        state = const AuthState();
+        return;
+      }
+
+      final user = await _repository.restoreSession();
+      state = AuthState(user: user);
+    } catch (_) {
+      // Keep stored credentials through temporary network failures. The app
+      // shows a retry screen instead of sending the user to login or dropping
+      // a still-valid refresh token.
+      if (await _repository.hasStoredSession()) {
+        state = const AuthState(
+          sessionRestoreFailed: true,
+          error:
+              'Could not reconnect to your account. Check your connection and retry.',
+        );
+      } else {
+        // The interceptor clears tokens and emits SessionExpiredEvent when the
+        // backend definitively rejects the refresh credential.
+        state = const AuthState();
+      }
+    }
   }
 
   Future<void> refreshSession() async {
