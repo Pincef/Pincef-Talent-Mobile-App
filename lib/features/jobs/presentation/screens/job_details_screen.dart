@@ -3,18 +3,15 @@ import 'package:flutter/services.dart';
 import 'package:talentbridge/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../core/entitlements/module_codes.dart';
 import '../../../../core/theme/brand_color.dart';
 import '../../application/job_management_provider.dart';
 import '../../data/models/job_management_model.dart';
+import 'post_job_screen.dart';
 import '../../../auth/application/auth_provider.dart';
 import '../../../auth/data/models/user_model.dart';
 import '../../application/application_provider.dart';
 import '../../data/models/application_model.dart';
 import '../../../candidate_dashboard/presentation/widgets/cv_upload_modal.dart';
-import 'package:talentbridge/features/hiring_pipeline/application/hiring_pipeline_provider.dart';
-import 'package:talentbridge/features/hiring_pipeline/data/models/hiring_pipeline_model.dart';
-import 'package:talentbridge/features/jobs/presentation/widgets/custom_hiring_pipeline_picker.dart';
 
 /// Shared Job Detail screen — GET /jobs/:jobId (job.service.ts's
 /// getJobById, public/unauthenticated) is the same for every viewer; this
@@ -63,8 +60,8 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
         // somehow flips mid-session, fall back to read-only rather than
         // trust stale local edit-mode state.
         if (_isEditing && isRecruiter) {
-          return _EditJobForm(
-            job: job,
+          return PostJobScreen(
+            initialJob: job,
             onCancel: () => setState(() => _isEditing = false),
             onSaved: () {
               setState(() => _isEditing = false);
@@ -151,6 +148,13 @@ class _Body extends StatelessWidget {
                         icon: Icons.domain_outlined,
                         label: 'Industry',
                         value: job.industry!),
+                  if (job.applicationDeadline != null)
+                    _JobFactTile(
+                      icon: Icons.event_outlined,
+                      label: 'Apply by',
+                      value:
+                          _formatApplicationDeadline(job.applicationDeadline!),
+                    ),
                 ];
                 final sections = <Widget>[];
                 if (job.responsibilities.isNotEmpty) {
@@ -284,6 +288,11 @@ String _workplaceLabel(String value) => switch (value) {
       _ => value,
     };
 
+String _formatApplicationDeadline(DateTime value) {
+  final local = value.toLocal();
+  return '${local.month}/${local.day}/${local.year}';
+}
+
 class _Breadcrumb extends StatelessWidget {
   const _Breadcrumb({required this.title, required this.isRecruiter});
   final String title;
@@ -350,9 +359,17 @@ class _Header extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isRecruiter ? Colors.white : null,
+        gradient: isRecruiter
+            ? null
+            : const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF233761), Color(0xFF142344)],
+              ),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: BrandColors.border),
+        border: Border.all(
+            color: isRecruiter ? BrandColors.border : const Color(0xFF334A75)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -367,10 +384,11 @@ class _Header extends StatelessWidget {
                   runSpacing: 6,
                   children: [
                     Text(job.title,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w800,
-                            color: BrandColors.navy)),
+                            color:
+                                isRecruiter ? BrandColors.navy : Colors.white)),
                     _StatusPill(status: job.status),
                   ],
                 ),
@@ -380,20 +398,27 @@ class _Header extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(job.companyName,
-              style: const TextStyle(fontSize: 11.5, color: BrandColors.muted)),
+              style: TextStyle(
+                  fontSize: 11.5,
+                  color: isRecruiter ? BrandColors.muted : Colors.white70)),
           const SizedBox(height: 10),
           Wrap(
             spacing: 16,
             runSpacing: 6,
             children: [
-              _MetaItem(icon: Icons.location_on_outlined, label: job.location),
+              _MetaItem(
+                  icon: Icons.location_on_outlined,
+                  label: job.location,
+                  color: isRecruiter ? BrandColors.muted : Colors.white70),
               _MetaItem(
                   icon: Icons.schedule_outlined,
-                  label: job.employmentTypeLabel),
+                  label: job.employmentTypeLabel,
+                  color: isRecruiter ? BrandColors.muted : Colors.white70),
               if (job.minYearsOfExperience != null)
                 _MetaItem(
                     icon: Icons.timeline_outlined,
-                    label: '${job.minYearsOfExperience} experience'),
+                    label: '${job.minYearsOfExperience} experience',
+                    color: isRecruiter ? BrandColors.muted : Colors.white70),
               if (job.educationLevelLabel != null)
                 _MetaItem(
                     icon: Icons.school_outlined,
@@ -401,11 +426,13 @@ class _Header extends StatelessWidget {
                       job.educationLevelLabel!,
                       if (job.fieldOfStudy?.isNotEmpty ?? false)
                         job.fieldOfStudy!,
-                    ].join(' • ')),
+                    ].join(' • '),
+                    color: isRecruiter ? BrandColors.muted : Colors.white70),
               if (job.salaryRangeLabel != null)
                 _MetaItem(
                     icon: Icons.payments_outlined,
-                    label: job.salaryRangeLabel!),
+                    label: job.salaryRangeLabel!,
+                    color: isRecruiter ? BrandColors.muted : Colors.white70),
             ],
           ),
           if (!isWide) ...[const SizedBox(height: 16), actions],
@@ -450,19 +477,23 @@ class _StatusPill extends StatelessWidget {
 }
 
 class _MetaItem extends StatelessWidget {
-  const _MetaItem({required this.icon, required this.label});
+  const _MetaItem({
+    required this.icon,
+    required this.label,
+    this.color = BrandColors.muted,
+  });
   final IconData icon;
   final String label;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: BrandColors.muted),
+        Icon(icon, size: 14, color: color),
         const SizedBox(width: 4),
-        Text(label,
-            style: const TextStyle(fontSize: 11.5, color: BrandColors.muted)),
+        Text(label, style: TextStyle(fontSize: 11.5, color: color)),
       ],
     );
   }
@@ -518,1091 +549,6 @@ class _RecruiterActions extends StatelessWidget {
   }
 }
 
-// ============================================================
-// Recruiter edit — same screen, swapped in by _isEditing
-// ============================================================
-
-/// Reuses JobDraft and JobManagementRepository.updateJobDraft — the same
-/// PATCH /jobs/:jobId post_job_screen.dart's "Save" already uses — rather
-/// than inventing a second update path. This form pre-fills from the
-/// JobDetail already loaded on this screen instead of navigating to
-/// PostJobScreen, which only ever supported creating a new job (no
-/// prefill-from-existing-job path existed before this).
-class _EditJobForm extends ConsumerStatefulWidget {
-  const _EditJobForm(
-      {required this.job, required this.onCancel, required this.onSaved});
-
-  final JobDetail job;
-  final VoidCallback onCancel;
-  final VoidCallback onSaved;
-
-  @override
-  ConsumerState<_EditJobForm> createState() => _EditJobFormState();
-}
-
-class _EditJobFormState extends ConsumerState<_EditJobForm> {
-  final _formKey = GlobalKey<FormState>();
-  static const _benefitPresets = <String, String>{
-    'Health Insurance': 'Health Insurance',
-    'Equity/RSUs': 'Equity/RSUs',
-    'Learning Stipend': 'Learning Stipend',
-    'Wellness': 'Wellness',
-  };
-  static const _currencies = ['USD', 'NGN', 'GBP', 'EUR', 'CAD'];
-
-  late final TextEditingController _title;
-  late final TextEditingController _location;
-  late final TextEditingController _minSalary;
-  late final TextEditingController _maxSalary;
-  late final TextEditingController _currency;
-  late final TextEditingController _description;
-  late final TextEditingController _minYears;
-  late final TextEditingController _fieldOfStudy;
-  late final TextEditingController _skillInput;
-  late final TextEditingController _companyOverview;
-  late final TextEditingController _responsibilityInput;
-  late final TextEditingController _benefitInput;
-  late final TextEditingController _deadlineInput;
-  late final TextEditingController _assessmentEmailCount;
-  late final TextEditingController _interviewEmailCount;
-
-  late String _employmentType;
-  late String _workplaceType;
-  late String _industry;
-  late String _pipelineTier;
-  String? _selectedPipelineId;
-  late String _rankingPlanTier;
-  late double _rankingLimit;
-  String? _educationLevel;
-  late bool _requiresManagement;
-  late bool _autoRejectNonMatches;
-  late double _autoRejectBelowScore;
-  late bool _aiRanking;
-  late bool _aiSummary;
-  late List<String> _skills;
-  late List<String> _responsibilities;
-  late List<String> _benefits;
-  DateTime? _applicationDeadline;
-
-  bool _isSaving = false;
-  String? _error;
-
-  static const _employmentTypes = {
-    'Full-time': 'full_time',
-    'Part-time': 'part_time',
-    'Contract': 'contract',
-    'Internship': 'internship',
-  };
-
-  @override
-  void initState() {
-    super.initState();
-    final job = widget.job;
-    _title = TextEditingController(text: job.title);
-    _location = TextEditingController(text: job.location);
-    _minSalary =
-        TextEditingController(text: job.minSalary?.toStringAsFixed(0) ?? '');
-    _maxSalary =
-        TextEditingController(text: job.maxSalary?.toStringAsFixed(0) ?? '');
-    _currency = TextEditingController(text: job.currency ?? 'USD');
-    _description = TextEditingController(text: job.description);
-    _minYears =
-        TextEditingController(text: job.minYearsOfExperience?.toString() ?? '');
-    _fieldOfStudy = TextEditingController(text: job.fieldOfStudy ?? '');
-    _skillInput = TextEditingController();
-    _companyOverview = TextEditingController(text: job.companyOverview ?? '');
-    _responsibilityInput = TextEditingController();
-    _benefitInput = TextEditingController();
-    _employmentType = job.employmentType ?? 'full_time';
-    _workplaceType =
-        const ['on_site', 'hybrid', 'remote'].contains(job.workplaceType)
-            ? job.workplaceType!
-            : 'on_site';
-    _industry = const [
-      'Technology',
-      'Finance',
-      'Healthcare',
-      'Education',
-      'Retail',
-      'Other',
-    ].contains(job.industry)
-        ? job.industry!
-        : 'Technology';
-    _educationLevel = job.educationLevel;
-    _requiresManagement = job.requiresManagementExperience;
-    _autoRejectNonMatches = job.autoRejectNonMatches;
-    _autoRejectBelowScore = job.autoRejectBelowScore.toDouble();
-    _aiRanking = job.aiRanking;
-    _aiSummary = job.aiSummary;
-    _applicationDeadline = job.applicationDeadline;
-    _deadlineInput =
-        TextEditingController(text: _formatDeadline(_applicationDeadline));
-    _assessmentEmailCount =
-        TextEditingController(text: job.assessmentEmailCount.toString());
-    _interviewEmailCount =
-        TextEditingController(text: job.interviewEmailCount.toString());
-    _pipelineTier =
-        const ['Standard', 'Premium', 'Custom'].contains(job.pipelineTier)
-            ? job.pipelineTier
-            : 'Standard';
-    _selectedPipelineId = job.pipelineId;
-    _rankingPlanTier =
-        const ['Standard', 'Premium', 'Custom'].contains(job.rankingPlanTier)
-            ? job.rankingPlanTier
-            : 'Premium';
-    _rankingLimit = job.rankingLimit.toDouble().clamp(1, 30).toDouble();
-    _skills = List.of(job.requiredSkills);
-    _responsibilities = List.of(job.responsibilities);
-    _benefits = List.of(job.benefits);
-  }
-
-  @override
-  void dispose() {
-    _title.dispose();
-    _location.dispose();
-    _minSalary.dispose();
-    _maxSalary.dispose();
-    _currency.dispose();
-    _description.dispose();
-    _minYears.dispose();
-    _fieldOfStudy.dispose();
-    _skillInput.dispose();
-    _companyOverview.dispose();
-    _responsibilityInput.dispose();
-    _benefitInput.dispose();
-    _deadlineInput.dispose();
-    _assessmentEmailCount.dispose();
-    _interviewEmailCount.dispose();
-    super.dispose();
-  }
-
-  void _addSkill() {
-    final value = _skillInput.text.trim();
-    if (value.isEmpty || _skills.contains(value)) return;
-    setState(() {
-      _skills.add(value);
-      _skillInput.clear();
-    });
-  }
-
-  Future<void> _editListItem(
-      List<String> items, String item, String title) async {
-    final index = items.indexOf(item);
-    if (index < 0) return;
-    final controller = TextEditingController(text: item);
-    final value = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLines: 3,
-          textCapitalization: TextCapitalization.sentences,
-          onSubmitted: (_) => Navigator.pop(ctx, controller.text),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, controller.text),
-              child: const Text('Save')),
-        ],
-      ),
-    );
-    controller.dispose();
-    final updated = value?.trim();
-    if (!mounted || updated == null || updated.isEmpty) return;
-    setState(() => items[index] = updated);
-  }
-
-  void _addToList(TextEditingController controller, List<String> items) {
-    final value = controller.text.trim();
-    if (value.isEmpty) return;
-    setState(() {
-      if (!items.contains(value)) items.add(value);
-      controller.clear();
-    });
-  }
-
-  void _toggleBenefit(String benefit, bool selected) {
-    setState(() {
-      if (selected && !_benefits.contains(benefit)) {
-        _benefits.add(benefit);
-      } else if (!selected) {
-        _benefits.remove(benefit);
-      }
-    });
-  }
-
-  Widget _benefitsEditor() {
-    final customBenefits = _benefits
-        .where((benefit) => !_benefitPresets.containsValue(benefit))
-        .toList();
-    return _SectionCard(
-      title: 'Benefits Package',
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Wrap(
-          spacing: 8,
-          runSpacing: 4,
-          children: [
-            for (final benefit in _benefitPresets.values)
-              FilterChip(
-                label: Text(benefit),
-                selected: _benefits.contains(benefit),
-                onSelected: (selected) => _toggleBenefit(benefit, selected),
-                selectedColor: const Color(0xFFFFF0DE),
-                checkmarkColor: BrandColors.orange,
-              ),
-          ],
-        ),
-        if (customBenefits.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              for (final benefit in customBenefits)
-                InputChip(
-                  label: Text(benefit),
-                  onPressed: () =>
-                      _editListItem(_benefits, benefit, 'Edit benefit'),
-                  onDeleted: () => setState(() => _benefits.remove(benefit)),
-                ),
-            ],
-          ),
-        ],
-        const SizedBox(height: 10),
-        Row(children: [
-          Expanded(
-            child: TextField(
-              controller: _benefitInput,
-              decoration: const InputDecoration(
-                  hintText: 'Add another benefit or package'),
-              onSubmitted: (_) => _addToList(_benefitInput, _benefits),
-            ),
-          ),
-          const SizedBox(width: 8),
-          OutlinedButton(
-            onPressed: () => _addToList(_benefitInput, _benefits),
-            child: const Text('Add'),
-          ),
-        ]),
-      ]),
-    );
-  }
-
-  Widget _editableItemsSection({
-    required String title,
-    required List<String> items,
-    required TextEditingController controller,
-    required String hint,
-  }) =>
-      _SectionCard(
-        title: title,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              for (final item in items)
-                InputChip(
-                  label: Text(item),
-                  onPressed: () =>
-                      _editListItem(items, item, 'Edit $title item'),
-                  onDeleted: () => setState(() => items.remove(item)),
-                ),
-            ],
-          ),
-          Row(children: [
-            Expanded(
-              child: TextField(
-                controller: controller,
-                decoration: InputDecoration(hintText: hint),
-                onSubmitted: (_) => _addToList(controller, items),
-              ),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton(
-              onPressed: () => _addToList(controller, items),
-              child: const Text('Add'),
-            ),
-          ]),
-        ]),
-      );
-
-  Future<void> _pickApplicationDeadline() async {
-    final now = DateTime.now();
-    final initial = _applicationDeadline ?? now;
-    final date = await showDatePicker(
-      context: context,
-      initialDate: initial.isBefore(now) ? now : initial,
-      firstDate: DateTime(now.year, now.month, now.day),
-      lastDate: DateTime(now.year + 5),
-    );
-    if (date == null || !mounted) return;
-    final time = await showTimePicker(
-      context: context,
-      initialTime: _applicationDeadline == null
-          ? const TimeOfDay(hour: 23, minute: 59)
-          : TimeOfDay.fromDateTime(_applicationDeadline!.toLocal()),
-    );
-    if (time == null || !mounted) return;
-    setState(() {
-      _applicationDeadline =
-          DateTime(date.year, date.month, date.day, time.hour, time.minute);
-      _deadlineInput.text = _formatDeadline(_applicationDeadline);
-    });
-  }
-
-  String _formatDeadline(DateTime? deadline) {
-    if (deadline == null) return '';
-    final local = deadline.toLocal();
-    final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
-    final minute = local.minute.toString().padLeft(2, '0');
-    final period = local.hour >= 12 ? 'PM' : 'AM';
-    return '${local.month}/${local.day}/${local.year}, $hour:$minute $period';
-  }
-
-  bool get _planAutomationAvailable {
-    final user = ref.read(authProvider).user;
-    final explicit = user?.capabilities['allowsPlanAutomation'];
-    if (explicit is bool) return explicit;
-    return user?.hasModule(ModuleCodes.jobsPlanAutomation) ?? false;
-  }
-
-  int _planQuota(String module, String limitKey, int requested) {
-    final user = ref.read(authProvider).user;
-    if (user?.hasModule(module) != true) return 0;
-    final ceiling = (user?.limits[limitKey] as num?)?.toInt() ?? 0;
-    if (ceiling == 0) return 0;
-    return ceiling == -1 ? requested : requested.clamp(0, ceiling).toInt();
-  }
-
-  bool _pipelineTierAvailable(String tier) {
-    final user = ref.read(authProvider).user;
-    if (tier == 'Standard') return true;
-    if (tier == 'Premium') {
-      final explicit = user?.capabilities['allowsPremiumPipeline'];
-      return explicit is bool
-          ? explicit
-          : user?.hasModule(ModuleCodes.jobPipelinePremium) ?? false;
-    }
-    final maxCustom =
-        (user?.capabilities['maxCustomPipelines'] as num?)?.toInt() ?? 0;
-    final hasCustomModule =
-        user?.hasModule(ModuleCodes.jobPipelineCustom) == true ||
-            user?.hasModule(ModuleCodes.hiringPipeline) == true;
-    return hasCustomModule &&
-        user?.capabilities['allowsCustomPipelines'] == true &&
-        maxCustom > 0;
-  }
-
-  Future<void> _chooseCustomPipeline() async {
-    final pipeline = await showCustomHiringPipelinePicker(context);
-    if (pipeline == null || !mounted) return;
-    setState(() {
-      _pipelineTier = 'Custom';
-      _selectedPipelineId = pipeline.id;
-    });
-  }
-
-  String? _minYearsValidator(String? value) {
-    final trimmed = value?.trim() ?? '';
-    return trimmed.isEmpty ? 'Describe the experience required' : null;
-  }
-
-  Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_skills.isEmpty) {
-      setState(() => _error = 'Add at least one required skill.');
-      return;
-    }
-
-    setState(() {
-      _isSaving = true;
-      _error = null;
-    });
-
-    final draft = JobDraft(
-      id: widget.job.id,
-      title: _title.text.trim(),
-      description: _description.text.trim(),
-      employmentType: _employmentType,
-      workplaceType: _workplaceType,
-      industry: _industry,
-      companyOverview: _companyOverview.text.trim(),
-      location: _location.text.trim(),
-      minimumSalary: double.tryParse(_minSalary.text.trim()),
-      maximumSalary: double.tryParse(_maxSalary.text.trim()),
-      currency: _currency.text.trim().isEmpty ? null : _currency.text.trim(),
-      requiredSkills: _skills,
-      responsibilities: _responsibilities,
-      benefits: _benefits,
-      minYearsOfExperience: _minYears.text.trim(),
-      educationLevel: _educationLevel,
-      fieldOfStudy: _fieldOfStudy.text.trim(),
-      requiresManagementExperience: _requiresManagement,
-      autoRejectNonMatches: _autoRejectNonMatches,
-      autoRejectBelowScore: _autoRejectBelowScore.round(),
-      applicationDeadline: _applicationDeadline,
-      aiRanking: _aiRanking,
-      aiSummary: _aiSummary,
-      pipelineTier: _pipelineTier,
-      pipelineId: _selectedPipelineId,
-      rankingPlanTier: _rankingPlanTier,
-      rankingLimit: _planQuota(
-        ModuleCodes.aiCandidateMatch,
-        'rankingsPerJob',
-        _rankingLimit.round(),
-      ),
-      assessmentEmailCount: _planQuota(
-        ModuleCodes.hiringStageAssessment,
-        'assessmentEmailsPerJob',
-        int.tryParse(_assessmentEmailCount.text.trim()) ?? 15,
-      ),
-      interviewEmailCount: _planQuota(
-        ModuleCodes.hiringStageInterview,
-        'interviewInvitesPerJob',
-        int.tryParse(_interviewEmailCount.text.trim()) ?? 10,
-      ),
-    );
-
-    try {
-      await ref
-          .read(jobManagementRepositoryProvider)
-          .updateJobDraft(widget.job.id, draft);
-      if (!mounted) return;
-      widget.onSaved();
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isSaving = false;
-        _error = e.toString();
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isWide = constraints.maxWidth >= 760;
-        final compactHeader = constraints.maxWidth < 740;
-        return SingleChildScrollView(
-          padding:
-              EdgeInsets.fromLTRB(isWide ? 28 : 16, 22, isWide ? 28 : 16, 32),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                LayoutBuilder(builder: (context, headerConstraints) {
-                  final actions = Wrap(
-                    spacing: 9,
-                    runSpacing: 8,
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: _isSaving ? null : widget.onCancel,
-                        icon: const Icon(Icons.close, size: 16),
-                        label: const Text('Cancel'),
-                      ),
-                      FilledButton.icon(
-                        onPressed: _isSaving ? null : _save,
-                        icon: _isSaving
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(Icons.save_outlined, size: 16),
-                        label: Text(_isSaving ? 'Saving...' : 'Save Changes'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: BrandColors.orange,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 18, vertical: 15),
-                        ),
-                      ),
-                    ],
-                  );
-                  final titleBlock = Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 9, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFEEE7),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text(
-                          'JOB POSTING EDITOR',
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w800,
-                            color: BrandColors.orange,
-                            letterSpacing: .6,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Edit Job Posting',
-                        style: TextStyle(
-                          fontSize: 30,
-                          fontWeight: FontWeight.w800,
-                          color: BrandColors.navy,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      const Text(
-                        'Update the details candidates see when they discover this role.',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: BrandColors.muted,
-                        ),
-                      ),
-                    ],
-                  );
-                  if (compactHeader) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        titleBlock,
-                        const SizedBox(height: 14),
-                        actions,
-                      ],
-                    );
-                  }
-                  return Row(
-                    children: [
-                      Expanded(child: titleBlock),
-                      const SizedBox(width: 16),
-                      actions,
-                    ],
-                  );
-                }),
-                if (_error != null) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF1F0),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFFFD6D2)),
-                    ),
-                    child: Text(
-                      _error!,
-                      style: const TextStyle(
-                          fontSize: 12, color: Color(0xFFB42318)),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 20),
-                _SectionCard(
-                  title: 'Basic Information',
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const _FieldLabel('Job Title'),
-                      TextFormField(
-                        controller: _title,
-                        validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Enter a job title'
-                            : null,
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const _FieldLabel('Employment Type'),
-                                DropdownButtonFormField<String>(
-                                  initialValue: _employmentType,
-                                  items: _employmentTypes.entries
-                                      .map((e) => DropdownMenuItem(
-                                          value: e.value, child: Text(e.key)))
-                                      .toList(),
-                                  onChanged: (v) => setState(() =>
-                                      _employmentType = v ?? _employmentType),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const _FieldLabel('Location'),
-                                TextFormField(
-                                  controller: _location,
-                                  decoration: const InputDecoration(
-                                    hintText:
-                                        'City, region, country, or Remote',
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const _FieldLabel('Minimum Salary'),
-                                TextFormField(
-                                    controller: _minSalary,
-                                    keyboardType: TextInputType.number),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const _FieldLabel('Maximum Salary'),
-                                TextFormField(
-                                    controller: _maxSalary,
-                                    keyboardType: TextInputType.number),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          SizedBox(
-                            width: 90,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const _FieldLabel('Currency'),
-                                DropdownButtonFormField<String>(
-                                  initialValue: _currency.text,
-                                  items: {
-                                    ..._currencies,
-                                    if (!_currencies.contains(_currency.text))
-                                      _currency.text,
-                                  }
-                                      .map((value) => DropdownMenuItem(
-                                          value: value, child: Text(value)))
-                                      .toList(),
-                                  onChanged: (value) {
-                                    if (value != null) {
-                                      setState(() => _currency.text = value);
-                                    }
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      Row(children: [
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            initialValue: _workplaceType,
-                            decoration: const InputDecoration(
-                                labelText: 'Workplace policy'),
-                            items: const {
-                              'on_site': 'On-site',
-                              'hybrid': 'Hybrid',
-                              'remote': 'Remote',
-                            }
-                                .entries
-                                .map((e) => DropdownMenuItem(
-                                    value: e.key, child: Text(e.value)))
-                                .toList(),
-                            onChanged: (v) => setState(
-                                () => _workplaceType = v ?? _workplaceType),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            initialValue: _industry,
-                            decoration:
-                                const InputDecoration(labelText: 'Industry'),
-                            items: const [
-                              'Technology',
-                              'Finance',
-                              'Healthcare',
-                              'Education',
-                              'Retail',
-                              'Other',
-                            ]
-                                .map((v) =>
-                                    DropdownMenuItem(value: v, child: Text(v)))
-                                .toList(),
-                            onChanged: (v) =>
-                                setState(() => _industry = v ?? _industry),
-                          ),
-                        ),
-                      ]),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _SectionCard(
-                  title: 'Company Overview',
-                  child: TextFormField(
-                    controller: _companyOverview,
-                    maxLines: 3,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _SectionCard(
-                  title: 'Job Summary',
-                  child: TextFormField(
-                    controller: _description,
-                    maxLines: 6,
-                    validator: (v) => (v == null || v.trim().isEmpty)
-                        ? 'Enter a job description'
-                        : null,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _SectionCard(
-                  title: 'Requirements',
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const _FieldLabel('Experience Requirement'),
-                                TextFormField(
-                                  controller: _minYears,
-                                  validator: _minYearsValidator,
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const _FieldLabel('Education Level'),
-                                DropdownButtonFormField<String>(
-                                  initialValue: _educationLevel,
-                                  isExpanded: true,
-                                  items: kEducationLevels.entries
-                                      .map((e) => DropdownMenuItem(
-                                          value: e.value, child: Text(e.key)))
-                                      .toList(),
-                                  onChanged: (v) =>
-                                      setState(() => _educationLevel = v),
-                                  validator: (v) => v == null
-                                      ? 'Select a minimum education level'
-                                      : null,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      const _FieldLabel('FIELD OF STUDY'),
-                      TextFormField(
-                        controller: _fieldOfStudy,
-                        textCapitalization: TextCapitalization.words,
-                        decoration: const InputDecoration(
-                          hintText: 'e.g. Genetics, Biochemistry',
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      const SizedBox(height: 6),
-                      const _FieldLabel('Required Skills'),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          for (final skill in _skills)
-                            InputChip(
-                              label: Text(skill,
-                                  style: const TextStyle(fontSize: 11)),
-                              onPressed: () => _editListItem(
-                                  _skills, skill, 'Edit required skill'),
-                              onDeleted: () =>
-                                  setState(() => _skills.remove(skill)),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: _skillInput,
-                              decoration: const InputDecoration(
-                                  hintText: 'Add a skill and press Enter'),
-                              onFieldSubmitted: (_) => _addSkill(),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          OutlinedButton(
-                              onPressed: _addSkill, child: const Text('Add')),
-                        ],
-                      ),
-                      if (_skills.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 6),
-                          child: Text(
-                            'At least one required skill is needed to keep this job published.',
-                            style: TextStyle(
-                                fontSize: 10.5, color: BrandColors.muted),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _editableItemsSection(
-                  title: 'Key Responsibilities',
-                  items: _responsibilities,
-                  controller: _responsibilityInput,
-                  hint: 'Add a responsibility',
-                ),
-                const SizedBox(height: 16),
-                _benefitsEditor(),
-                const SizedBox(height: 16),
-                _SectionCard(
-                  title: 'Hiring Pipeline',
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      DropdownButtonFormField<String>(
-                        initialValue: _pipelineTier,
-                        decoration:
-                            const InputDecoration(labelText: 'Pipeline tier'),
-                        items: const ['Standard', 'Premium', 'Custom']
-                            .map((v) => DropdownMenuItem(
-                                  value: v,
-                                  enabled: _pipelineTierAvailable(v) ||
-                                      v == _pipelineTier,
-                                  child: Text(
-                                      v == 'Custom' ? 'Custom workflow' : v),
-                                ))
-                            .toList(),
-                        onChanged: (v) {
-                          if (v == null || v == _pipelineTier) return;
-                          if (v == 'Custom') {
-                            _chooseCustomPipeline();
-                          } else {
-                            setState(() {
-                              _pipelineTier = v;
-                              _selectedPipelineId = null;
-                            });
-                          }
-                        },
-                      ),
-                      if (_pipelineTier == 'Custom') ...[
-                        const SizedBox(height: 12),
-                        Builder(builder: (context) {
-                          final pipelines =
-                              ref.watch(pipelinesProvider).value ??
-                                  const <HiringPipeline>[];
-                          final selected = pipelines
-                              .where((p) => p.id == _selectedPipelineId)
-                              .firstOrNull;
-                          return OutlinedButton.icon(
-                            onPressed: _chooseCustomPipeline,
-                            icon: const Icon(Icons.account_tree_outlined),
-                            label: Text(selected?.name ?? 'Choose a workflow'),
-                          );
-                        }),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _SectionCard(
-                  title: 'Application Deadline & Settings',
-                  child: Column(
-                    children: [
-                      TextFormField(
-                        readOnly: true,
-                        controller: _deadlineInput,
-                        onTap: _pickApplicationDeadline,
-                        decoration: const InputDecoration(
-                          labelText: 'Application deadline',
-                          hintText: 'Select date and time',
-                        ),
-                        validator: (_) => (_aiRanking || _aiSummary) &&
-                                _applicationDeadline == null
-                            ? 'Select a deadline when AI processing is enabled'
-                            : null,
-                      ),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Requires management experience'),
-                        value: _requiresManagement,
-                        onChanged: (v) =>
-                            setState(() => _requiresManagement = v),
-                      ),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Auto-reject non-matches'),
-                        value: _autoRejectNonMatches,
-                        onChanged: (v) {
-                          if (v &&
-                              !(ref.read(authProvider).user?.hasModule(
-                                      ModuleCodes.aiCandidateMatch) ??
-                                  false)) {
-                            return;
-                          }
-                          setState(() {
-                            _autoRejectNonMatches = v;
-                            if (v) _aiRanking = true;
-                          });
-                        },
-                      ),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('AI candidate ranking'),
-                        value: _aiRanking,
-                        onChanged: (v) {
-                          if (v &&
-                              !(ref.read(authProvider).user?.hasModule(
-                                      ModuleCodes.aiCandidateMatch) ??
-                                  false)) {
-                            return;
-                          }
-                          setState(() {
-                            _aiRanking = v;
-                            if (!v) _autoRejectNonMatches = false;
-                          });
-                        },
-                      ),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('AI resume summary'),
-                        value: _aiSummary,
-                        onChanged: (v) {
-                          if (v &&
-                              !(ref.read(authProvider).user?.hasModule(
-                                      ModuleCodes.aiCandidateSummary) ??
-                                  false)) {
-                            return;
-                          }
-                          setState(() => _aiSummary = v);
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _SectionCard(
-                  title: 'Plan Automation & Quotas',
-                  child: AbsorbPointer(
-                    absorbing: !_planAutomationAvailable,
-                    child: Opacity(
-                      opacity: _planAutomationAvailable ? 1 : .5,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (!_planAutomationAvailable)
-                            const Padding(
-                              padding: EdgeInsets.only(bottom: 8),
-                              child: Text(
-                                'Your plan does not include plan automation.',
-                                style: TextStyle(
-                                    fontSize: 11, color: BrandColors.muted),
-                              ),
-                            ),
-                          DropdownButtonFormField<String>(
-                            initialValue: _rankingPlanTier,
-                            decoration: const InputDecoration(
-                                labelText: 'Candidate ranking plan'),
-                            items: const ['Standard', 'Premium', 'Custom']
-                                .map((v) =>
-                                    DropdownMenuItem(value: v, child: Text(v)))
-                                .toList(),
-                            onChanged: (v) => setState(() {
-                              _rankingPlanTier = v ?? _rankingPlanTier;
-                              _rankingLimit = switch (_rankingPlanTier) {
-                                'Standard' => 10,
-                                'Premium' => 20,
-                                _ => 30,
-                              };
-                            }),
-                          ),
-                          Slider(
-                            value: _rankingLimit,
-                            min: 1,
-                            max: 30,
-                            divisions: 29,
-                            label: '${_rankingLimit.round()} rankings',
-                            onChanged: (v) => setState(() => _rankingLimit = v),
-                          ),
-                          Row(children: [
-                            Expanded(
-                              child: TextFormField(
-                                controller: _assessmentEmailCount,
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(
-                                    labelText: 'Assessment emails'),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: TextFormField(
-                                controller: _interviewEmailCount,
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(
-                                    labelText: 'Interview emails'),
-                              ),
-                            ),
-                          ]),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _FieldLabel extends StatelessWidget {
-  const _FieldLabel(this.text);
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: Text(
-          text.toUpperCase(),
-          style: const TextStyle(
-              fontSize: 9.5,
-              fontWeight: FontWeight.w700,
-              color: BrandColors.muted,
-              letterSpacing: 0.4),
-        ),
-      );
-}
-
-// ============================================================
 // Candidate actions — apply + CV selection
 // ============================================================
 
@@ -1840,6 +786,15 @@ class _ApplicationSubmittedDialog extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style:
                       const TextStyle(fontSize: 12, color: BrandColors.muted)),
+              const SizedBox(height: 8),
+              Text(
+                application.receiptEmailSent
+                    ? 'A confirmation email has been sent to your inbox.'
+                    : 'Your application is saved. We could not send a confirmation email right now.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontSize: 11, color: BrandColors.muted, height: 1.45),
+              ),
               const SizedBox(height: 10),
               Container(
                 padding:
