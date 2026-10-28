@@ -382,18 +382,25 @@ class _PlanCard extends StatelessWidget {
         if (plan.featured)
           Align(
             alignment: Alignment.topCenter,
-            child: Container(
-              margin: const EdgeInsets.only(top: -24, bottom: 9),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-              decoration: BoxDecoration(
-                color: AppColors.orange,
-                borderRadius: BorderRadius.circular(16),
+            child: Transform.translate(
+              // Keep the badge aligned with the card's top edge without a
+              // negative Container margin (Flutter requires nonnegative
+              // margins).
+              offset: const Offset(0, -24),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 9),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: AppColors.orange,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Text('MOST POPULAR',
+                    style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800)),
               ),
-              child: const Text('MOST POPULAR',
-                  style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800)),
             ),
           ),
         Text(plan.name.toUpperCase(),
