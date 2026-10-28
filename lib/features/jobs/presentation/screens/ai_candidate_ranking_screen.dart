@@ -200,7 +200,7 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _RankingBody extends ConsumerWidget {
+class _RankingBody extends ConsumerStatefulWidget {
   const _RankingBody(
       {required this.jobId, required this.isWide, required this.result});
 
@@ -209,42 +209,344 @@ class _RankingBody extends ConsumerWidget {
   final CandidateRankingResult result;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_RankingBody> createState() => _RankingBodyState();
+}
+
+class _RankingBodyState extends ConsumerState<_RankingBody> {
+  bool _showSummaries = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _showSummaries = !widget.result.rankingEnabled;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final result = widget.result;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _StatsRow(isWide: isWide, result: result),
-        const SizedBox(height: 20),
-        _RankingList(
-            jobId: jobId,
-            isWide: isWide,
-            entries: result.entries,
-            total: result.totalRanked),
-        const SizedBox(height: 20),
-        isWide
-            ? IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(flex: 3, child: _ReasoningCard(result: result)),
-                    const SizedBox(width: 16),
-                    Expanded(
-                        flex: 2,
-                        child: _AutomateWorkflowCard(
-                            jobId: jobId, entries: result.entries)),
-                  ],
-                ),
-              )
-            : Column(
-                children: [
-                  _ReasoningCard(result: result),
-                  const SizedBox(height: 16),
-                  _AutomateWorkflowCard(jobId: jobId, entries: result.entries),
-                ],
+        if (result.rankingEnabled) ...[
+          _StatsRow(isWide: widget.isWide, result: result),
+          const SizedBox(height: 20),
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment<bool>(
+                value: false,
+                icon: Icon(Icons.leaderboard_outlined),
+                label: Text('AI Ranking'),
               ),
+              ButtonSegment<bool>(
+                value: true,
+                icon: Icon(Icons.summarize_outlined),
+                label: Text('Candidate Summaries'),
+              ),
+            ],
+            selected: {_showSummaries},
+            onSelectionChanged: (selection) =>
+                setState(() => _showSummaries = selection.first),
+          ),
+          const SizedBox(height: 16),
+        ] else ...[
+          const Text('AI Candidate Summaries',
+              style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: BrandColors.navy)),
+          const SizedBox(height: 8),
+        ],
+        if (_showSummaries)
+          _CandidateSummaryList(
+            jobId: widget.jobId,
+            entries: result.entries,
+            enabled: result.summaryEnabled,
+            commonSkill: result.topSkillLabel,
+            commonSkillPercent: result.topSkillOverlapPercent,
+          )
+        else
+          _RankingList(
+              jobId: widget.jobId,
+              isWide: widget.isWide,
+              entries: result.entries,
+              total: result.totalRanked),
+        const SizedBox(height: 20),
+        if (!_showSummaries)
+          _AutomateWorkflowCard(jobId: widget.jobId, entries: result.entries),
       ],
     );
   }
+}
+
+class _CandidateSummaryList extends StatefulWidget {
+  const _CandidateSummaryList({
+    required this.jobId,
+    required this.entries,
+    required this.enabled,
+    required this.commonSkill,
+    required this.commonSkillPercent,
+  });
+
+  final String jobId;
+  final List<CandidateRankingEntry> entries;
+  final bool enabled;
+  final String commonSkill;
+  final int commonSkillPercent;
+
+  @override
+  State<_CandidateSummaryList> createState() => _CandidateSummaryListState();
+}
+
+class _CandidateSummaryListState extends State<_CandidateSummaryList> {
+  static const _pageSize = 8;
+  int _page = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.enabled) {
+      return const _SummaryEmptyState(
+        title: 'AI summaries are not enabled for this job',
+        message:
+            'Edit the job and enable AI resume summaries in its AI configuration. Summaries are generated after the application deadline.',
+      );
+    }
+
+    final summarized = widget.entries
+        .where((entry) => entry.resumeSummary != null)
+        .toList(growable: false);
+    if (summarized.isEmpty) {
+      return const _SummaryEmptyState(
+        title: 'Candidate summaries are not ready yet',
+        message:
+            'AI summaries appear here after the post-deadline analysis has completed.',
+      );
+    }
+
+    final totalPages = (summarized.length / _pageSize).ceil();
+    if (_page >= totalPages) _page = totalPages - 1;
+    final start = _page * _pageSize;
+    final pageItems = summarized.skip(start).take(_pageSize);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: BrandColors.border),
+        ),
+        child: Wrap(
+          spacing: 24,
+          runSpacing: 8,
+          children: [
+            _summaryMetric('Summaries generated', '${summarized.length}'),
+            if (widget.commonSkill != '—')
+              _summaryMetric(
+                'Most common AI-identified skill',
+                '${widget.commonSkill} · ${widget.commonSkillPercent}% of summaries',
+              ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 12),
+      for (final entry in pageItems)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: _CandidateSummaryCard(
+            entry: entry,
+            onReview: () => context
+                .push('/jobs/${widget.jobId}/candidates/${entry.candidateId}'),
+          ),
+        ),
+      Row(children: [
+        Text(
+            'Showing ${start + 1}-${start + pageItems.length} of ${summarized.length}',
+            style: const TextStyle(fontSize: 11, color: BrandColors.muted)),
+        const Spacer(),
+        IconButton(
+          tooltip: 'Previous page',
+          onPressed: _page > 0 ? () => setState(() => _page--) : null,
+          icon: const Icon(Icons.chevron_left),
+        ),
+        Text('${_page + 1} / $totalPages',
+            style: const TextStyle(fontSize: 11, color: BrandColors.muted)),
+        IconButton(
+          tooltip: 'Next page',
+          onPressed:
+              _page + 1 < totalPages ? () => setState(() => _page++) : null,
+          icon: const Icon(Icons.chevron_right),
+        ),
+      ]),
+    ]);
+  }
+
+  Widget _summaryMetric(String label, String value) => SizedBox(
+        width: 260,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label.toUpperCase(),
+              style: const TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  color: BrandColors.muted,
+                  letterSpacing: .3)),
+          const SizedBox(height: 3),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: BrandColors.navy)),
+        ]),
+      );
+}
+
+class _CandidateSummaryCard extends StatelessWidget {
+  const _CandidateSummaryCard({required this.entry, required this.onReview});
+  final CandidateRankingEntry entry;
+  final VoidCallback onReview;
+
+  @override
+  Widget build(BuildContext context) {
+    final summary = entry.resumeSummary ?? const <String, dynamic>{};
+    final executive = summary['executiveSummary']?.toString().trim() ?? '';
+    final achievements = (summary['topAchievements'] as List? ?? const [])
+        .whereType<String>()
+        .toList();
+    final skills = (summary['skills'] as List? ?? const [])
+        .whereType<Map>()
+        .map((skill) => Map<String, dynamic>.from(skill))
+        .toList();
+    final competencies = (summary['competencies'] as List? ?? const [])
+        .whereType<String>()
+        .toList();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: BrandColors.border),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          if (entry.rank > 0)
+            _RankBadge(rank: entry.rank, level: entry.fitLevel)
+          else
+            const CircleAvatar(
+              radius: 14,
+              backgroundColor: Color(0xFFFFF0E8),
+              child:
+                  Icon(Icons.auto_awesome, size: 15, color: BrandColors.orange),
+            ),
+          const SizedBox(width: 10),
+          Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(entry.name,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w800, color: BrandColors.navy)),
+              Text(
+                  entry.rank > 0
+                      ? 'AI match ${entry.score}% · ${entry.fitLabel}'
+                      : 'AI-generated resume summary',
+                  style:
+                      const TextStyle(fontSize: 11, color: BrandColors.muted)),
+            ]),
+          ),
+          TextButton(onPressed: onReview, child: const Text('View profile')),
+        ]),
+        const Divider(height: 22),
+        if (executive.isNotEmpty) ...[
+          const Text('EXECUTIVE SUMMARY', style: _summaryLabelStyle),
+          const SizedBox(height: 5),
+          Text(executive,
+              style: const TextStyle(
+                  fontSize: 12, height: 1.5, color: BrandColors.navy)),
+        ],
+        if (achievements.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          const Text('TOP ACHIEVEMENTS', style: _summaryLabelStyle),
+          const SizedBox(height: 5),
+          for (final achievement in achievements)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child:
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Icon(Icons.check_circle_outline,
+                    size: 14, color: BrandColors.orange),
+                const SizedBox(width: 7),
+                Expanded(
+                    child: Text(achievement,
+                        style: const TextStyle(
+                            fontSize: 11.5,
+                            height: 1.4,
+                            color: BrandColors.navy))),
+              ]),
+            ),
+        ],
+        if (skills.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          const Text('RELEVANT SKILLS', style: _summaryLabelStyle),
+          const SizedBox(height: 6),
+          Wrap(spacing: 6, runSpacing: 6, children: [
+            for (final skill in skills)
+              Chip(
+                label: Text(
+                    '${skill['name'] ?? 'Skill'} · ${skill['level'] ?? 'intermediate'}'),
+                visualDensity: VisualDensity.compact,
+                side: BorderSide.none,
+                backgroundColor: const Color(0xFFF3F5F8),
+              ),
+          ]),
+        ],
+        if (competencies.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          const Text('COMPETENCIES', style: _summaryLabelStyle),
+          const SizedBox(height: 5),
+          Text(competencies.join(' · '),
+              style: const TextStyle(
+                  fontSize: 11.5, height: 1.4, color: BrandColors.muted)),
+        ],
+      ]),
+    );
+  }
+
+  static const _summaryLabelStyle = TextStyle(
+      fontSize: 9,
+      fontWeight: FontWeight.w800,
+      color: BrandColors.muted,
+      letterSpacing: .4);
+}
+
+class _SummaryEmptyState extends StatelessWidget {
+  const _SummaryEmptyState({required this.title, required this.message});
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(28),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: BrandColors.border),
+        ),
+        child: Column(children: [
+          const Icon(Icons.summarize_outlined,
+              size: 30, color: BrandColors.orange),
+          const SizedBox(height: 10),
+          Text(title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontWeight: FontWeight.w800, color: BrandColors.navy)),
+          const SizedBox(height: 5),
+          Text(message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 11.5, height: 1.45, color: BrandColors.muted)),
+        ]),
+      );
 }
 
 class _StatsRow extends StatelessWidget {
@@ -269,13 +571,14 @@ class _StatsRow extends StatelessWidget {
         sub: 'Across all ${result.totalRanked} applicants',
         color: BrandColors.orange,
       ),
-      _StatCard(
-        icon: Icons.hub_outlined,
-        label: 'SKILL OVERLAP',
-        value: result.topSkillLabel,
-        sub: '${result.topSkillOverlapPercent}% of top matches possess',
-        color: const Color(0xFF6366F1),
-      ),
+      if (result.summaryEnabled)
+        _StatCard(
+          icon: Icons.hub_outlined,
+          label: 'MOST COMMON AI SKILL',
+          value: result.topSkillLabel,
+          sub: '${result.topSkillOverlapPercent}% of AI summaries mention',
+          color: const Color(0xFF6366F1),
+        ),
     ];
 
     if (!isWide) {
@@ -864,100 +1167,6 @@ class _LegendDot extends StatelessWidget {
                   color: BrandColors.muted,
                   fontWeight: FontWeight.w600)),
         ],
-      );
-}
-
-class _ReasoningCard extends StatelessWidget {
-  const _ReasoningCard({required this.result});
-  final CandidateRankingResult result;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: BrandColors.border),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Talent Match Reasoning',
-                style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: BrandColors.navy)),
-            const Text('Global ranking algorithm synthesis',
-                style: TextStyle(fontSize: 10.5, color: BrandColors.muted)),
-            const SizedBox(height: 14),
-            if (result.marketReasoning.isNotEmpty)
-              _ReasoningCallout(
-                title: 'Market Competitive Edge',
-                body: result.marketReasoning.first,
-                color: const Color(0xFF16A34A),
-                icon: Icons.trending_up,
-              ),
-            if (result.marketReasoning.isNotEmpty &&
-                result.skillGapReasoning.isNotEmpty)
-              const SizedBox(height: 10),
-            if (result.skillGapReasoning.isNotEmpty)
-              _ReasoningCallout(
-                title: 'Skill Gap Identified',
-                body: result.skillGapReasoning.first,
-                color: BrandColors.orange,
-                icon: Icons.warning_amber_outlined,
-              ),
-            if (result.marketReasoning.isEmpty &&
-                result.skillGapReasoning.isEmpty)
-              const Text('No additional reasoning returned for this ranking.',
-                  style: TextStyle(fontSize: 11, color: BrandColors.muted)),
-          ],
-        ),
-      );
-}
-
-class _ReasoningCallout extends StatelessWidget {
-  const _ReasoningCallout(
-      {required this.title,
-      required this.body,
-      required this.color,
-      required this.icon});
-  final String title;
-  final String body;
-  final Color color;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-            color: color.withValues(alpha: .08),
-            borderRadius: BorderRadius.circular(9)),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, size: 15, color: color),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          color: color)),
-                  const SizedBox(height: 2),
-                  Text(body,
-                      style: const TextStyle(
-                          fontSize: 10.5,
-                          color: BrandColors.muted,
-                          height: 1.4)),
-                ],
-              ),
-            ),
-          ],
-        ),
       );
 }
 
