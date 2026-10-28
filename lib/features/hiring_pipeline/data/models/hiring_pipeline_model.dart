@@ -119,6 +119,7 @@ class HiringPipeline {
     required this.id,
     required this.name,
     required this.isSystemStandard,
+    this.isSystemPremium = false,
     required this.stages,
     required this.createdAt,
     required this.updatedAt,
@@ -132,6 +133,7 @@ class HiringPipeline {
   final String id;
   final String name;
   final bool isSystemStandard;
+  final bool isSystemPremium;
   final List<PipelineStage> stages;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -146,7 +148,9 @@ class HiringPipeline {
   /// ACTIVE | DRAFT | LOCKED. The system-standard pipeline can't be edited
   /// or deleted server-side, so it is presented as locked.
   String get state {
-    if (isSystemStandard || candidateCount > 0) return 'LOCKED';
+    if (isSystemStandard || isSystemPremium || candidateCount > 0) {
+      return 'LOCKED';
+    }
     final s = (status ?? 'active').toUpperCase();
     return s == 'DRAFT' ? 'DRAFT' : (s == 'LOCKED' ? 'LOCKED' : 'ACTIVE');
   }
@@ -171,6 +175,7 @@ class HiringPipeline {
       id: (json['_id'] ?? json['id']).toString(),
       name: (json['name'] ?? '').toString(),
       isSystemStandard: json['isSystemStandard'] as bool? ?? false,
+      isSystemPremium: json['isSystemPremium'] as bool? ?? false,
       stages: stages,
       createdAt: parse(json['createdAt']),
       updatedAt: parse(json['updatedAt']),
@@ -222,7 +227,7 @@ class PipelineCapabilities {
   }
 
   factory PipelineCapabilities.fromEntitlements(
-      Map<String, dynamic> capabilities) =>
+          Map<String, dynamic> capabilities) =>
       PipelineCapabilities.fromJson({'capabilities': capabilities});
 
   /// If the server sent no list, don't block anything client-side — the
