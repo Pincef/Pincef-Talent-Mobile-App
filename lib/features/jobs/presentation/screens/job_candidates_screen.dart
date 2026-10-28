@@ -10,19 +10,12 @@ import '../../application/job_management_provider.dart';
 // application_provider.dart itself (same depth as job_management_provider.dart).
 import '../../application/application_provider.dart';
 import '../../data/models/application_model.dart';
-// Reused for the "AI CV-to-Job Matching" bulk action below — same
-// repository/provider CandidateProfilePreviewScreen already uses for the
-// single-candidate "Run AI Match" action. If that provider is already
-// declared there under a different name, import and reuse it instead of
-// this local one to avoid two Dio-backed instances of the same repository.
-import 'package:talentbridge/features/jobs/data/candidate_profile_repository.dart';
+import '../../data/models/job_management_model.dart';
 import 'package:talentbridge/features/jobs/presentation/widgets/download_cv_button.dart';
-import 'package:talentbridge/core/network/dio_provider.dart'; // adjust to wherever dioProvider actually lives
 import 'package:talentbridge/core/widgets/app_toast.dart';
 import 'package:talentbridge/features/jobs/presentation/widgets/candidate_email_dialog.dart';
 import 'package:talentbridge/features/jobs/presentation/widgets/send_invite_widget.dart';
-import 'package:talentbridge/features/auth/application/auth_provider.dart'
-    hide dioProvider;
+import 'package:talentbridge/features/auth/application/auth_provider.dart';
 // "Message" button — reuses the same socket-backed messaging repository/
 // providers as the Messages screens, so a thread started here shows up
 // there (and in the candidate's inbox) with no separate code path.
@@ -31,39 +24,6 @@ import 'package:talentbridge/features/messages/application/messages_provider.dar
         messagesRepositoryProvider,
         selectedMessageThreadProvider,
         messageThreadsProvider;
-
-final _candidateProfileViewRepositoryProvider =
-    Provider<CandidateProfileViewRepository>(
-        (ref) => CandidateProfileViewRepository(ref.watch(dioProvider)));
-
-/// The four "AI Candidate Tools" actions in the mockup's bulk-action bar.
-/// Summary and matching both use the existing job-scoped analysis endpoint.
-/// CV parsing is queued automatically when a candidate uploads a CV, while
-/// cross-candidate ranking has its own job-level screen.
-enum CandidateBulkAiAction {
-  cvParsing,
-  resumeSummary,
-  cvToJobMatching,
-  candidateRanking
-}
-
-extension on CandidateBulkAiAction {
-  String get label => switch (this) {
-        CandidateBulkAiAction.cvParsing => 'AI CV Parsing',
-        CandidateBulkAiAction.resumeSummary => 'AI Resume Summary',
-        CandidateBulkAiAction.cvToJobMatching => 'AI CV-to-Job Matching',
-        CandidateBulkAiAction.candidateRanking => 'AI Candidate Ranking',
-      };
-
-  // AI Candidate Ranking is meant to be gated by the company's plan
-  // (PlanType on company.model.ts) — for now that check is bypassed and
-  // it's shown to everyone. Wire the real gate here once billing exists:
-  //   this != CandidateBulkAiAction.candidateRanking || company.planType != PlanType.FREE
-  bool get isImplemented =>
-      this == CandidateBulkAiAction.cvToJobMatching ||
-      this == CandidateBulkAiAction.resumeSummary ||
-      this == CandidateBulkAiAction.candidateRanking;
-}
 
 /// Recruiter-only applications view. Backed by live data from
 /// GET /applications/job/:jobId via [jobApplicantsProvider] — no more local
@@ -83,21 +43,7 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
   ApplicationBackendStatus? _statusFilter; // null = all statuses
   bool _newestFirst = true;
   final _scrollController = ScrollController();
-
-  // Selection for the "AI Candidate Tools" bulk-action bar. Keyed by
-  // application id (JobApplicantSummary.id), same id the card's checkbox
-  // and JobApplicantsState carry, so a re-sort or a refreshed page can't
-  // silently point a selection at the wrong candidate.
-  final Set<String> _selectedApplicationIds = {};
-  CandidateBulkAiAction? _bulkActionInFlight;
-
-  void _toggleSelected(String applicationId) {
-    setState(() {
-      if (!_selectedApplicationIds.remove(applicationId)) {
-        _selectedApplicationIds.add(applicationId);
-      }
-    });
-  }
+  bool _deadlineRedirectQueued = false;
 
   /// Get-or-create a conversation for this applicant, then hand off to the
   /// Messages screen with that thread already selected — the candidate
@@ -168,67 +114,6 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
     }
   }
 
-  Future<void> _bulkSetCandidateDecision(
-      ApplicationBackendStatus status) async {
-    final selected = ref
-        .read(jobApplicantsProvider(widget.jobId))
-        .applications
-        .where(
-            (application) => _selectedApplicationIds.contains(application.id))
-        .toList();
-    if (selected.isEmpty) return;
-    final rejecting = status == ApplicationBackendStatus.rejected;
-    if (rejecting) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text('Reject ${selected.length} candidates?'),
-          content: const Text(
-              'Each candidate will be marked as not selected and sent an application update email.'),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel')),
-            FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Reject candidates')),
-          ],
-        ),
-      );
-      if (confirmed != true || !mounted) return;
-    }
-    var succeeded = 0;
-    var emailFailures = 0;
-    var failures = 0;
-    final repository = ref.read(applicationsRepositoryProvider);
-    for (final applicant in selected) {
-      try {
-        final emailSent =
-            await repository.updateApplicationStatus(applicant.id, status);
-        succeeded++;
-        if (status != ApplicationBackendStatus.submitted && !emailSent) {
-          emailFailures++;
-        }
-      } catch (_) {
-        failures++;
-      }
-    }
-    if (!mounted) return;
-    setState(_selectedApplicationIds.clear);
-    await ref.read(jobApplicantsProvider(widget.jobId).notifier).refresh();
-    if (!mounted) return;
-    final details = <String>[
-      '$succeeded updated',
-      if (emailFailures > 0) '$emailFailures emails not delivered',
-      if (failures > 0) '$failures failed',
-    ].join(' · ');
-    if (failures > 0 || emailFailures > 0) {
-      AppToast.info(context, details);
-    } else {
-      AppToast.success(context, details);
-    }
-  }
-
   static const _avatarPalette = [
     Color(0xFF8B5CF6),
     Color(0xFF0EA5E9),
@@ -274,8 +159,23 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
       data: (job) => job.title,
       orElse: () => 'this role',
     );
-    final applicantsState = ref.watch(jobApplicantsProvider(widget.jobId));
     final user = ref.watch(authProvider).user;
+    jobAsync.whenData((job) {
+      final deadlinePassed = job.status != JobBackendStatus.draft &&
+          job.applicationDeadline != null &&
+          !job.applicationDeadline!.isAfter(DateTime.now());
+      final shouldShowAiReview = (job.aiRanking &&
+              user?.hasModule('ai.candidate_match') == true) ||
+          (job.aiSummary && user?.hasModule('ai.candidate_summary') == true);
+      if (deadlinePassed && shouldShowAiReview && !_deadlineRedirectQueued) {
+        _deadlineRedirectQueued = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted)
+            context.replace('/jobs/${widget.jobId}/candidate-ranking');
+        });
+      }
+    });
+    final applicantsState = ref.watch(jobApplicantsProvider(widget.jobId));
     final canMessageCandidates =
         user?.capabilities['allowsCandidateMessaging'] == true ||
             user?.hasModule('hiring.candidate.messaging') == true;
@@ -325,8 +225,6 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
                 const SizedBox(height: 18),
                 _filters(isWide, notifier),
                 const SizedBox(height: 14),
-                _aiToolsBar(applicantsState),
-                const SizedBox(height: 18),
                 _body(applicantsState, visible, columns, notifier,
                     canMessageCandidates),
                 const SizedBox(height: 24),
@@ -422,8 +320,6 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
             return _CandidateCard(
               applicant: visible[index],
               avatarColor: _colorForName(visible[index].candidate.fullName),
-              selected: _selectedApplicationIds.contains(visible[index].id),
-              onToggleSelected: () => _toggleSelected(visible[index].id),
               onViewProfile: () => context.push(
                 // NOTE: the old placeholder comment here suggested
                 // visible[index].id (the *application* id) — the route
@@ -447,7 +343,9 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
                   applicant: visible[index],
                 );
                 if (sent == true && context.mounted) {
-                  await ref.read(jobApplicantsProvider(widget.jobId).notifier).refresh();
+                  await ref
+                      .read(jobApplicantsProvider(widget.jobId).notifier)
+                      .refresh();
                   if (context.mounted) {
                     AppToast.success(context,
                         'Interview invitation sent to ${visible[index].candidate.fullName}.');
@@ -494,7 +392,9 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
         final count = action['candidateCount'] ?? 0;
         final stage = action['stageName'] ?? 'Interview';
         final due = DateTime.tryParse('${action['dueAt']}')?.toLocal();
-        final dueText = due == null ? 'soon' : '${due.day}/${due.month} at ${due.hour.toString().padLeft(2, '0')}:${due.minute.toString().padLeft(2, '0')}';
+        final dueText = due == null
+            ? 'soon'
+            : '${due.day}/${due.month} at ${due.hour.toString().padLeft(2, '0')}:${due.minute.toString().padLeft(2, '0')}';
         return Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -508,7 +408,8 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
             Expanded(
               child: Text(
                 'AI plans to invite $count top-ranked candidates to $stage at $dueText. If you take no action, it will proceed automatically.',
-                style: const TextStyle(fontSize: 12, color: BrandColors.navy, height: 1.4),
+                style: const TextStyle(
+                    fontSize: 12, color: BrandColors.navy, height: 1.4),
               ),
             ),
             const SizedBox(width: 10),
@@ -527,20 +428,30 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Take over interview invitations?'),
-        content: const Text('This stops the pending automatic invitations. You can then send invitations manually from each candidate card.'),
+        content: const Text(
+            'This stops the pending automatic invitations. You can then send invitations manually from each candidate card.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Keep automation')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Take over')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Keep automation')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Take over')),
         ],
       ),
     );
     if (confirmed != true || !mounted) return;
     try {
-      await ref.read(jobManagementRepositoryProvider).takeOverInterviewAutomation(widget.jobId);
+      await ref
+          .read(jobManagementRepositoryProvider)
+          .takeOverInterviewAutomation(widget.jobId);
       ref.invalidate(pendingInterviewAutomationProvider(widget.jobId));
-      if (mounted) AppToast.success(context, 'Automatic invitations stopped. You are in control.');
+      if (mounted)
+        AppToast.success(
+            context, 'Automatic invitations stopped. You are in control.');
     } catch (error) {
-      if (mounted) AppToast.error(context, "Couldn't take over automation: $error");
+      if (mounted)
+        AppToast.error(context, "Couldn't take over automation: $error");
     }
   }
 
@@ -695,180 +606,6 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
           ),
         ],
       );
-
-  // --- AI Candidate Tools bulk-action bar ------------------------------------
-
-  Widget _aiToolsBar(JobApplicantsState state) {
-    final hasSelection = _selectedApplicationIds.isNotEmpty;
-    final selectedName = hasSelection
-        ? state.applications
-            .firstWhere(
-              (a) => a.id == _selectedApplicationIds.first,
-              orElse: () => state.applications.first,
-            )
-            .candidate
-            .fullName
-        : null;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: BrandColors.orange.withValues(alpha: .25))),
-      child: Wrap(
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: 16,
-        runSpacing: 12,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                    color: BrandColors.orange.withValues(alpha: .12),
-                    borderRadius: BorderRadius.circular(9)),
-                child: const Icon(Icons.auto_awesome,
-                    size: 17, color: BrandColors.orange),
-              ),
-              const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('AI Candidate Tools',
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          color: BrandColors.navy)),
-                  const SizedBox(height: 4),
-                  if (hasSelection) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                          color: BrandColors.orange.withValues(alpha: .12),
-                          borderRadius: BorderRadius.circular(20)),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        const Icon(Icons.circle,
-                            size: 6, color: BrandColors.orange),
-                        const SizedBox(width: 5),
-                        Text(
-                          '${_selectedApplicationIds.length} candidate${_selectedApplicationIds.length == 1 ? '' : 's'} selected',
-                          style: const TextStyle(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w700,
-                              color: BrandColors.orange),
-                        ),
-                      ]),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text('Actions applied to:',
-                        style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: BrandColors.orange)),
-                    Text(selectedName ?? '',
-                        style: const TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w700,
-                            color: BrandColors.navy)),
-                  ] else
-                    const Text('Select any candidate card to switch context',
-                        style: TextStyle(
-                            fontSize: 10.5, color: BrandColors.muted)),
-                ],
-              ),
-            ],
-          ),
-          for (final action in CandidateBulkAiAction.values)
-            _AiToolChip(
-              action: action,
-              enabled: (action == CandidateBulkAiAction.candidateRanking ||
-                      hasSelection) &&
-                  _bulkActionInFlight == null,
-              busy: _bulkActionInFlight == action,
-              onTap: () => _runBulkAction(action),
-            ),
-          if (hasSelection) ...[
-            OutlinedButton.icon(
-              onPressed: _bulkActionInFlight == null
-                  ? () => _bulkSetCandidateDecision(
-                      ApplicationBackendStatus.shortlisted)
-                  : null,
-              icon: const Icon(Icons.playlist_add_check, size: 16),
-              label: const Text('Shortlist selected'),
-            ),
-            OutlinedButton.icon(
-              onPressed: _bulkActionInFlight == null
-                  ? () => _bulkSetCandidateDecision(
-                      ApplicationBackendStatus.rejected)
-                  : null,
-              icon: const Icon(Icons.person_off_outlined, size: 16),
-              label: const Text('Reject selected'),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Future<void> _runBulkAction(CandidateBulkAiAction action) async {
-    if (action == CandidateBulkAiAction.cvParsing) {
-      AppToast.info(context,
-          'CV parsing starts automatically when a candidate uploads a résumé.');
-      return;
-    }
-    if (!action.isImplemented) {
-      AppToast.info(context, '${action.label} is coming soon.');
-      return;
-    }
-
-    if (action == CandidateBulkAiAction.candidateRanking) {
-      // Deliberately ignores _selectedApplicationIds — ranking always
-      // covers every current applicant for this job, not just whichever
-      // cards happen to be checked for the other three tools.
-      context.push('/jobs/${widget.jobId}/candidate-ranking');
-      return;
-    }
-
-    final candidateIds = ref
-        .read(jobApplicantsProvider(widget.jobId))
-        .applications
-        .where((a) => _selectedApplicationIds.contains(a.id))
-        .map((a) => a.candidate.id)
-        .toList();
-    if (candidateIds.isEmpty) return;
-
-    setState(() => _bulkActionInFlight = action);
-    final repository = ref.read(_candidateProfileViewRepositoryProvider);
-    final failures = <String>[];
-    for (final candidateId in candidateIds) {
-      try {
-        await repository.requestJobAnalysis(candidateId, widget.jobId,
-            includeSummary: action == CandidateBulkAiAction.resumeSummary);
-      } catch (_) {
-        failures.add(candidateId);
-      }
-    }
-    if (!mounted) return;
-    setState(() => _bulkActionInFlight = null);
-
-    final ranCount = candidateIds.length - failures.length;
-    final actionName = action == CandidateBulkAiAction.resumeSummary
-        ? 'summarized'
-        : 'matched';
-    if (failures.isEmpty) {
-      AppToast.success(context,
-          'AI $actionName $ranCount candidate${ranCount == 1 ? '' : 's'}.');
-    } else {
-      AppToast.error(
-          context, 'AI $actionName $ranCount, ${failures.length} failed.');
-    }
-    ref.read(jobApplicantsProvider(widget.jobId).notifier).refresh();
-  }
 
   Widget _statusDropdown() => _labeledField(
         label: 'STATUS',
@@ -1179,8 +916,6 @@ class _CandidateCard extends StatelessWidget {
   const _CandidateCard({
     required this.applicant,
     required this.avatarColor,
-    required this.selected,
-    required this.onToggleSelected,
     required this.onViewProfile,
     required this.onSendEmail,
     required this.onInvite,
@@ -1190,8 +925,6 @@ class _CandidateCard extends StatelessWidget {
   });
   final JobApplicantSummary applicant;
   final Color avatarColor;
-  final bool selected;
-  final VoidCallback onToggleSelected;
   final VoidCallback onViewProfile;
   final VoidCallback onSendEmail;
   final VoidCallback onInvite;
@@ -1216,9 +949,7 @@ class _CandidateCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-            color: selected ? BrandColors.orange : BrandColors.border,
-            width: selected ? 1.6 : 1),
+        border: Border.all(color: BrandColors.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1245,12 +976,6 @@ class _CandidateCard extends StatelessWidget {
                     style: const TextStyle(
                         fontSize: 11, color: BrandColors.muted)),
               ])),
-          Checkbox(
-            value: selected,
-            onChanged: (_) => onToggleSelected(),
-            visualDensity: VisualDensity.compact,
-            side: const BorderSide(color: BrandColors.border),
-          ),
           SizedBox(
             width: 34,
             height: 34,
@@ -1416,64 +1141,6 @@ class _CandidateCard extends StatelessWidget {
           ),
         ]),
       ]),
-    );
-  }
-}
-
-/// One chip in the AI Candidate Tools bar. [CandidateBulkAiAction
-/// .cvToJobMatching] renders as the filled navy "primary" chip in the
-/// mockup — the other three are the lighter, gray-filled "secondary" style
-/// — regardless of which one is actually running, so the active/default
-/// tool stays visually anchored rather than flipping styles mid-selection.
-class _AiToolChip extends StatelessWidget {
-  const _AiToolChip(
-      {required this.action,
-      required this.enabled,
-      required this.busy,
-      required this.onTap});
-
-  final CandidateBulkAiAction action;
-  final bool enabled;
-  final bool busy;
-  final VoidCallback onTap;
-
-  bool get _isPrimary => action == CandidateBulkAiAction.cvToJobMatching;
-
-  IconData get _icon => switch (action) {
-        CandidateBulkAiAction.cvParsing => Icons.description_outlined,
-        CandidateBulkAiAction.resumeSummary => Icons.article_outlined,
-        CandidateBulkAiAction.cvToJobMatching => Icons.search,
-        CandidateBulkAiAction.candidateRanking => Icons.bar_chart_outlined,
-      };
-
-  @override
-  Widget build(BuildContext context) {
-    final background = _isPrimary ? BrandColors.navy : const Color(0xFFF3F4F6);
-    final foreground = _isPrimary ? Colors.white : BrandColors.navy;
-    final iconColor = _isPrimary ? Colors.white : BrandColors.orange;
-
-    return Opacity(
-      opacity: enabled ? 1 : .5,
-      child: ElevatedButton.icon(
-        onPressed: enabled ? onTap : null,
-        icon: busy
-            ? SizedBox(
-                width: 13,
-                height: 13,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: foreground))
-            : Icon(_icon, size: 15, color: iconColor),
-        label: Text(action.label,
-            style: TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w700, color: foreground)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: background,
-          disabledBackgroundColor: background,
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-      ),
     );
   }
 }
