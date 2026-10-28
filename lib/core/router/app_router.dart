@@ -268,6 +268,8 @@ final routerProvider = Provider<GoRouter>((ref) {
                         initialJobId: state.uri.queryParameters['jobId'],
                         initialPipelineId:
                             state.uri.queryParameters['pipelineId'],
+                        initialPipelineTier:
+                            state.uri.queryParameters['pipelineTier'],
                       )),
               GoRoute(
                   path: ':testId',
