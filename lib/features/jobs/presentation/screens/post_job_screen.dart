@@ -1651,6 +1651,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
       final query = Uri(queryParameters: {
         if (jobId != null) 'jobId': jobId,
         if (_selectedPipelineId != null) 'pipelineId': _selectedPipelineId!,
+        'pipelineTier': _pipelineTier.toLowerCase(),
       }).query;
       return '/competency-assessments/new${query.isEmpty ? '' : '?$query'}';
     }
