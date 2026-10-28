@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/entitlements/module_codes.dart';
 import '../../../../core/theme/brand_color.dart';
+import '../../../auth/application/auth_provider.dart';
 import '../../data/models/job_management_model.dart';
 
 // ============================================================
@@ -280,7 +283,7 @@ class _TabChip extends StatelessWidget {
 // Job posting grid card
 // ============================================================
 
-class JobPostingCard extends StatelessWidget {
+class JobPostingCard extends ConsumerWidget {
   const JobPostingCard({super.key, required this.job});
   final JobPosting job;
 
@@ -307,11 +310,22 @@ class JobPostingCard extends StatelessWidget {
       };
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final (bg, fg, label) = _statusStyle;
+    final deadlinePassed = job.status == JobPipelineStatus.active &&
+        job.applicationDeadline != null &&
+        !job.applicationDeadline!.isAfter(DateTime.now());
+    final user = ref.watch(authProvider).user;
+    final canOpenAiReview = deadlinePassed &&
+        job.aiRanking &&
+        user?.hasModule(ModuleCodes.aiCandidateMatch) == true;
 
     return InkWell(
-      onTap: () => context.push('/jobs/${job.id}'),
+      onTap: () => context.push(deadlinePassed
+          ? canOpenAiReview
+              ? '/jobs/${job.id}/candidate-ranking'
+              : '/jobs/${job.id}/candidates'
+          : '/jobs/${job.id}'),
       borderRadius: BorderRadius.circular(10),
       child: Container(
         padding: const EdgeInsets.all(16),
