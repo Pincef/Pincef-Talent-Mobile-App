@@ -493,7 +493,10 @@ class _MetaItem extends StatelessWidget {
       children: [
         Icon(icon, size: 14, color: color),
         const SizedBox(width: 4),
-        Text(label, style: TextStyle(fontSize: 11.5, color: color)),
+        Flexible(
+          child: Text(label,
+              softWrap: true, style: TextStyle(fontSize: 11.5, color: color)),
+        ),
       ],
     );
   }
@@ -935,33 +938,43 @@ class _SkillsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: skills
-          .map((skill) => Container(
-                constraints: const BoxConstraints(minWidth: 150),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: BrandColors.iconBg.withValues(alpha: 0.4),
-                  borderRadius: BorderRadius.circular(10),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var index = 0; index < skills.length; index++) ...[
+          if (index > 0) const SizedBox(height: 9),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: BrandColors.iconBg.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(top: 1),
+                  child: Icon(Icons.check_circle_outline,
+                      size: 16, color: BrandColors.navy),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.check_circle_outline,
-                        size: 16, color: BrandColors.navy),
-                    const SizedBox(width: 8),
-                    Text(skill,
-                        style: const TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
-                            color: BrandColors.navy)),
-                  ],
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    skills[index],
+                    softWrap: true,
+                    style: const TextStyle(
+                        fontSize: 11.5,
+                        height: 1.4,
+                        fontWeight: FontWeight.w600,
+                        color: BrandColors.navy),
+                  ),
                 ),
-              ))
-          .toList(),
+              ],
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

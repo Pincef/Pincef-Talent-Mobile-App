@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:talentbridge/core/application/location_provider.dart';
@@ -589,9 +590,24 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
         TextFormField(
           controller: _minYears,
           validator: _minYearsValidator,
-          decoration: _input('e.g. 3+ years, or entry level'),
+          maxLength: 400,
+          inputFormatters: [
+            LengthLimitingTextInputFormatter(400),
+            _WordCountLimitingTextInputFormatter(60),
+          ],
+          onChanged: (_) => setState(() {}),
+          decoration: _input('e.g. 3+ years, or entry level').copyWith(
+            counterText:
+                '${_wordCount(_minYears.text)}/60 words · ${_minYears.text.length}/400 characters',
+          ),
         ),
       ]);
+
+  int _wordCount(String value) => value
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((word) => word.isNotEmpty)
+      .length;
 
   Widget _educationLevelField() =>
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -2357,3 +2373,22 @@ final _draftButtonStyle = OutlinedButton.styleFrom(
     padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 14),
     textStyle: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)));
+
+class _WordCountLimitingTextInputFormatter extends TextInputFormatter {
+  const _WordCountLimitingTextInputFormatter(this.maxWords);
+
+  final int maxWords;
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final words = newValue.text
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((word) => word.isNotEmpty)
+        .length;
+    return words <= maxWords ? newValue : oldValue;
+  }
+}
