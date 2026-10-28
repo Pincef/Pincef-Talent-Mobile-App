@@ -15,10 +15,12 @@ class AssessmentCreateScreen extends ConsumerStatefulWidget {
     this.testId,
     this.initialJobId,
     this.initialPipelineId,
+    this.initialPipelineTier,
   });
   final String? testId;
   final String? initialJobId;
   final String? initialPipelineId;
+  final String? initialPipelineTier;
   @override
   ConsumerState<AssessmentCreateScreen> createState() =>
       _AssessmentCreateScreenState();
@@ -43,6 +45,7 @@ class _AssessmentCreateScreenState
   bool _autoInviteShortlisted = true;
   bool _autoGenerateAfterDeadline = true;
   bool _initialPipelineDefaultsApplied = false;
+  String? _jobDefaultsAppliedFor;
   bool _pipelineGenerationQueued = false;
   DateTime? _availableFrom;
   DateTime? _availableUntil;
@@ -51,6 +54,61 @@ class _AssessmentCreateScreenState
   bool _busy = false;
   List<Map<String, dynamic>> _questions = [];
   final Set<String> _selectedApplications = {};
+  String _applicantSearch = '';
+
+  Future<void> _selectJob(List jobs) async {
+    final search = TextEditingController();
+    final selected = await showDialog<dynamic>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final query = search.text.trim().toLowerCase();
+          final matches = jobs
+              .where(
+                  (job) => job.title.toString().toLowerCase().contains(query))
+              .toList();
+          return AlertDialog(
+            title: const Text('Choose a job'),
+            content: SizedBox(
+              width: 480,
+              height: 420,
+              child: Column(children: [
+                TextField(
+                  controller: search,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.search),
+                    hintText: 'Search jobs',
+                  ),
+                  onChanged: (_) => setDialogState(() {}),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                    child: ListView.builder(
+                  itemCount: matches.length,
+                  itemBuilder: (_, index) {
+                    final job = matches[index];
+                    return ListTile(
+                      title: Text(job.title),
+                      selected: job.id == _jobId,
+                      onTap: () => Navigator.pop(dialogContext, job),
+                    );
+                  },
+                )),
+              ]),
+            ),
+          );
+        },
+      ),
+    );
+    search.dispose();
+    if (selected != null && mounted) {
+      setState(() {
+        _jobId = selected.id;
+        _selectedApplications.clear();
+      });
+    }
+  }
 
   @override
   void initState() {
@@ -286,6 +344,18 @@ class _AssessmentCreateScreenState
 
   Future<void> _publish() async {
     if (!_validateBasics()) return;
+    final scheduledAutomation =
+        _mode == 'full_ai' && _autoGenerateAfterDeadline;
+    final automaticCandidateSelection =
+        _mode == 'full_ai' && _autoInviteShortlisted;
+    if (!scheduledAutomation &&
+        _selectedApplications.isEmpty &&
+        !_includeShortlisted &&
+        !automaticCandidateSelection) {
+      _showError(StateError(
+          'Select at least one candidate or choose to include shortlisted candidates before publishing.'));
+      return;
+    }
     if (_kind == 'internal' &&
         _mode == 'ai_assisted' &&
         (_testId == null || _questions.isEmpty)) {
@@ -328,6 +398,10 @@ class _AssessmentCreateScreenState
         await repo.update(_testId!, _payload(forUpdate: true));
       }
       if (_mode == 'full_ai' && _autoGenerateAfterDeadline) {
+        // AI generation above creates the assessment draft with scheduling
+        // disabled so question generation can run immediately. Persist the
+        // scheduled state now, after the questions have been prepared.
+        await repo.update(_testId!, _payload(forUpdate: true));
         ref.invalidate(recruiterAssessmentsProvider);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -373,15 +447,37 @@ class _AssessmentCreateScreenState
     final jobsState = ref.watch(jobManagementProvider);
     final jobs = jobsState.summary?.postings ?? const [];
     _jobId ??= jobs.isNotEmpty ? jobs.first.id : null;
+    final selectedJob = jobs.where((job) => job.id == _jobId).firstOrNull;
+    if (selectedJob != null &&
+        _jobDefaultsAppliedFor != selectedJob.id &&
+        _title.text.trim().isEmpty) {
+      _jobDefaultsAppliedFor = selectedJob.id;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _title.text.trim().isNotEmpty) return;
+        setState(() {
+          _title.text = '${selectedJob.title} assessment';
+          _purpose.text =
+              'Evaluate candidates for ${selectedJob.title} using the role requirements.';
+        });
+      });
+    }
     final pipelineState = ref.watch(pipelinesProvider);
     final pipelines = pipelineState.value ?? const <HiringPipeline>[];
+    final initialPipelineId = widget.initialPipelineId ??
+        (widget.initialPipelineTier?.toLowerCase() == 'premium'
+            ? pipelines
+                .where((pipeline) => pipeline.isSystemPremium)
+                .firstOrNull
+                ?.id
+            : null);
     if (!_initialPipelineDefaultsApplied &&
-        widget.initialPipelineId != null &&
+        initialPipelineId != null &&
         pipelineState.hasValue) {
       final initialPipeline = pipelines
-          .where((pipeline) => pipeline.id == widget.initialPipelineId)
+          .where((pipeline) => pipeline.id == initialPipelineId)
           .firstOrNull;
       if (initialPipeline != null) {
+        _pipelineId = initialPipeline.id;
         _applyPipelineDefaults(initialPipeline);
         _initialPipelineDefaultsApplied = true;
       }
@@ -569,25 +665,25 @@ class _AssessmentCreateScreenState
                         style: TextStyle(
                             fontSize: 19, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 14),
-                    DropdownButtonFormField<String>(
-                        value:
-                            jobs.any((job) => job.id == _jobId) ? _jobId : null,
+                    InkWell(
+                      onTap: _busy ? null : () => _selectJob(jobs),
+                      child: InputDecorator(
                         decoration: const InputDecoration(labelText: 'Job'),
-                        items: [
-                          for (final job in jobs)
-                            DropdownMenuItem<String>(
-                                value: job.id,
-                                child: Text(job.title,
-                                    overflow: TextOverflow.ellipsis))
-                        ],
-                        onChanged: _busy
-                            ? null
-                            : (value) => setState(() {
-                                  _jobId = value;
-                                  _selectedApplications.clear();
-                                }),
-                        validator: (value) =>
-                            value == null ? 'Choose a job' : null),
+                        child: Row(children: [
+                          Expanded(
+                            child: Text(
+                              jobs
+                                      .where((job) => job.id == _jobId)
+                                      .firstOrNull
+                                      ?.title ??
+                                  'Search and select a job',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const Icon(Icons.search),
+                        ]),
+                      ),
+                    ),
                     const SizedBox(height: 12),
                     TextFormField(
                         controller: _title,
@@ -778,8 +874,21 @@ class _AssessmentCreateScreenState
                       const Text('Choose a job to select applicants.')
                     else if (applicationsState.isLoading)
                       const LinearProgressIndicator()
-                    else
+                    else ...[
+                      TextField(
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.search),
+                          hintText: 'Search candidates',
+                        ),
+                        onChanged: (value) =>
+                            setState(() => _applicantSearch = value),
+                      ),
                       ...applicationsState.applications
+                          .where((application) =>
+                              '${application.candidate.firstName} ${application.candidate.lastName}'
+                                  .toLowerCase()
+                                  .contains(
+                                      _applicantSearch.trim().toLowerCase()))
                           .map((application) => CheckboxListTile(
                                 contentPadding: EdgeInsets.zero,
                                 dense: true,
@@ -796,6 +905,7 @@ class _AssessmentCreateScreenState
                                         .remove(application.id);
                                 }),
                               )),
+                    ],
                   ])));
 
   Widget _buildSummary(PipelineStage? stage) => Card(
