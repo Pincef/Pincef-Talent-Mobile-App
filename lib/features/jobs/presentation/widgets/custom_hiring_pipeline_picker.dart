@@ -20,7 +20,9 @@ class CustomHiringPipelinePickerDialog extends ConsumerWidget {
     final async = ref.watch(pipelinesProvider);
     final pipelines = (async.value ?? const <HiringPipeline>[])
         .where((pipeline) =>
-            !pipeline.isSystemStandard && pipeline.state == 'ACTIVE')
+            !pipeline.isSystemStandard &&
+            !pipeline.isSystemPremium &&
+            pipeline.state == 'ACTIVE')
         .toList(growable: false);
     final size = MediaQuery.sizeOf(context);
 
