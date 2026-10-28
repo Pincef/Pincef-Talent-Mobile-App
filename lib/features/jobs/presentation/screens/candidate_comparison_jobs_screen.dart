@@ -34,12 +34,6 @@ class _CandidateComparisonJobsScreenState
         .toList();
     final applicants =
         allJobs.fold<int>(0, (sum, job) => sum + (job.applicantCount ?? 0));
-    final scored = allJobs.where((job) => job.matchQuality != null).toList();
-    final averageScore = scored.isEmpty
-        ? null
-        : (scored.fold<int>(0, (sum, job) => sum + job.matchQuality!) /
-                scored.length)
-            .round();
 
     return LayoutBuilder(builder: (context, constraints) {
       final wide = constraints.maxWidth >= 900;
@@ -79,11 +73,11 @@ class _CandidateComparisonJobsScreenState
                         value: '$applicants candidates',
                         note: 'Across active requisitions',
                       ),
-                      _ComparisonStat(
-                        icon: Icons.insights_outlined,
-                        label: 'Average AI match',
-                        value: averageScore == null ? '—' : '$averageScore%',
-                        note: 'Based on available scored applicants',
+                      const _ComparisonStat(
+                        icon: Icons.fact_check_outlined,
+                        label: 'Comparison basis',
+                        value: 'Assessment',
+                        note: 'Best graded result per candidate',
                       ),
                     ],
                   );
@@ -157,7 +151,7 @@ class _ComparisonPageHeader extends StatelessWidget {
                 color: BrandColors.navy)),
         SizedBox(height: 6),
         Text(
-          'Choose a requisition to review its applicants, shortlist, and available match scores.',
+          'Choose a job to rank its applicants by their best graded assessment result.',
           style: TextStyle(color: BrandColors.muted, height: 1.45),
         ),
       ],
@@ -269,7 +263,7 @@ class _ComparisonJobCard extends ConsumerWidget {
         if (aShortlisted != bShortlisted) {
           return bShortlisted.compareTo(aShortlisted);
         }
-        return (b.aiScore ?? -1).compareTo(a.aiScore ?? -1);
+        return a.appliedAt.compareTo(b.appliedAt);
       });
     final shortlistCount = applicantState.applications
         .where((a) => a.status == ApplicationBackendStatus.shortlisted)
@@ -286,7 +280,7 @@ class _ComparisonJobCard extends ConsumerWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           _StatusPill(
-            label: ready ? 'READY FOR MATRIX' : 'BUILDING APPLICANT POOL',
+            label: ready ? 'APPLICANTS AVAILABLE' : 'BUILDING APPLICANT POOL',
             ready: ready,
           ),
           const SizedBox(width: 8),
@@ -302,7 +296,7 @@ class _ComparisonJobCard extends ConsumerWidget {
                     color: BrandColors.muted,
                     fontWeight: FontWeight.w700)),
           ),
-          const Icon(Icons.auto_awesome_outlined,
+          const Icon(Icons.fact_check_outlined,
               size: 19, color: BrandColors.orange),
         ]),
         const SizedBox(height: 13),
@@ -387,15 +381,11 @@ class _ComparisonJobCard extends ConsumerWidget {
                                           color: BrandColors.navy)),
                                 ),
                                 Text(
-                                  applicant.aiScore == null
-                                      ? applicant.status.label
-                                      : '${applicant.aiScore}% match',
-                                  style: TextStyle(
+                                  applicant.status.label,
+                                  style: const TextStyle(
                                       fontSize: 10,
                                       fontWeight: FontWeight.w700,
-                                      color: applicant.aiScore == null
-                                          ? BrandColors.muted
-                                          : BrandColors.orange),
+                                      color: BrandColors.muted),
                                 ),
                               ]),
                             ),
@@ -408,8 +398,8 @@ class _ComparisonJobCard extends ConsumerWidget {
           Expanded(
             child: Text(
               applicantState.total < 3
-                  ? 'Compare the applicants currently available'
-                  : 'Review the candidates side by side',
+                  ? 'Assessment scores appear after candidates are graded'
+                  : 'Compare candidates by their best assessment score',
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 10, color: BrandColors.muted),
