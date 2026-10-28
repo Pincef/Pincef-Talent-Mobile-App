@@ -653,7 +653,10 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
       onPressed: () async {
         final selected = await _showCustomPipelinePicker();
         if (!mounted || selected == null) return;
-        setState(() => _selectedPipelineId = selected.id);
+        setState(() {
+          _pipelineTier = 'Custom';
+          _selectedPipelineId = selected.id;
+        });
       },
       icon: Icon(
         pipeline == null ? Icons.add_rounded : Icons.alt_route_rounded,
@@ -730,7 +733,10 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
                       if (opensModal) {
                         _showPipelinePicker();
                       } else {
-                        setState(() => _pipelineTier = tier);
+                        setState(() {
+                          _pipelineTier = tier;
+                          _selectedPipelineId = null;
+                        });
                       }
                     }
                   : null,
