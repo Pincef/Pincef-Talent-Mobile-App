@@ -88,6 +88,8 @@ class _PanelState extends ConsumerState<ScheduleInterviewPanel> {
   late int _duration;
   late DateTime _date;
   SchedulableApplication? _app;
+  String? _jobId;
+  String? _jobTitle;
   SlotOption? _slot;
   bool _saving = false;
   String? _error;
@@ -155,7 +157,56 @@ class _PanelState extends ConsumerState<ScheduleInterviewPanel> {
         _slot = null;
       });
 
+  Future<void> _chooseJob(List<SchedulableApplication> applications) async {
+    final search = TextEditingController();
+    final selected = await showDialog<SchedulableApplication>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(builder: (context, refresh) {
+        final jobs = <String, SchedulableApplication>{};
+        for (final application in applications) {
+          jobs.putIfAbsent(application.jobId, () => application);
+        }
+        final matches = jobs.values
+            .where((item) =>
+                item.jobTitle.toLowerCase().contains(search.text.toLowerCase()))
+            .toList();
+        return AlertDialog(
+          title: const Text('Select a job'),
+          content: SizedBox(
+              width: 420,
+              height: 400,
+              child: Column(children: [
+                TextField(
+                    controller: search,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.search),
+                        hintText: 'Search jobs'),
+                    onChanged: (_) => refresh(() {})),
+                Expanded(
+                    child: ListView(children: [
+                  for (final item in matches)
+                    ListTile(
+                        title: Text(item.jobTitle),
+                        onTap: () => Navigator.pop(dialogContext, item)),
+                ])),
+              ])),
+        );
+      }),
+    );
+    search.dispose();
+    if (selected != null && mounted) {
+      setState(() {
+        _jobId = selected.jobId;
+        _jobTitle = selected.jobTitle;
+        _app = null;
+        _slot = null;
+      });
+    }
+  }
+
   Future<void> _pickCandidate(List<SchedulableApplication> list) async {
+    var query = '';
     final picked = await showModalBottomSheet<SchedulableApplication>(
       context: context,
       isScrollControlled: true,
@@ -166,32 +217,55 @@ class _PanelState extends ConsumerState<ScheduleInterviewPanel> {
         expand: false,
         initialChildSize: .7,
         maxChildSize: .95,
-        builder: (_, scroll) => ListView.separated(
-          controller: scroll,
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
-          itemCount: list.length,
-          separatorBuilder: (_, __) => const Divider(height: 1),
-          itemBuilder: (_, i) {
-            final a = list[i];
-            return ListTile(
-              onTap: () => Navigator.pop(ctx, a),
-              leading: IvAvatar(
-                  name: a.candidate.name, url: a.candidate.profileImage),
-              title: Text(a.candidate.name,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w700, color: ivNavy)),
-              subtitle: Text(a.jobTitle),
-              trailing: a.aiScore == null
-                  ? null
-                  : ivTag('${a.aiScore}% match', ivOrange),
-            );
-          },
-        ),
+        builder: (_, scroll) => StatefulBuilder(builder: (ctx, refresh) {
+          return Column(children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: TextField(
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.search),
+                  hintText: 'Search candidates',
+                ),
+                onChanged: (value) =>
+                    refresh(() => query = value.toLowerCase()),
+              ),
+            ),
+            Expanded(child: Builder(builder: (_) {
+              final matches = list
+                  .where((item) =>
+                      item.candidate.name.toLowerCase().contains(query))
+                  .toList();
+              return ListView.separated(
+                controller: scroll,
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+                itemCount: matches.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (_, i) {
+                  final a = matches[i];
+                  return ListTile(
+                    onTap: () => Navigator.pop(ctx, a),
+                    leading: IvAvatar(
+                        name: a.candidate.name, url: a.candidate.profileImage),
+                    title: Text(a.candidate.name,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w700, color: ivNavy)),
+                    subtitle: Text(a.jobTitle),
+                    trailing: a.aiScore == null
+                        ? null
+                        : ivTag('${a.aiScore}% match', ivOrange),
+                  );
+                },
+              );
+            })),
+          ]);
+        }),
       ),
     );
     if (picked != null) {
       setState(() {
         _app = picked;
+        _jobId = picked.jobId;
+        _jobTitle = picked.jobTitle;
         _slot = null;
       });
     }
@@ -440,7 +514,12 @@ class _PanelState extends ConsumerState<ScheduleInterviewPanel> {
             if (_app?.applicationId != requested.applicationId) {
               final selectedApplication = requested;
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) setState(() => _app = selectedApplication);
+                if (mounted)
+                  setState(() {
+                    _app = selectedApplication;
+                    _jobId = selectedApplication.jobId;
+                    _jobTitle = selectedApplication.jobTitle;
+                  });
               });
               return const _Box(child: Text('Loading selected candidate…'));
             }
@@ -450,15 +529,19 @@ class _PanelState extends ConsumerState<ScheduleInterviewPanel> {
                 child: Text('No candidates are ready to be scheduled yet.',
                     style: TextStyle(color: ivMuted)));
           }
+          final matching = list.where((item) => item.jobId == _jobId).toList();
           return InkWell(
-            onTap: () => _pickCandidate(list),
+            onTap: _jobId == null ? null : () => _pickCandidate(matching),
             borderRadius: BorderRadius.circular(10),
-            child: const _Box(
+            child: _Box(
               child: Row(children: [
                 Icon(Icons.person_search_outlined, color: ivMuted),
                 SizedBox(width: 10),
                 Expanded(
-                    child: Text('Select a candidate',
+                    child: Text(
+                        _jobId == null
+                            ? 'Select a job first'
+                            : 'Select a candidate',
                         style: TextStyle(
                             color: ivNavy, fontWeight: FontWeight.w600))),
                 Icon(Icons.keyboard_arrow_down, color: ivMuted),
@@ -471,7 +554,9 @@ class _PanelState extends ConsumerState<ScheduleInterviewPanel> {
       candidateCard = InkWell(
         onTap: _editing || schedulable.value == null
             ? null
-            : () => _pickCandidate(schedulable.value!),
+            : () => _pickCandidate(schedulable.value!
+                .where((application) => application.jobId == _jobId)
+                .toList()),
         borderRadius: BorderRadius.circular(10),
         child: _Box(
           child:
@@ -522,6 +607,22 @@ class _PanelState extends ConsumerState<ScheduleInterviewPanel> {
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       _section('1', 'CANDIDATE & JOB'),
+      if (!_editing && schedulable.value != null) ...[
+        InkWell(
+          onTap: () => _chooseJob(schedulable.value!),
+          child: _Box(
+              child: Row(children: [
+            const Icon(Icons.work_outline, color: ivMuted),
+            const SizedBox(width: 10),
+            Expanded(
+                child: Text(_jobTitle ?? 'Search and select a job',
+                    style: const TextStyle(
+                        color: ivNavy, fontWeight: FontWeight.w600))),
+            const Icon(Icons.search, color: ivMuted),
+          ])),
+        ),
+        const SizedBox(height: 10),
+      ],
       candidateCard,
       const SizedBox(height: 18),
       _section('2', 'INTERVIEW ROUND'),
