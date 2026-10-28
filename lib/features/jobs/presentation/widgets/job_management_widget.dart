@@ -317,8 +317,10 @@ class JobPostingCard extends ConsumerWidget {
         !job.applicationDeadline!.isAfter(DateTime.now());
     final user = ref.watch(authProvider).user;
     final canOpenAiReview = deadlinePassed &&
-        job.aiRanking &&
-        user?.hasModule(ModuleCodes.aiCandidateMatch) == true;
+        ((job.aiRanking &&
+                user?.hasModule(ModuleCodes.aiCandidateMatch) == true) ||
+            (job.aiSummary &&
+                user?.hasModule(ModuleCodes.aiCandidateSummary) == true));
 
     return InkWell(
       onTap: () => context.push(deadlinePassed
