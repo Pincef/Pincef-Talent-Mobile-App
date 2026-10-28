@@ -189,8 +189,7 @@ class _HiringPipelineScreenState extends ConsumerState<HiringPipelineScreen> {
   Widget _header(bool compact, List<HiringPipeline> all) {
     final exportBtn = _actionButton(
         'Export Workflows', Icons.download_outlined, false, () => _export(all));
-    final createBtn = _actionButton(
-        'Create Pipeline', Icons.add, true, _create,
+    final createBtn = _actionButton('Create Pipeline', Icons.add, true, _create,
         enabled: true);
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -264,8 +263,8 @@ class _HiringPipelineScreenState extends ConsumerState<HiringPipelineScreen> {
               onEdit: () => p.isLocked
                   ? showSnack(
                       context,
-                      p.isSystemStandard
-                          ? "The standard pipeline can't be edited. Duplicate it to customise."
+                      (p.isSystemStandard || p.isSystemPremium)
+                          ? 'Built-in pipelines cannot be edited. Duplicate one to customise.'
                           : 'This workflow is locked while candidates are active in it.')
                   : _openEditor(pipeline: p),
               onDuplicate: () => _duplicate(p),
@@ -591,7 +590,9 @@ class _PipelineCard extends StatelessWidget {
   final VoidCallback onView, onEdit, onDuplicate, onDelete;
 
   static IconData _iconFor(HiringPipeline p) {
-    if (p.isSystemStandard) return Icons.workspace_premium_outlined;
+    if (p.isSystemStandard || p.isSystemPremium) {
+      return Icons.workspace_premium_outlined;
+    }
     final n = p.name.toLowerCase();
     if (n.contains('design')) return Icons.design_services_outlined;
     if (n.contains('engineer') || n.contains('dev') || n.contains('tech')) {
@@ -625,7 +626,7 @@ class _PipelineCard extends StatelessWidget {
           const PopupMenuItem(value: 'dup', child: Text('Duplicate')),
           PopupMenuItem(
             value: 'del',
-            enabled: !p.isSystemStandard,
+            enabled: !p.isSystemStandard && !p.isSystemPremium,
             child: const Text('Delete', style: TextStyle(color: PT.danger)),
           ),
         ],
@@ -683,6 +684,8 @@ class _PipelineCard extends StatelessWidget {
                               'Candidates active in pipeline')
                         else if (p.isSystemStandard)
                           _meta(Icons.shield_outlined, 'System default')
+                        else if (p.isSystemPremium)
+                          _meta(Icons.auto_awesome_outlined, 'Premium template')
                         else
                           _meta(Icons.work_outline,
                               '${p.jobCount} ${p.jobCount == 1 ? 'active job' : 'active jobs'}'),
