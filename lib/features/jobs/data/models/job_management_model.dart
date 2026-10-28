@@ -220,7 +220,7 @@ class JobDraft {
         if (currency != null) 'currency': currency,
         if (requiredSkills.isNotEmpty) 'requiredSkills': requiredSkills,
         if (minYearsOfExperience != null)
-          'minYearsOfExperience': minYearsOfExperience,
+          'minYearsOfExperience': minYearsOfExperience!.trim(),
         if (educationLevel != null) 'educationLevel': educationLevel,
         if (fieldOfStudy != null) 'fieldOfStudy': fieldOfStudy!.trim(),
         'requiresManagementExperience': requiresManagementExperience,
