@@ -228,7 +228,9 @@ class JobDraft {
         'benefits': benefits,
         'autoRejectNonMatches': autoRejectNonMatches,
         'autoRejectBelowScore': autoRejectBelowScore,
-        if (pipelineId != null) 'pipelineId': pipelineId,
+        'pipelineTier': pipelineTier.toLowerCase(),
+        'pipelineId':
+            pipelineTier.toLowerCase() == 'custom' ? pipelineId : null,
         if (rankingLimit > 0 ||
             assessmentEmailCount > 0 ||
             interviewEmailCount > 0)
@@ -258,6 +260,10 @@ class JobPosting {
     this.matchQuality, // null -> shown as "N/A"
     this.isScanning = false,
     this.createdAt,
+    this.applicationDeadline,
+    this.aiRanking = false,
+    this.aiSummary = false,
+    this.aiStatus = 'idle',
   });
 
   /// Required for routing to edit/publish/close actions — the previous
@@ -279,6 +285,10 @@ class JobPosting {
   /// one exists; until then it defaults to false everywhere.
   final bool isScanning;
   final DateTime? createdAt;
+  final DateTime? applicationDeadline;
+  final bool aiRanking;
+  final bool aiSummary;
+  final String aiStatus;
 
   /// Maps a raw job object from GET /jobs/mine (job.controller.ts's
   /// listMyCompanyJobs, wrapping job.service.ts's JobWithStats) into the
@@ -308,6 +318,11 @@ class JobPosting {
       createdAt: DateTime.tryParse(
         (json['publishedAt'] ?? json['createdAt'] ?? '').toString(),
       ),
+      applicationDeadline:
+          DateTime.tryParse((json['applicationDeadline'] ?? '').toString()),
+      aiRanking: (json['aiConfig'] as Map?)?['ranking'] as bool? ?? false,
+      aiSummary: (json['aiConfig'] as Map?)?['summary'] as bool? ?? false,
+      aiStatus: (json['aiStatus'] ?? 'idle').toString(),
     );
   }
 }
@@ -814,7 +829,16 @@ class JobDetail {
       ),
       aiRanking: (json['aiConfig'] as Map?)?['ranking'] as bool? ?? false,
       aiSummary: (json['aiConfig'] as Map?)?['summary'] as bool? ?? false,
-      pipelineTier: json['pipelineTier'] as String? ?? 'Standard',
+      pipelineTier: json['pipelineId'] != null &&
+              (json['pipelineTier'] == null ||
+                  json['pipelineTier'].toString().toLowerCase() == 'standard')
+          ? 'Custom'
+          : switch (
+              (json['pipelineTier'] ?? 'standard').toString().toLowerCase()) {
+              'premium' => 'Premium',
+              'custom' => 'Custom',
+              _ => 'Standard',
+            },
       pipelineId: json['pipelineId']?.toString(),
       rankingPlanTier: json['rankingPlanTier'] as String? ?? 'Premium',
       rankingLimit: (automation?['rankingLimit'] as num?)?.toInt() ?? 20,
