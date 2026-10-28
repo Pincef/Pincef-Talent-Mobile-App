@@ -14,8 +14,20 @@ class CandidateRankingRepository {
           await _dio.get('/applications/jobs/$jobId/ai-ranking/overview');
       final overview =
           Map<String, dynamic>.from(overviewResponse.data['data'] as Map);
+      final config =
+          Map<String, dynamic>.from(overview['aiConfig'] as Map? ?? const {});
+      final entitlements = Map<String, dynamic>.from(
+          overview['entitlements'] as Map? ?? const {});
+      final summaryEnabled =
+          config['summary'] == true && entitlements['summary'] == true;
+      final rankingEnabled =
+          config['ranking'] == true && entitlements['ranking'] == true;
       if (overview['locked'] == true) {
-        return CandidateRankingResult.fromApiJson(overview);
+        return CandidateRankingResult.fromApiJson({
+          ...overview,
+          'summaryEnabled': summaryEnabled,
+          'rankingEnabled': rankingEnabled,
+        });
       }
       const pageSize = 100;
       final firstResponse = await _dio.get(
@@ -72,6 +84,8 @@ class CandidateRankingRepository {
         'totalRanked': firstPage['total'] ?? 0,
         'topTierCount': overview['topTierMatches'] ?? 0,
         'avgMatchScore': overview['averageMatchScore'] ?? 0,
+        'summaryEnabled': summaryEnabled,
+        'rankingEnabled': rankingEnabled,
         'entries': rawRankings,
       });
     } on DioException catch (e) {
