@@ -24,6 +24,7 @@ class CandidateRankingEntry {
     this.experienceYears,
     this.previousCompanies = const [],
     this.strengths = const [],
+    this.resumeSummary,
   });
 
   final int rank;
@@ -48,6 +49,7 @@ class CandidateRankingEntry {
   final int? experienceYears;
   final List<String> previousCompanies;
   final List<String> strengths;
+  final Map<String, dynamic>? resumeSummary;
 
   RankingFitLevel get fitLevel => _fitLevelFromScore(score);
 
@@ -77,6 +79,9 @@ class CandidateRankingEntry {
           (json['previousCompanies'] as List?)?.cast<String>() ?? const [],
       strengths: (json['strengths'] as List?)?.whereType<String>().toList() ??
           const [],
+      resumeSummary: json['resumeSummary'] is Map
+          ? Map<String, dynamic>.from(json['resumeSummary'] as Map)
+          : null,
     );
   }
 }
@@ -92,7 +97,9 @@ class CandidateRankingResult {
         marketReasoning = const [],
         skillGapReasoning = const [],
         entries = const [],
-        isLocked = false;
+        isLocked = false,
+        summaryEnabled = false,
+        rankingEnabled = false;
 
   const CandidateRankingResult({
     required this.totalRanked,
@@ -104,6 +111,8 @@ class CandidateRankingResult {
     required this.skillGapReasoning,
     required this.entries,
     this.isLocked = false,
+    this.summaryEnabled = false,
+    this.rankingEnabled = true,
   });
 
   final int totalRanked;
@@ -115,6 +124,8 @@ class CandidateRankingResult {
   final List<String> skillGapReasoning;
   final List<CandidateRankingEntry> entries;
   final bool isLocked;
+  final bool summaryEnabled;
+  final bool rankingEnabled;
 
   factory CandidateRankingResult.fromApiJson(Map<String, dynamic> json) {
     final rawEntries =
@@ -122,6 +133,22 @@ class CandidateRankingResult {
             .cast<Map<String, dynamic>>();
     final entries = rawEntries.map(CandidateRankingEntry.fromApiJson).toList()
       ..sort((a, b) => a.rank.compareTo(b.rank));
+
+    final skillCounts = <String, int>{};
+    var summarizedCandidates = 0;
+    for (final entry in entries) {
+      final summary = entry.resumeSummary;
+      if (summary != null && summary.isNotEmpty) summarizedCandidates++;
+      final skills = summary?['skills'] as List? ?? const [];
+      for (final skill in skills.whereType<Map>()) {
+        final name = skill['name']?.toString().trim() ?? '';
+        if (name.isNotEmpty) {
+          skillCounts.update(name, (count) => count + 1, ifAbsent: () => 1);
+        }
+      }
+    }
+    final commonSkill = skillCounts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
 
     return CandidateRankingResult(
       totalRanked: (json['totalRanked'] as num?)?.toInt() ?? entries.length,
@@ -132,15 +159,20 @@ class CandidateRankingResult {
               ? 0
               : entries.map((e) => e.score).reduce((a, b) => a + b) /
                   entries.length),
-      topSkillLabel: (json['topSkillLabel'] ?? '—') as String,
-      topSkillOverlapPercent:
-          (json['topSkillOverlapPercent'] as num?)?.toInt() ?? 0,
+      topSkillLabel: commonSkill.isNotEmpty
+          ? commonSkill.first.key
+          : (json['topSkillLabel'] ?? '—') as String,
+      topSkillOverlapPercent: summarizedCandidates == 0
+          ? 0
+          : ((commonSkill.first.value / summarizedCandidates) * 100).round(),
       marketReasoning:
           (json['marketReasoning'] as List?)?.cast<String>() ?? const [],
       skillGapReasoning:
           (json['skillGapReasoning'] as List?)?.cast<String>() ?? const [],
       entries: entries,
       isLocked: json['locked'] == true,
+      summaryEnabled: json['summaryEnabled'] == true,
+      rankingEnabled: json['rankingEnabled'] != false,
     );
   }
 }
