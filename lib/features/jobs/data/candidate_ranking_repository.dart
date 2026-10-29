@@ -82,6 +82,12 @@ class CandidateRankingRepository {
             Map<String, dynamic>.from(item['profile'] as Map? ?? const {});
         final location =
             Map<String, dynamic>.from(profile['location'] as Map? ?? const {});
+        final profileImage = candidate['profileImage'];
+        final avatarUrl = profileImage is Map
+            ? profileImage['url'] as String?
+            : profileImage is String
+                ? profileImage
+                : null;
         return {
           ...item,
           'score': (item['match'] as Map?)?['score'] ?? 0,
@@ -93,7 +99,7 @@ class CandidateRankingRepository {
             'name':
                 '${candidate['firstName'] ?? ''} ${candidate['lastName'] ?? ''}'
                     .trim(),
-            'avatarUrl': candidate['profileImage'],
+            'avatarUrl': avatarUrl,
           },
           'experienceYears': profile['yearsOfExperience'],
           'previousCompanies': profile['recentCompanies'] ?? const [],
