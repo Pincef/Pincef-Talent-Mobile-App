@@ -29,9 +29,14 @@ import 'package:talentbridge/features/messages/application/messages_provider.dar
 /// GET /applications/job/:jobId via [jobApplicantsProvider] — no more local
 /// placeholder candidates.
 class JobCandidatesScreen extends ConsumerStatefulWidget {
-  const JobCandidatesScreen({super.key, required this.jobId});
+  const JobCandidatesScreen({
+    super.key,
+    required this.jobId,
+    this.keepCandidatesVisible = false,
+  });
 
   final String jobId;
+  final bool keepCandidatesVisible;
 
   @override
   ConsumerState<JobCandidatesScreen> createState() =>
@@ -165,16 +170,21 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
       final deadlinePassed = job.status != JobBackendStatus.draft &&
           job.applicationDeadline != null &&
           !job.applicationDeadline!.isAfter(DateTime.now());
-      final shouldShowAiReview = (job.aiRanking &&
-              user?.hasModule('ai.candidate_match') == true) ||
-          (job.aiSummary && user?.hasModule('ai.candidate_summary') == true);
+      final shouldShowAiReview = job.aiRanking || job.aiSummary;
       if ((jobClosed || deadlinePassed) &&
           shouldShowAiReview &&
+          !widget.keepCandidatesVisible &&
           !_deadlineRedirectQueued) {
         _deadlineRedirectQueued = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
-            context.replace('/jobs/${widget.jobId}/candidate-ranking');
+            context.replace(
+              '/jobs/${widget.jobId}/candidate-ranking',
+              extra: {
+                'originRoute': '/jobs/${widget.jobId}/candidates',
+                'originLabel': 'Candidates',
+              },
+            );
           }
         });
       }
