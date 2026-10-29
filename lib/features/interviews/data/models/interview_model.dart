@@ -85,6 +85,26 @@ class Interview {
     this.confirmationExpiresAt,
   });
 
+  /// Minimal local-only context for a bearer-link guest. No candidate, job,
+  /// company, or schedule data is returned by the guest-token API.
+  factory Interview.guestPlaceholder() {
+    final now = DateTime.now();
+    return Interview(
+      id: '',
+      applicationId: '',
+      jobId: '',
+      jobTitle: 'Interview room',
+      candidate: const InterviewPerson(id: '', name: ''),
+      interviewers: const [],
+      roundName: 'Guest session',
+      roundNumber: 1,
+      startsAt: now,
+      endsAt: now.add(const Duration(hours: 1)),
+      durationMins: 60,
+      status: InterviewStatus.confirmed,
+    );
+  }
+
   final String id;
   final String applicationId;
   final String jobId;
