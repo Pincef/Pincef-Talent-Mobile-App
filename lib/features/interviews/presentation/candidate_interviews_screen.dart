@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../application/interview_provider.dart';
 import '../data/models/interview_model.dart';
 import 'interview_room_screen.dart';
@@ -207,7 +208,28 @@ class _CandidateInterviewsScreenState
                                               color: canJoin
                                                   ? Colors.green.shade700
                                                   : Colors.black54))),
-                                  if (canJoin)
+                                  if (interview.isActive &&
+                                      interview.meetingUrl != null)
+                                    FilledButton.icon(
+                                        onPressed: () async {
+                                          final uri = Uri.tryParse(
+                                              interview.meetingUrl!.trim());
+                                          if (uri == null ||
+                                              !await launchUrl(uri,
+                                                  mode: LaunchMode
+                                                      .externalApplication)) {
+                                            if (context.mounted) {
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(const SnackBar(
+                                                      content: Text(
+                                                          'Couldn’t open the meeting link.')));
+                                            }
+                                          }
+                                        },
+                                        icon: const Icon(Icons.open_in_new),
+                                        label:
+                                            const Text('Join external meeting'))
+                                  else if (canJoin)
                                     FilledButton.icon(
                                         onPressed: () => openInterviewRoom(
                                             context, interview),
