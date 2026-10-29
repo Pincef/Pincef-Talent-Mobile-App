@@ -54,6 +54,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
   String? _selectedPipelineId;
   String _planTier = 'Premium';
   String? _pendingAction;
+  bool _generatingJobDetails = false;
   double _rankingLimit = 20;
   String? _countryCode;
   String? _countryName;
@@ -156,6 +157,131 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
     _rankingLimit = job.rankingLimit.toDouble();
   }
 
+  Future<String?> _askForRoleIdea() async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('What role are you hiring for?'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: _input('e.g. Senior Product Designer'),
+          onSubmitted: (_) => Navigator.pop(dialogContext, controller.text),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, controller.text),
+              child: const Text('Continue')),
+        ],
+      ),
+    );
+    controller.dispose();
+    final trimmed = result?.trim();
+    return trimmed == null || trimmed.isEmpty ? null : trimmed;
+  }
+
+  Future<void> _generateJobDetails() async {
+    if (!_aiJobDescriptionAvailable || _generatingJobDetails) return;
+    final roleIdea = _title.text.trim().isNotEmpty
+        ? _title.text.trim()
+        : await _askForRoleIdea();
+    if (!mounted || roleIdea == null) return;
+
+    setState(() => _generatingJobDetails = true);
+    try {
+      final generated =
+          await ref.read(jobManagementRepositoryProvider).generateJobDetails({
+        'roleIdea': roleIdea,
+        'companyContext': _companyOverview.text.trim(),
+        'currentDescription': _overview.text.trim(),
+        'industry': _industry,
+        'employmentType': _employmentTypeValues[_employment],
+        'workplaceType': _workplaceTypeValues[_workplace],
+        'minYearsOfExperience': _minYears.text.trim(),
+        if (_educationLevel != null) 'educationLevel': _educationLevel,
+        'fieldOfStudy': _fieldOfStudy.text.trim(),
+        'requiresManagementExperience': _requiresManagement,
+        'currentResponsibilities': _responsibilities,
+        'currentRequirements': _requirements,
+        'currentBenefits': [
+          if (_health) 'Health Insurance',
+          if (_equity) 'Equity/RSUs',
+          if (_learning) 'Learning Stipend',
+          if (_wellness) 'Wellness',
+          ..._customBenefits,
+        ],
+      });
+
+      final benefits = (generated['benefits'] as List? ?? const [])
+          .whereType<String>()
+          .toList();
+      final normalizedBenefits =
+          benefits.map((item) => item.toLowerCase()).toList();
+      bool hasBenefit(RegExp pattern) =>
+          normalizedBenefits.any((item) => pattern.hasMatch(item));
+
+      setState(() {
+        _title.text = generated['title']?.toString() ?? roleIdea;
+        _overview.text = generated['description']?.toString() ?? '';
+        _industry = generated['industry']?.toString() ?? _industry;
+        _employment = _employmentTypeValues.entries
+            .firstWhere(
+              (entry) => entry.value == generated['employmentType'],
+              orElse: () => _employmentTypeValues.entries.first,
+            )
+            .key;
+        _workplace = _workplaceTypeValues.entries
+            .firstWhere(
+              (entry) => entry.value == generated['workplaceType'],
+              orElse: () => _workplaceTypeValues.entries.first,
+            )
+            .key;
+        _minYears.text =
+            generated['minYearsOfExperience']?.toString() ?? _minYears.text;
+        _educationLevel = generated['educationLevel']?.toString();
+        _fieldOfStudy.text = generated['fieldOfStudy']?.toString() ?? '';
+        _requiresManagement = generated['requiresManagementExperience'] == true;
+        _responsibilities
+          ..clear()
+          ..addAll((generated['responsibilities'] as List? ?? const [])
+              .whereType<String>());
+        _requirements
+          ..clear()
+          ..addAll((generated['requiredSkills'] as List? ?? const [])
+              .whereType<String>());
+        if (benefits.isNotEmpty) {
+          _health = hasBenefit(RegExp(r'health'));
+          _equity = hasBenefit(RegExp(r'equity|rsu|stock option'));
+          _learning = hasBenefit(RegExp(r'learning|professional development'));
+          _wellness = hasBenefit(RegExp(r'wellness|mental health'));
+          _customBenefits
+            ..clear()
+            ..addAll(benefits.where((item) {
+              final normalized = item.toLowerCase();
+              return !RegExp(r'health').hasMatch(normalized) &&
+                  !RegExp(r'equity|rsu|stock option').hasMatch(normalized) &&
+                  !RegExp(r'learning|professional development')
+                      .hasMatch(normalized) &&
+                  !RegExp(r'wellness|mental health').hasMatch(normalized);
+            }));
+        }
+      });
+      _showToast(
+        'AI filled the role details. Review the generated text and benefit selections before publishing.',
+        isError: false,
+      );
+    } catch (error) {
+      _showToast('Could not generate job details: $error', isError: true);
+    } finally {
+      if (mounted) setState(() => _generatingJobDetails = false);
+    }
+  }
+
   @override
   void dispose() {
     for (final controller in [
@@ -182,7 +308,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final saving = ref.watch(postJobProvider).isSaving;
+    final saving = ref.watch(postJobProvider).isSaving || _generatingJobDetails;
     return Container(
       color: const Color(0xFFF5F7FB),
       child: LayoutBuilder(
@@ -446,17 +572,22 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
           const Spacer(),
           Tooltip(
             message: _aiJobDescriptionAvailable
-                ? 'AI job description generation is not connected yet.'
+                ? 'Draft the job details from the role idea. Salary, deadline, company overview, and location stay unchanged.'
                 : 'AI job description generation is unavailable right now.',
             child: Opacity(
               opacity: _aiJobDescriptionAvailable ? 1 : .45,
               child: TextButton.icon(
-                onPressed: _aiJobDescriptionAvailable
-                    ? () => AppToast.info(context,
-                        'AI job description generation is coming soon.')
+                onPressed: _aiJobDescriptionAvailable && !_generatingJobDetails
+                    ? _generateJobDetails
                     : null,
-                icon: const Icon(Icons.auto_awesome, size: 12),
-                label: const Text('Generate with AI'),
+                icon: _generatingJobDetails
+                    ? const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(strokeWidth: 1.5))
+                    : const Icon(Icons.auto_awesome, size: 12),
+                label: Text(
+                    _generatingJobDetails ? 'Generating…' : 'Generate with AI'),
                 style: TextButton.styleFrom(
                   foregroundColor: BrandColors.orange,
                   disabledForegroundColor: BrandColors.muted,
