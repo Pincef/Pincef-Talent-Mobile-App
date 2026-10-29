@@ -22,7 +22,11 @@ class TalentBridgeApp extends ConsumerWidget {
       builder: (context, child) {
         final isLoading = ref.watch(isApiLoadingProvider);
         final authState = ref.watch(authProvider);
-        if (authState.isRestoringSession || authState.sessionRestoreFailed) {
+        final isGuestInvite =
+            router.routerDelegate.currentConfiguration.uri.path ==
+                '/interview-guest';
+        if (!isGuestInvite &&
+            (authState.isRestoringSession || authState.sessionRestoreFailed)) {
           return Material(
             color: Colors.white,
             child: Center(
