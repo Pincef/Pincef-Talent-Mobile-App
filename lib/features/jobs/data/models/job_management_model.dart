@@ -303,6 +303,11 @@ class JobPosting {
   factory JobPosting.fromApiJson(Map<String, dynamic> json) {
     final backendStatus =
         JobBackendStatusJson.fromJson(json['status'] as String? ?? 'draft');
+    final rawTier = json['pipelineTier']?.toString().toLowerCase();
+    final builtInAiFlow = rawTier != 'custom';
+    final aiConfig = json['aiConfig'] as Map?;
+    final configuredRanking = aiConfig != null && aiConfig['ranking'] == true;
+    final configuredSummary = aiConfig != null && aiConfig['summary'] == true;
     final postedBy = json['postedById'];
     final creatorId = postedBy is Map
         ? (postedBy['_id'] ?? postedBy['id'])?.toString()
@@ -326,8 +331,8 @@ class JobPosting {
       ),
       applicationDeadline:
           DateTime.tryParse((json['applicationDeadline'] ?? '').toString()),
-      aiRanking: (json['aiConfig'] as Map?)?['ranking'] as bool? ?? false,
-      aiSummary: (json['aiConfig'] as Map?)?['summary'] as bool? ?? false,
+      aiRanking: builtInAiFlow || configuredRanking,
+      aiSummary: builtInAiFlow || configuredSummary,
       aiStatus: (json['aiStatus'] ?? 'idle').toString(),
       createdById: creatorId,
     );
@@ -793,6 +798,19 @@ class JobDetail {
   factory JobDetail.fromApiJson(Map<String, dynamic> json) {
     final company = json['companyId'];
     final automation = json['automation'] as Map?;
+    final rawTier = json['pipelineTier']?.toString().toLowerCase();
+    final pipelineTier =
+        json['pipelineId'] != null && (rawTier == null || rawTier == 'standard')
+            ? 'Custom'
+            : switch (rawTier ?? 'standard') {
+                'premium' => 'Premium',
+                'custom' => 'Custom',
+                _ => 'Standard',
+              };
+    final builtInAiFlow = rawTier != 'custom';
+    final aiConfig = json['aiConfig'] as Map?;
+    final configuredRanking = aiConfig != null && aiConfig['ranking'] == true;
+    final configuredSummary = aiConfig != null && aiConfig['summary'] == true;
     final companyName = company is Map<String, dynamic>
         ? (company['name'] as String? ?? 'Unknown company')
         : 'Unknown company';
@@ -834,18 +852,9 @@ class JobDetail {
       applicationDeadline: DateTime.tryParse(
         (json['applicationDeadline'] ?? '').toString(),
       ),
-      aiRanking: (json['aiConfig'] as Map?)?['ranking'] as bool? ?? false,
-      aiSummary: (json['aiConfig'] as Map?)?['summary'] as bool? ?? false,
-      pipelineTier: json['pipelineId'] != null &&
-              (json['pipelineTier'] == null ||
-                  json['pipelineTier'].toString().toLowerCase() == 'standard')
-          ? 'Custom'
-          : switch (
-              (json['pipelineTier'] ?? 'standard').toString().toLowerCase()) {
-              'premium' => 'Premium',
-              'custom' => 'Custom',
-              _ => 'Standard',
-            },
+      aiRanking: builtInAiFlow || configuredRanking,
+      aiSummary: builtInAiFlow || configuredSummary,
+      pipelineTier: pipelineTier,
       pipelineId: json['pipelineId']?.toString(),
       rankingPlanTier: json['rankingPlanTier'] as String? ?? 'Premium',
       rankingLimit: (automation?['rankingLimit'] as num?)?.toInt() ?? 20,
