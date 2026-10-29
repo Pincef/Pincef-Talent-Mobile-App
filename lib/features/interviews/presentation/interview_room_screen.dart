@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 // Prefixed: LiveKit also exports a `ConnectionState` that clashes with Flutter's.
@@ -26,8 +27,17 @@ Future<void> openInterviewRoom(BuildContext context, Interview interview) =>
 enum _Phase { connecting, waiting, live, failed }
 
 class InterviewRoomScreen extends ConsumerStatefulWidget {
-  const InterviewRoomScreen({super.key, required this.interview});
+  const InterviewRoomScreen({
+    super.key,
+    required this.interview,
+    this.guestToken,
+    this.guestDisplayName,
+    this.initialGuestJoinInfo,
+  });
   final Interview interview;
+  final String? guestToken;
+  final String? guestDisplayName;
+  final JoinInfo? initialGuestJoinInfo;
 
   @override
   ConsumerState<InterviewRoomScreen> createState() => _RoomState();
@@ -49,6 +59,10 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
   bool _hostPollBusy = false;
   bool _admitting = false;
   bool _leaving = false;
+  bool _guestLinkBusy = false;
+  JoinInfo? _pendingGuestJoinInfo;
+
+  bool get _isGuest => widget.guestToken != null;
 
   // Screen sharing on phones needs extra native setup (Android foreground
   // service / iOS broadcast extension), so it's offered on web & desktop only.
@@ -60,6 +74,7 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
   @override
   void initState() {
     super.initState();
+    _pendingGuestJoinInfo = widget.initialGuestJoinInfo;
     _join();
   }
 
@@ -85,9 +100,14 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
     });
 
     try {
-      final info = await ref
-          .read(interviewRepositoryProvider)
-          .joinToken(widget.interview.id);
+      final repository = ref.read(interviewRepositoryProvider);
+      final firstGuestInfo = _pendingGuestJoinInfo;
+      _pendingGuestJoinInfo = null;
+      final info = _isGuest
+          ? firstGuestInfo ??
+              await repository.guestJoinToken(
+                  widget.guestToken!, widget.guestDisplayName!)
+          : await repository.joinToken(widget.interview.id);
       if (!mounted) return;
 
       if (info.waiting) {
@@ -171,9 +191,13 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
     if (_waitingPollBusy || !mounted || _phase != _Phase.waiting) return;
     _waitingPollBusy = true;
     try {
-      final info = await ref
-          .read(interviewRepositoryProvider)
-          .joinToken(widget.interview.id);
+      final info = _isGuest
+          ? await ref
+              .read(interviewRepositoryProvider)
+              .guestJoinToken(widget.guestToken!, widget.guestDisplayName!)
+          : await ref
+              .read(interviewRepositoryProvider)
+              .joinToken(widget.interview.id);
       if (!mounted || _phase != _Phase.waiting) return;
       if (!info.waiting) {
         _waitingPoll?.cancel();
@@ -295,8 +319,10 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
 
   Future<void> _leave() async {
     final i = widget.interview;
-    final canFinalize =
-        (_info?.isInterviewer ?? false) && i.isActive && i.hasStarted;
+    final canFinalize = !_isGuest &&
+        (_info?.isInterviewer ?? false) &&
+        i.isActive &&
+        i.hasStarted;
     final isWaiting = _phase == _Phase.waiting;
 
     final choice = await showDialog<String>(
@@ -307,7 +333,9 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
             ? 'You will leave the lobby and need to request entry again.'
             : canFinalize
                 ? 'You can also mark this interview as completed now.'
-                : 'You can rejoin while the room is open.'),
+                : _isGuest
+                    ? 'Reopen your invitation link to rejoin while the room is open.'
+                    : 'You can rejoin while the room is open.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx), child: const Text('Stay')),
@@ -334,7 +362,7 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
         if (mounted) toast(context, errorMessage(e));
       }
     }
-    if (isWaiting) {
+    if (isWaiting && !_isGuest) {
       try {
         await ref.read(interviewRepositoryProvider).cancelWaitingRequest(i.id);
       } catch (_) {}
@@ -544,6 +572,93 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
     }
   }
 
+  Future<void> _showGuestLink() async {
+    if (_guestLinkBusy) return;
+    setState(() => _guestLinkBusy = true);
+    try {
+      final link = await ref
+          .read(interviewRepositoryProvider)
+          .createGuestLink(widget.interview.id);
+      if (!mounted) return;
+      final shareUrl = Uri.base
+          .replace(
+            path: '/interview-guest',
+            queryParameters: {'token': link.token},
+            fragment: '',
+          )
+          .toString();
+      var copied = false;
+      try {
+        await Clipboard.setData(ClipboardData(text: shareUrl));
+        copied = true;
+      } catch (_) {
+        // Keep the selectable link visible even if the browser blocks copying.
+      }
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Guest link created'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                  'The previous guest link was replaced. This link only opens this interview and expires after its join window.'),
+              const SizedBox(height: 12),
+              SelectableText(shareUrl),
+              const SizedBox(height: 12),
+              Text(
+                '${copied ? 'Copied to clipboard · ' : ''}Expires ${DateFormat.yMMMd().add_jm().format(link.expiresAt)}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (mounted) toast(context, errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _guestLinkBusy = false);
+    }
+  }
+
+  Future<void> _revokeGuestLink() async {
+    final revoke = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Revoke guest link?'),
+        content: const Text(
+            'Anyone using that link will be disconnected, and the link will stop working.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Keep link'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Revoke link'),
+          ),
+        ],
+      ),
+    );
+    if (revoke != true || !mounted) return;
+    try {
+      await ref
+          .read(interviewRepositoryProvider)
+          .revokeGuestLink(widget.interview.id);
+      if (mounted) toast(context, 'Guest link revoked.');
+    } catch (e) {
+      if (mounted) toast(context, errorMessage(e));
+    }
+  }
+
   Future<void> _switchInterview(Interview interview) async {
     _leaving = true;
     await _cleanup();
@@ -647,7 +762,7 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
             _Phase.connecting => _status(
                 icon: null,
                 title: 'Joining the interview…',
-                message: widget.interview.candidate.name.isEmpty
+                message: _isGuest || widget.interview.candidate.name.isEmpty
                     ? null
                     : '${widget.interview.roundName} · ${widget.interview.jobTitle}'),
             _Phase.failed => _status(
@@ -803,7 +918,10 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
           Expanded(
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('${i.roundName}: ${i.jobTitle}',
+              Text(
+                  _isGuest
+                      ? 'Interview guest'
+                      : '${i.roundName}: ${i.jobTitle}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -825,7 +943,7 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
       Expanded(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
-          child: wide
+          child: wide && !_isGuest
               ? Row(children: [
                   Expanded(child: _stage(local, remotes, true)),
                   const SizedBox(width: 12),
@@ -858,7 +976,7 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
               off: !(local?.isCameraEnabled() ?? false),
               onTap: _toggleCamera,
             ),
-            if (_canShareScreen)
+            if (_canShareScreen && !_isGuest)
               _CtrlButton(
                 icon: Icons.screen_share_outlined,
                 label: 'Share',
@@ -881,6 +999,17 @@ class _RoomState extends ConsumerState<InterviewRoomScreen> {
                 icon: Icons.person_add_alt_1_outlined,
                 label: 'Invite team',
                 onTap: _showInvitePanel,
+              ),
+              _CtrlButton(
+                icon: Icons.link_outlined,
+                label: 'Guest link',
+                onTap: _showGuestLink,
+              ),
+              _CtrlButton(
+                icon: Icons.link_off_outlined,
+                label: 'Revoke link',
+                danger: true,
+                onTap: _revokeGuestLink,
               ),
             ],
             _CtrlButton(
