@@ -8,6 +8,9 @@ class PriorityJob {
   final int?
       matchCount; // null when the job has no AI matches yet (e.g. still drafting)
   final JobPublishStatus status;
+  final bool aiRanking;
+  final bool aiSummary;
+  final DateTime? applicationDeadline;
   final bool
       isScanning; // AI matching in progress — shown alongside status, not instead of it
 
@@ -18,6 +21,9 @@ class PriorityJob {
     required this.applicantCount,
     this.matchCount,
     required this.status,
+    this.aiRanking = false,
+    this.aiSummary = false,
+    this.applicationDeadline,
     this.isScanning = false,
   });
 }
