@@ -635,9 +635,19 @@ class _RecruiterActions extends StatelessWidget {
           label: const Text('Edit Posting'),
         ),
         ElevatedButton(
-          onPressed: () => context.go(showAiReview
-              ? '/jobs/$jobId/candidate-ranking'
-              : '/jobs/$jobId/candidates'),
+          onPressed: () {
+            if (showAiReview) {
+              context.go(
+                '/jobs/$jobId/candidate-ranking',
+                extra: {
+                  'originRoute': '/jobs/$jobId',
+                  'originLabel': 'Job Details',
+                },
+              );
+            } else {
+              context.go('/jobs/$jobId/candidates');
+            }
+          },
           style: ElevatedButton.styleFrom(
               backgroundColor: BrandColors.orange,
               foregroundColor: Colors.white,
