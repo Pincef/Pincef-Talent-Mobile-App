@@ -302,8 +302,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/jobs/:jobId/candidates',
-            builder: (context, state) =>
-                JobCandidatesScreen(jobId: state.pathParameters['jobId']!),
+            builder: (context, state) => JobCandidatesScreen(
+              jobId: state.pathParameters['jobId']!,
+              keepCandidatesVisible:
+                  state.uri.queryParameters['showCandidates'] == 'true',
+            ),
             routes: [
               GoRoute(
                 path: ':candidateId',
@@ -321,9 +324,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/jobs/:jobId/candidate-ranking',
-            builder: (context, state) => AiCandidateRankingScreen(
-              jobId: state.pathParameters['jobId']!,
-            ),
+            builder: (context, state) {
+              final origin = state.extra is Map
+                  ? Map<String, dynamic>.from(state.extra as Map)
+                  : const <String, dynamic>{};
+              return AiCandidateRankingScreen(
+                jobId: state.pathParameters['jobId']!,
+                originRoute: origin['originRoute'] as String? ?? '/jobs',
+                originLabel: origin['originLabel'] as String? ?? 'Jobs',
+              );
+            },
           ),
           GoRoute(
             path: '/candidate-comparison',
