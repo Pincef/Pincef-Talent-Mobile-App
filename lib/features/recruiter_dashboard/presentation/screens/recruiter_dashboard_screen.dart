@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/widgets/recruiter_dashboard_widgets.dart';
 import '../../../auth/application/auth_provider.dart';
+import '../../data/model/recruiter_dashboard_models.dart';
 import '../../application/recruiter_dashboard_provider.dart';
 
 class RecruiterDashboardScreen extends ConsumerWidget {
@@ -147,10 +148,11 @@ class _RecruiterDashboardBody extends ConsumerWidget {
                             ? DateTimeRange(start: state.from!, end: state.to!)
                             : null,
                       );
-                      if (range != null)
+                      if (range != null) {
                         ref
                             .read(recruiterDashboardProvider.notifier)
                             .load(from: range.start, to: range.end);
+                      }
                     },
                     icon: const Icon(Icons.calendar_today_outlined, size: 14),
                     label: Text(state.from == null || state.to == null
@@ -237,7 +239,27 @@ class _RecruiterDashboardBody extends ConsumerWidget {
                           child: PriorityJobsCard(
                               jobs: summary.priorityJobs,
                               onViewAll: () => context.go('/jobs'),
-                              onJobTap: (job) => context.go('/jobs/${job.id}')),
+                              onJobTap: (job) {
+                                final deadlinePassed =
+                                    job.status == JobPublishStatus.active &&
+                                        job.applicationDeadline != null &&
+                                        !job.applicationDeadline!
+                                            .isAfter(DateTime.now());
+                                final canOpenAiReview =
+                                    (job.status == JobPublishStatus.closed ||
+                                            deadlinePassed) &&
+                                        (job.aiRanking || job.aiSummary);
+                                if (canOpenAiReview) {
+                                  context.push(
+                                      '/jobs/${job.id}/candidate-ranking',
+                                      extra: {
+                                        'originRoute': '/dashboard',
+                                        'originLabel': 'Dashboard',
+                                      });
+                                } else {
+                                  context.go('/jobs/${job.id}');
+                                }
+                              }),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
@@ -263,7 +285,27 @@ class _RecruiterDashboardBody extends ConsumerWidget {
                         PriorityJobsCard(
                             jobs: summary.priorityJobs,
                             onViewAll: () => context.go('/jobs'),
-                            onJobTap: (job) => context.go('/jobs/${job.id}')),
+                            onJobTap: (job) {
+                              final deadlinePassed =
+                                  job.status == JobPublishStatus.active &&
+                                      job.applicationDeadline != null &&
+                                      !job.applicationDeadline!
+                                          .isAfter(DateTime.now());
+                              final canOpenAiReview =
+                                  (job.status == JobPublishStatus.closed ||
+                                          deadlinePassed) &&
+                                      (job.aiRanking || job.aiSummary);
+                              if (canOpenAiReview) {
+                                context.push(
+                                    '/jobs/${job.id}/candidate-ranking',
+                                    extra: {
+                                      'originRoute': '/dashboard',
+                                      'originLabel': 'Dashboard',
+                                    });
+                              } else {
+                                context.go('/jobs/${job.id}');
+                              }
+                            }),
                         const SizedBox(height: 16),
                         QuickActionsCard(actions: quickActions),
                         const SizedBox(height: 16),
