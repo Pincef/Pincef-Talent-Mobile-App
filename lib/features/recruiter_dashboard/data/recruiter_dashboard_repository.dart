@@ -93,6 +93,9 @@ class RecruiterDashboardRepository {
       priorityJobs: topJobs.map((row) {
         final job = jobsById[(row['jobId'] ?? '').toString()] ?? const {};
         final status = job['status']?.toString() ?? '';
+        final aiConfig = job['aiConfig'] as Map?;
+        final builtInAiFlow =
+            job['pipelineTier']?.toString().toLowerCase() != 'custom';
         return PriorityJob(
           id: (row['jobId'] ?? '').toString(),
           title: row['title'] as String? ?? 'Untitled role',
@@ -106,6 +109,10 @@ class RecruiterDashboardRepository {
               : status == 'closed'
                   ? JobPublishStatus.closed
                   : JobPublishStatus.drafting,
+          aiRanking: builtInAiFlow || aiConfig?['ranking'] == true,
+          aiSummary: builtInAiFlow || aiConfig?['summary'] == true,
+          applicationDeadline:
+              DateTime.tryParse((job['applicationDeadline'] ?? '').toString()),
         );
       }).toList(),
       recentActivity: const [],
