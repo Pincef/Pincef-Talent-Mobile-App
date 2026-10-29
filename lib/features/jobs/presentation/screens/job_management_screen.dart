@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:talentbridge/core/widgets/app_toast.dart';
+import 'package:talentbridge/features/assessment/application/assessment_provider.dart';
 import '../widgets/job_management_widget.dart';
 import '../../application/job_management_provider.dart';
 import '../../data/models/job_management_model.dart';
@@ -20,6 +22,150 @@ class _JobManagementScreenState extends ConsumerState<JobManagementScreen> {
   JobPostingTab _tab = JobPostingTab.active;
   int _postingPage = 1;
   String? _lastRouteStatus;
+  bool _creatingDemo = false;
+
+  Future<void> _createAutomationDemo() async {
+    setState(() => _creatingDemo = true);
+    String? jobId;
+    String? assessmentId;
+    const jobTitle = 'TalentBridge Demo: AI Operations Analyst';
+    const purpose =
+        'Assess workflow automation, data handling, and practical AI operations skills. Use objective questions with clear correct answers for automatic scoring.';
+    final deadline = DateTime.now().add(const Duration(days: 14));
+    final assessmentClose = deadline.add(const Duration(days: 7));
+
+    try {
+      final job = JobDraft(
+        title: jobTitle,
+        description:
+            'This demonstration role is designed to exercise TalentBridge’s automated hiring workflow. The analyst will evaluate AI-assisted business processes, build reliable workflow automations, and measure quality using clear operational metrics.',
+        employmentType: 'full_time',
+        workplaceType: 'remote',
+        industry: 'Technology',
+        companyOverview:
+            'TalentBridge automation demonstration job. This draft is for product evaluation.',
+        location: 'Remote, Nigeria',
+        currency: 'NGN',
+        requiredSkills: const [
+          'Workflow automation',
+          'Data analysis',
+          'Python',
+          'AI operations',
+        ],
+        minYearsOfExperience: '3',
+        educationLevel: 'bachelors',
+        applicationDeadline: deadline,
+        aiRanking: true,
+        aiSummary: true,
+        pipelineTier: 'Premium',
+        rankingPlanTier: 'Premium',
+        rankingLimit: 20,
+        assessmentEmailCount: 15,
+        interviewEmailCount: 10,
+        responsibilities: const [
+          'Design and maintain reliable workflow automations.',
+          'Analyze operational data and communicate measurable improvements.',
+          'Evaluate AI-assisted processes for accuracy and quality.',
+        ],
+        benefits: const ['Remote work', 'Professional development'],
+      );
+      jobId =
+          await ref.read(jobManagementRepositoryProvider).createJobDraft(job);
+
+      final assessmentRepository = ref.read(assessmentRepositoryProvider);
+      final generated = await assessmentRepository.generate({
+        'title': '$jobTitle assessment',
+        'purpose': purpose,
+        'generationMode': 'full_ai',
+        'assessmentKind': 'internal',
+        'deliveryChannel': 'email',
+        'durationMinutes': 45,
+        'passingScore': 75,
+        'questions': <Map<String, dynamic>>[],
+        'autoInviteShortlisted': true,
+        'autoGenerateAfterDeadline': false,
+        'jobId': jobId,
+        'pipelineStageName': 'Assessment',
+        'questionsPerSkill': 2,
+      });
+      final rawAssessmentId = generated['_id'] ?? generated['id'];
+      if (rawAssessmentId == null) {
+        throw StateError('The generated assessment did not include an ID.');
+      }
+      assessmentId = rawAssessmentId.toString();
+
+      final questions = (generated['questions'] as List? ?? const [])
+          .whereType<Map>()
+          .map((raw) => Map<String, dynamic>.from(raw))
+          .map(_serializeGeneratedQuestion)
+          .toList();
+      if (questions.isEmpty) {
+        throw StateError('AI generation returned no assessment questions.');
+      }
+
+      await assessmentRepository.update(assessmentId, {
+        'title': '$jobTitle assessment',
+        'purpose': purpose,
+        'generationMode': 'full_ai',
+        'assessmentKind': 'internal',
+        'deliveryChannel': 'email',
+        'durationMinutes': 45,
+        'passingScore': 75,
+        'questions': questions,
+        'autoInviteShortlisted': true,
+        'autoGenerateAfterDeadline': true,
+        'pipelineStageName': 'Assessment',
+        'availableUntil': assessmentClose.toUtc().toIso8601String(),
+      });
+
+      ref.invalidate(jobManagementProvider);
+      ref.invalidate(recruiterAssessmentsProvider);
+      if (!mounted) return;
+      AppToast.success(context,
+          'Draft demo job and automated assessment created. Publish the job to start collecting applications.');
+      context.go('/competency-assessments/$assessmentId');
+    } catch (error) {
+      if (!mounted) return;
+      final message = jobId == null
+          ? 'Could not create the demo job: $error'
+          : assessmentId == null
+              ? 'The demo job was created, but its AI assessment could not be generated: $error'
+              : 'The demo job and assessment were created, but scheduling could not be saved: $error';
+      AppToast.error(context, message);
+      if (assessmentId != null) {
+        context.go('/competency-assessments/$assessmentId');
+      } else if (jobId != null) {
+        context.go('/jobs/$jobId');
+      }
+    } finally {
+      if (mounted) setState(() => _creatingDemo = false);
+    }
+  }
+
+  Map<String, dynamic> _serializeGeneratedQuestion(
+      Map<String, dynamic> question) {
+    final type = question['type']?.toString() ?? 'multiple_choice';
+    return {
+      'questionId':
+          question['questionId']?.toString() ?? UniqueKey().toString(),
+      'text': question['text']?.toString() ?? '',
+      'type': type,
+      'skillCategory': question['skillCategory']?.toString() ?? 'General',
+      'points': (question['points'] as num?)?.toInt() ?? 10,
+      if (type != 'multiple_choice') ...{
+        'referenceAnswer': question['referenceAnswer']?.toString().trim() ?? '',
+        'gradingRubric': question['gradingRubric']?.toString().trim() ?? '',
+      },
+      if (type == 'multiple_choice') ...{
+        'options': (question['options'] as List? ?? const [])
+            .map((option) => option.toString().trim())
+            .where((option) => option.isNotEmpty)
+            .toList(),
+        if (question['correctAnswer'] != null)
+          'correctAnswer': question['correctAnswer'].toString().trim(),
+      },
+    };
+  }
 
   @override
   void didChangeDependencies() {
@@ -72,6 +218,8 @@ class _JobManagementScreenState extends ConsumerState<JobManagementScreen> {
       },
       onRetry: () => ref.read(jobManagementProvider.notifier).load(),
       onPostJob: () => context.go('/jobs/new'),
+      onCreateDemo: _createAutomationDemo,
+      creatingDemo: _creatingDemo,
     );
   }
 
@@ -90,7 +238,9 @@ class _Body extends StatelessWidget {
       required this.onPageChanged,
       required this.onTabChanged,
       required this.onRetry,
-      required this.onPostJob});
+      required this.onPostJob,
+      required this.onCreateDemo,
+      required this.creatingDemo});
 
   final JobManagementState state;
   final JobPostingTab tab;
@@ -99,6 +249,8 @@ class _Body extends StatelessWidget {
   final ValueChanged<JobPostingTab> onTabChanged;
   final VoidCallback onRetry;
   final VoidCallback onPostJob;
+  final VoidCallback onCreateDemo;
+  final bool creatingDemo;
 
   @override
   Widget build(BuildContext context) {
@@ -169,6 +321,11 @@ class _Body extends StatelessWidget {
                       ],
                     ),
               const SizedBox(height: 24),
+              _AutomationDemoCard(
+                onCreate: onCreateDemo,
+                isCreating: creatingDemo,
+              ),
+              const SizedBox(height: 24),
               Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
                 Expanded(
                     child: Wrap(
@@ -225,4 +382,63 @@ class _Body extends StatelessWidget {
       },
     );
   }
+}
+
+class _AutomationDemoCard extends StatelessWidget {
+  const _AutomationDemoCard({
+    required this.onCreate,
+    required this.isCreating,
+  });
+
+  final VoidCallback onCreate;
+  final bool isCreating;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF8F1),
+          border: Border.all(color: const Color(0xFFFFD9B8)),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: LayoutBuilder(builder: (context, constraints) {
+          final compact = constraints.maxWidth < 600;
+          const content = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Try the full automation flow',
+                  style: TextStyle(
+                      color: Color(0xFF1B2A4E),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800)),
+              SizedBox(height: 4),
+              Text(
+                  'Creates a draft Premium job with AI ranking and a generated assessment. After you publish, shortlisted candidates are invited automatically at the deadline and their objective answers are scored automatically. Nothing is published or sent yet.',
+                  style: TextStyle(color: Color(0xFF6B7280), fontSize: 11.5)),
+            ],
+          );
+          final action = FilledButton.icon(
+            onPressed: isCreating ? null : onCreate,
+            icon: isCreating
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.auto_awesome, size: 16),
+            label: Text(isCreating ? 'Creating demo…' : 'Create demo job'),
+          );
+          return compact
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [content, const SizedBox(height: 12), action],
+                )
+              : Row(
+                  children: [
+                    const Expanded(child: content),
+                    const SizedBox(width: 16),
+                    action,
+                  ],
+                );
+        }),
+      );
 }
