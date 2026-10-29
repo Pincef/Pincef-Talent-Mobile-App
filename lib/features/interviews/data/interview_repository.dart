@@ -173,6 +173,32 @@ class InterviewRepository {
         return JoinInfo.fromJson(Map<String, dynamic>.from(_data(r) as Map));
       });
 
+  Future<JoinInfo> guestJoinToken(String token, String name) =>
+      _guard(() async {
+        final r = await _dio.post('$_base/guest/join-token',
+            data: {
+              'token': token,
+              'name': name,
+            },
+            options: Options(extra: const {'skipAuth': true}));
+        return JoinInfo.fromJson(Map<String, dynamic>.from(_data(r) as Map));
+      });
+
+  Future<({String token, DateTime expiresAt})> createGuestLink(
+          String interviewId) =>
+      _guard(() async {
+        final r = await _dio.post('$_base/$interviewId/guest-link');
+        final data = Map<String, dynamic>.from(_data(r) as Map);
+        return (
+          token: data['token'] as String,
+          expiresAt: DateTime.parse(data['expiresAt'] as String).toLocal(),
+        );
+      });
+
+  Future<void> revokeGuestLink(String interviewId) => _guard(() async {
+        await _dio.delete('$_base/$interviewId/guest-link');
+      });
+
   Future<InterviewWaitingCandidate?> waitingCandidate(String interviewId) =>
       _guard(() async {
         final r = await _dio.get('$_base/$interviewId/waiting-candidate');
