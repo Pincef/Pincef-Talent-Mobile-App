@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:file_saver/file_saver.dart';
+import 'package:pdf/pdf.dart' as pdf;
+import 'package:pdf/widgets.dart' as pw;
 import 'package:talentbridge/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -41,6 +44,67 @@ class AiCandidateRankingScreen extends ConsumerStatefulWidget {
 class _AiCandidateRankingScreenState
     extends ConsumerState<AiCandidateRankingScreen> {
   bool _retrying = false;
+
+  Future<void> _exportRankings(CandidateRankingResult result) async {
+    if (result.entries.isEmpty) {
+      AppToast.info(context, 'There are no rankings to export yet.');
+      return;
+    }
+
+    try {
+      final document = pw.Document();
+      document.addPage(pw.MultiPage(
+        build: (context) => [
+          pw.Text('Candidate rankings',
+              style: const pw.TextStyle(
+                  fontSize: 20, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 4),
+          pw.Text(
+              'Job: ${ref.read(jobDetailProvider(widget.jobId)).valueOrNull?.title ?? widget.originLabel} · ${DateTime.now().toIso8601String().substring(0, 10)}'),
+          pw.SizedBox(height: 14),
+          pw.Text(
+              'Candidates: ${result.totalRanked}    Top matches: ${result.topTierCount}    Average match: ${result.avgMatchScore.round()}%'),
+          pw.SizedBox(height: 16),
+          pw.TableHelper.fromTextArray(
+            headers: const [
+              'Rank',
+              'Candidate',
+              'Match',
+              'Fit',
+              'Experience',
+              'Strengths',
+              'AI insight'
+            ],
+            data: result.entries
+                .map((entry) => [
+                      entry.rank.toString(),
+                      entry.name,
+                      '${entry.score}%',
+                      entry.fitLabel,
+                      entry.experienceLabel,
+                      entry.strengths.join(', '),
+                      entry.insight,
+                    ])
+                .toList(),
+            headerStyle: const pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            headerDecoration:
+                const pw.BoxDecoration(color: pdf.PdfColors.grey100),
+            cellAlignment: pw.Alignment.topLeft,
+            cellPadding: const pw.EdgeInsets.all(5),
+          ),
+        ],
+      ));
+      await FileSaver.instance.saveFile(
+        name:
+            'candidate-rankings-${DateTime.now().toIso8601String().substring(0, 10)}.pdf',
+        bytes: await document.save(),
+        mimeType: MimeType.pdf,
+      );
+      if (mounted) AppToast.success(context, 'Rankings exported as PDF.');
+    } catch (error) {
+      if (mounted) AppToast.error(context, 'Could not export rankings: $error');
+    }
+  }
 
   Future<void> _retryFailed() async {
     setState(() => _retrying = true);
@@ -89,7 +153,10 @@ class _AiCandidateRankingScreenState
                 isWide: isWide,
                 jobTitle: jobTitle,
                 candidateCount: ranking.valueOrNull?.totalRanked,
-                onExport: () => _notImplemented(context, 'Export Rankings'),
+                onExport: () {
+                  final result = ranking.valueOrNull;
+                  if (result != null) _exportRankings(result);
+                },
                 onFilter: () => _notImplemented(context, 'Filter'),
               ),
               const SizedBox(height: 22),
@@ -452,8 +519,7 @@ class _RankingBodyState extends ConsumerState<_RankingBody> {
               entries: result.entries,
               total: result.totalRanked),
         const SizedBox(height: 20),
-        if (!_showSummaries)
-          _AutomateWorkflowCard(jobId: widget.jobId, entries: result.entries),
+        if (!_showSummaries) _AutomateWorkflowCard(entries: result.entries),
       ],
     );
   }
@@ -975,6 +1041,7 @@ class _RankingListState extends ConsumerState<_RankingList> {
               alignment: WrapAlignment.spaceBetween,
               crossAxisAlignment: WrapCrossAlignment.center,
               runSpacing: 8,
+              spacing: 12,
               children: [
                 const Text('Candidate Ranking List',
                     style: TextStyle(
@@ -1452,8 +1519,7 @@ class _LegendDot extends StatelessWidget {
 }
 
 class _AutomateWorkflowCard extends StatelessWidget {
-  const _AutomateWorkflowCard({required this.jobId, required this.entries});
-  final String jobId;
+  const _AutomateWorkflowCard({required this.entries});
   final List<CandidateRankingEntry> entries;
 
   @override
@@ -1498,21 +1564,6 @@ class _AutomateWorkflowCard extends StatelessWidget {
             const _WorkflowStep(
                 label: 'Schedule interviews and track outcomes'),
             const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => context.go('/jobs/$jobId/candidates'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: BrandColors.orange,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-                child: const Text('Manage Hiring Pipeline',
-                    style:
-                        TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-              ),
-            ),
           ],
         ),
       );
