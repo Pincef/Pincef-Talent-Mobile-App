@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../core/entitlements/module_codes.dart';
 import '../../../../core/theme/brand_color.dart';
 import '../../../../core/widgets/app_toast.dart';
 import '../../../auth/application/auth_provider.dart';
@@ -314,23 +313,28 @@ class JobPostingCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final (bg, fg, label) = _statusStyle;
+    final jobClosed = job.status == JobPipelineStatus.closed;
     final deadlinePassed = job.status == JobPipelineStatus.active &&
         job.applicationDeadline != null &&
         !job.applicationDeadline!.isAfter(DateTime.now());
     final user = ref.watch(authProvider).user;
-    final canOpenAiReview = deadlinePassed &&
-        ((job.aiRanking &&
-                user?.hasModule(ModuleCodes.aiCandidateMatch) == true) ||
-            (job.aiSummary &&
-                user?.hasModule(ModuleCodes.aiCandidateSummary) == true));
+    final canOpenAiReview =
+        (jobClosed || deadlinePassed) && (job.aiRanking || job.aiSummary);
     final canDelete = job.createdById != null && job.createdById == user?.id;
 
     return InkWell(
-      onTap: () => context.push(deadlinePassed
-          ? canOpenAiReview
-              ? '/jobs/${job.id}/candidate-ranking'
-              : '/jobs/${job.id}/candidates'
-          : '/jobs/${job.id}'),
+      onTap: () {
+        if (canOpenAiReview) {
+          context.push(
+            '/jobs/${job.id}/candidate-ranking',
+            extra: {'originRoute': '/jobs', 'originLabel': 'Jobs'},
+          );
+        } else {
+          context.push(deadlinePassed
+              ? '/jobs/${job.id}/candidates'
+              : '/jobs/${job.id}');
+        }
+      },
       borderRadius: BorderRadius.circular(10),
       child: Container(
         padding: const EdgeInsets.all(16),
