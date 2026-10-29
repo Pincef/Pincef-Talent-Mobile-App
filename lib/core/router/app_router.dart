@@ -16,6 +16,7 @@ import 'package:talentbridge/features/notifications/presentation/notification_ce
 import 'package:talentbridge/features/hiring_pipeline/presentation/hiring_pipeline_screen.dart';
 import 'package:talentbridge/features/interviews/presentation/interview_calendar_screen.dart';
 import 'package:talentbridge/features/interviews/presentation/candidate_interviews_screen.dart';
+import 'package:talentbridge/features/interviews/presentation/guest_interview_entry_screen.dart';
 import 'package:talentbridge/features/jobs/presentation/screens/my_applications_screen.dart';
 import 'package:talentbridge/features/recruiter_dashboard/presentation/screens/recruitment_report_screen.dart';
 import 'package:talentbridge/features/support/presentation/support_center_screen.dart';
@@ -65,7 +66,9 @@ const _authEntryRoutes = {
 };
 
 bool _isPublicRoute(String location) =>
-    _publicRoutes.contains(location) || location.startsWith('/shared/jobs/');
+    _publicRoutes.contains(location) ||
+    location.startsWith('/shared/jobs/') ||
+    location == '/interview-guest';
 
 /// These routes are valid immediately after registration. Keeping `/signup`
 /// here prevents the auth-state refresh from redirecting to the dashboard
@@ -140,6 +143,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       final location = state.matchedLocation;
+      // Bearer-link interview guests must work even when a different user is
+      // signed in in this browser; guest access is independently validated by
+      // the narrowly scoped interview API.
+      if (location == '/interview-guest') return null;
       if (isLoggedIn &&
           authState.user?.needsCompanySetup == true &&
           location != '/dashboard' &&
@@ -193,6 +200,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/shared/jobs/:jobId',
         builder: (context, state) => PublicJobScreen(
           jobId: state.pathParameters['jobId']!,
+        ),
+      ),
+      GoRoute(
+        path: '/interview-guest',
+        builder: (context, state) => GuestInterviewEntryScreen(
+          token: state.uri.queryParameters['token'],
         ),
       ),
       GoRoute(
