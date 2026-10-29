@@ -8,6 +8,31 @@ class CandidateRankingRepository {
 
   final Dio _dio;
 
+  Future<void> saveJobRankingOrder(
+    String jobId,
+    List<String> applicationIds,
+  ) async {
+    try {
+      await _dio.patch(
+        '/applications/jobs/$jobId/ai-ranking/order',
+        data: {'applicationIds': applicationIds},
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDioError(e);
+    }
+  }
+
+  Future<int> retryFailedJobRanking(String jobId) async {
+    try {
+      final response =
+          await _dio.post('/applications/jobs/$jobId/ai-ranking/retry');
+      final data = Map<String, dynamic>.from(response.data['data'] as Map);
+      return (data['retried'] as num?)?.toInt() ?? 0;
+    } on DioException catch (e) {
+      throw ApiException.fromDioError(e);
+    }
+  }
+
   Future<CandidateRankingResult> loadJobRankings(String jobId) async {
     try {
       final overviewResponse =
@@ -16,12 +41,10 @@ class CandidateRankingRepository {
           Map<String, dynamic>.from(overviewResponse.data['data'] as Map);
       final config =
           Map<String, dynamic>.from(overview['aiConfig'] as Map? ?? const {});
-      final entitlements = Map<String, dynamic>.from(
-          overview['entitlements'] as Map? ?? const {});
       final summaryEnabled =
-          config['summary'] == true && entitlements['summary'] == true;
+          overview['summaryEnabled'] == true || config['summary'] == true;
       final rankingEnabled =
-          config['ranking'] == true && entitlements['ranking'] == true;
+          overview['rankingEnabled'] == true || config['ranking'] == true;
       if (overview['locked'] == true) {
         return CandidateRankingResult.fromApiJson({
           ...overview,
@@ -86,6 +109,9 @@ class CandidateRankingRepository {
         'avgMatchScore': overview['averageMatchScore'] ?? 0,
         'summaryEnabled': summaryEnabled,
         'rankingEnabled': rankingEnabled,
+        'aiStatus': overview['aiStatus'],
+        'analyzed': overview['analyzed'],
+        'failed': overview['failed'],
         'entries': rawRankings,
       });
     } on DioException catch (e) {

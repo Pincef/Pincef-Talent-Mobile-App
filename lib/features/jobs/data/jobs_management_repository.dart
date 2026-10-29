@@ -90,6 +90,11 @@ class JobManagementRepository {
     );
   }
 
+  Future<void> deleteJob(String jobId) => _request(
+        () => _dio.delete('/jobs/$jobId'),
+        (_) {},
+      );
+
   Future<Map<String, dynamic>?> getPendingInterviewAutomation(String jobId) =>
       _request(
         () => _dio.get('/jobs/$jobId/automation/interview-invites'),

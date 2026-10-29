@@ -21,17 +21,41 @@ import '../../data/models/candidate_ranking_model.dart';
 /// job_candidates_screen.dart's _runBulkAction — it deliberately ignores
 /// the card-selection state for this one action).
 ///
-/// Feature-gating: this is meant to sit behind the company's payment plan
-/// (PlanType on company.model.ts) — that check is bypassed for now per
-/// request, so the screen is reachable by everyone. Search this file for
-/// "PLAN GATE" for the one spot to wire that in later.
-class AiCandidateRankingScreen extends ConsumerWidget {
+class AiCandidateRankingScreen extends ConsumerStatefulWidget {
   const AiCandidateRankingScreen({super.key, required this.jobId});
 
   final String jobId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AiCandidateRankingScreen> createState() =>
+      _AiCandidateRankingScreenState();
+}
+
+class _AiCandidateRankingScreenState
+    extends ConsumerState<AiCandidateRankingScreen> {
+  bool _retrying = false;
+
+  Future<void> _retryFailed() async {
+    setState(() => _retrying = true);
+    try {
+      final count = await ref
+          .read(candidateRankingRepositoryProvider)
+          .retryFailedJobRanking(widget.jobId);
+      ref.invalidate(candidateRankingProvider(widget.jobId));
+      if (mounted) {
+        AppToast.success(
+            context, 'Retrying AI review for $count candidate(s).');
+      }
+    } catch (error) {
+      if (mounted) AppToast.error(context, 'Could not retry AI review: $error');
+    } finally {
+      if (mounted) setState(() => _retrying = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final jobId = widget.jobId;
     final jobAsync = ref.watch(jobDetailProvider(jobId));
     final jobTitle =
         jobAsync.maybeWhen(data: (job) => job.title, orElse: () => 'this role');
@@ -67,16 +91,40 @@ class AiCandidateRankingScreen extends ConsumerWidget {
                       ref.invalidate(candidateRankingProvider(jobId)),
                 ),
                 data: (result) => result.isLocked
-                    ? const _UpgradeRequired()
-                    : result.entries.isEmpty
-                        ? _NoRankingsFound(
-                            onRetry: () =>
+                    ? const _AiResultsUnavailable()
+                    : (result.aiStatus == 'queued' ||
+                                result.aiStatus == 'running') &&
+                            result.entries.isEmpty
+                        ? _RankingProcessing(
+                            analyzed: result.analyzedCount,
+                            total: result.totalRanked,
+                            onRefresh: () =>
                                 ref.invalidate(candidateRankingProvider(jobId)),
-                            onViewCandidates: () =>
-                                context.go('/jobs/$jobId/candidates'),
                           )
-                        : _RankingBody(
-                            jobId: jobId, isWide: isWide, result: result),
+                        : (result.aiStatus == 'failed' ||
+                                    result.failedCount > 0) &&
+                                result.entries.isEmpty
+                            ? _RankingFailed(
+                                failed: result.failedCount,
+                                retrying: _retrying,
+                                onRetry: _retryFailed,
+                                onRefresh: () => ref.invalidate(
+                                    candidateRankingProvider(jobId)),
+                              )
+                            : result.entries.isEmpty
+                                ? _NoRankingsFound(
+                                    onRetry: () => ref.invalidate(
+                                        candidateRankingProvider(jobId)),
+                                    onViewCandidates: () =>
+                                        context.go('/jobs/$jobId/candidates'),
+                                  )
+                                : _RankingBody(
+                                    jobId: jobId,
+                                    isWide: isWide,
+                                    result: result,
+                                    retrying: _retrying,
+                                    onRetryFailed: _retryFailed,
+                                  ),
               ),
             ],
           ),
@@ -88,6 +136,106 @@ class AiCandidateRankingScreen extends ConsumerWidget {
   void _notImplemented(BuildContext context, String label) {
     AppToast.info(context, '$label is coming soon.');
   }
+}
+
+class _RankingProcessing extends StatelessWidget {
+  const _RankingProcessing(
+      {required this.analyzed, required this.total, required this.onRefresh});
+
+  final int analyzed;
+  final int total;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: BrandColors.border),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(children: [
+          const CircularProgressIndicator(),
+          const SizedBox(height: 14),
+          const Text('AI review is processing candidates',
+              style: TextStyle(
+                  color: BrandColors.navy,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800)),
+          const SizedBox(height: 5),
+          Text(
+            total > 0
+                ? '$analyzed of $total candidates analyzed.'
+                : 'Preparing candidate analysis.',
+            style: const TextStyle(color: BrandColors.muted, fontSize: 11),
+          ),
+          const SizedBox(height: 10),
+          TextButton.icon(
+            onPressed: onRefresh,
+            icon: const Icon(Icons.refresh, size: 15),
+            label: const Text('Refresh results'),
+          ),
+        ]),
+      );
+}
+
+class _RankingFailed extends StatelessWidget {
+  const _RankingFailed({
+    required this.failed,
+    required this.retrying,
+    required this.onRetry,
+    required this.onRefresh,
+  });
+
+  final int failed;
+  final bool retrying;
+  final VoidCallback onRetry;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: const Color(0xFFFFD6C7)),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(children: [
+          const Icon(Icons.warning_amber_rounded,
+              color: BrandColors.orange, size: 30),
+          const SizedBox(height: 10),
+          const Text('AI review could not finish',
+              style: TextStyle(
+                  color: BrandColors.navy, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 5),
+          Text(
+            failed > 0
+                ? '$failed candidate analysis(es) failed. You can retry them; completed results will be kept.'
+                : 'The AI review stopped before producing results. You can retry the review.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                color: BrandColors.muted, fontSize: 11, height: 1.5),
+          ),
+          const SizedBox(height: 12),
+          Wrap(spacing: 8, children: [
+            FilledButton.icon(
+              onPressed: retrying ? null : onRetry,
+              icon: retrying
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.refresh, size: 15),
+              label:
+                  Text(retrying ? 'Queueing retry…' : 'Retry failed analyses'),
+            ),
+            TextButton(
+                onPressed: onRefresh, child: const Text('Refresh status')),
+          ]),
+        ]),
+      );
 }
 
 class _Breadcrumb extends StatelessWidget {
@@ -202,11 +350,17 @@ class _Header extends StatelessWidget {
 
 class _RankingBody extends ConsumerStatefulWidget {
   const _RankingBody(
-      {required this.jobId, required this.isWide, required this.result});
+      {required this.jobId,
+      required this.isWide,
+      required this.result,
+      required this.retrying,
+      required this.onRetryFailed});
 
   final String jobId;
   final bool isWide;
   final CandidateRankingResult result;
+  final bool retrying;
+  final VoidCallback onRetryFailed;
 
   @override
   ConsumerState<_RankingBody> createState() => _RankingBodyState();
@@ -227,6 +381,16 @@ class _RankingBodyState extends ConsumerState<_RankingBody> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (result.failedCount > 0) ...[
+          _RankingFailed(
+            failed: result.failedCount,
+            retrying: widget.retrying,
+            onRetry: widget.onRetryFailed,
+            onRefresh: () =>
+                ref.invalidate(candidateRankingProvider(widget.jobId)),
+          ),
+          const SizedBox(height: 16),
+        ],
         if (result.rankingEnabled) ...[
           _StatsRow(isWide: widget.isWide, result: result),
           const SizedBox(height: 20),
@@ -683,6 +847,12 @@ class _RankingList extends ConsumerStatefulWidget {
 class _RankingListState extends ConsumerState<_RankingList> {
   static const _pageSize = 10;
   int _page = 0;
+  bool _reordering = false;
+  bool _savingOrder = false;
+  List<CandidateRankingEntry>? _draftOrder;
+
+  List<CandidateRankingEntry> get _orderedEntries =>
+      _draftOrder ?? widget.entries;
 
   bool get _canMessage =>
       ref.read(authProvider).user?.capabilities['allowsCandidateMessaging'] ==
@@ -730,13 +900,48 @@ class _RankingListState extends ConsumerState<_RankingList> {
     }
   }
 
+  void _beginReordering() {
+    setState(() {
+      _draftOrder = [...widget.entries];
+      _reordering = true;
+      _page = 0;
+    });
+  }
+
+  Future<void> _saveOrder() async {
+    final entries = _orderedEntries;
+    setState(() => _savingOrder = true);
+    try {
+      await ref.read(candidateRankingRepositoryProvider).saveJobRankingOrder(
+            widget.jobId,
+            entries.map((entry) => entry.applicationId).toList(),
+          );
+      if (!mounted) return;
+      ref.invalidate(candidateRankingProvider(widget.jobId));
+      setState(() {
+        _draftOrder = null;
+        _reordering = false;
+      });
+      AppToast.success(context, 'Candidate ranking order saved.');
+    } catch (e) {
+      if (mounted) AppToast.error(context, "Couldn't save ranking order: $e");
+    } finally {
+      if (mounted) setState(() => _savingOrder = false);
+    }
+  }
+
+  void _cancelReordering() => setState(() {
+        _draftOrder = null;
+        _reordering = false;
+      });
+
   @override
   Widget build(BuildContext context) {
+    final entries = _orderedEntries;
     final start = _page * _pageSize;
-    final end = (start + _pageSize).clamp(0, widget.entries.length);
-    final pageItems =
-        widget.entries.sublist(start.clamp(0, widget.entries.length), end);
-    final totalPages = (widget.entries.length / _pageSize).ceil().clamp(1, 999);
+    final end = (start + _pageSize).clamp(0, entries.length);
+    final pageItems = entries.sublist(start.clamp(0, entries.length), end);
+    final totalPages = (entries.length / _pageSize).ceil().clamp(1, 999);
 
     return Container(
       decoration: BoxDecoration(
@@ -747,51 +952,110 @@ class _RankingListState extends ConsumerState<_RankingList> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(18, 16, 18, 10),
-            child: Row(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 10),
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              runSpacing: 8,
               children: [
-                Text('Candidate Ranking List',
+                const Text('Candidate Ranking List',
                     style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
                         color: BrandColors.navy)),
-                Spacer(),
-                _LegendDot(color: Color(0xFF16A34A), label: 'High Match'),
-                SizedBox(width: 12),
-                _LegendDot(color: BrandColors.orange, label: 'Medium Match'),
+                if (_reordering) ...[
+                  TextButton(
+                    onPressed: _savingOrder ? null : _cancelReordering,
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: _savingOrder ? null : _saveOrder,
+                    child: Text(_savingOrder ? 'Saving…' : 'Save order'),
+                  ),
+                ] else ...[
+                  const _LegendDot(
+                      color: Color(0xFF16A34A), label: 'High Match'),
+                  const _LegendDot(
+                      color: BrandColors.orange, label: 'Medium Match'),
+                  OutlinedButton.icon(
+                    onPressed:
+                        widget.entries.length < 2 ? null : _beginReordering,
+                    icon: const Icon(Icons.drag_handle, size: 15),
+                    label: const Text('Reorder'),
+                  ),
+                ],
               ],
             ),
           ),
           const Divider(height: 1, color: BrandColors.border),
-          if (widget.isWide) _tableHeader(),
-          for (final entry in pageItems)
-            widget.isWide ? _tableRow(entry) : _stackedCard(entry),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 10, 18, 16),
-            child: Row(
-              children: [
-                Text(
-                    'Showing ${widget.entries.isEmpty ? 0 : start + 1}-$end of ${widget.total} candidates',
-                    style: const TextStyle(
-                        fontSize: 11, color: BrandColors.muted)),
-                const Spacer(),
-                IconButton(
-                  onPressed: _page > 0 ? () => setState(() => _page--) : null,
-                  icon: const Icon(Icons.chevron_left, size: 18),
-                ),
-                Text('${_page + 1} / $totalPages',
-                    style: const TextStyle(
-                        fontSize: 11, color: BrandColors.muted)),
-                IconButton(
-                  onPressed: _page < totalPages - 1
-                      ? () => setState(() => _page++)
-                      : null,
-                  icon: const Icon(Icons.chevron_right, size: 18),
-                ),
-              ],
+          if (_reordering)
+            ReorderableListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              buildDefaultDragHandles: false,
+              itemCount: entries.length,
+              onReorderItem: (oldIndex, newIndex) {
+                setState(() {
+                  final item = _draftOrder!.removeAt(oldIndex);
+                  _draftOrder!.insert(newIndex, item);
+                });
+              },
+              itemBuilder: (context, index) {
+                final entry = entries[index];
+                return ListTile(
+                  key: ValueKey(entry.applicationId),
+                  leading: SizedBox(
+                    width: 32,
+                    child: Text('${index + 1}'.padLeft(2, '0'),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            color: BrandColors.navy)),
+                  ),
+                  title: Text(entry.name,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: BrandColors.navy)),
+                  subtitle: Text('${entry.score}% match · ${entry.fitLabel}'),
+                  trailing: ReorderableDragStartListener(
+                    index: index,
+                    child: const Icon(Icons.drag_indicator,
+                        color: BrandColors.muted),
+                  ),
+                );
+              },
+            )
+          else ...[
+            if (widget.isWide) _tableHeader(),
+            for (final entry in pageItems)
+              widget.isWide ? _tableRow(entry) : _stackedCard(entry),
+          ],
+          if (!_reordering)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 10, 18, 16),
+              child: Row(
+                children: [
+                  Text(
+                      'Showing ${entries.isEmpty ? 0 : start + 1}-$end of ${widget.total} candidates',
+                      style: const TextStyle(
+                          fontSize: 11, color: BrandColors.muted)),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: _page > 0 ? () => setState(() => _page--) : null,
+                    icon: const Icon(Icons.chevron_left, size: 18),
+                  ),
+                  Text('${_page + 1} / $totalPages',
+                      style: const TextStyle(
+                          fontSize: 11, color: BrandColors.muted)),
+                  IconButton(
+                    onPressed: _page < totalPages - 1
+                        ? () => setState(() => _page++)
+                        : null,
+                    icon: const Icon(Icons.chevron_right, size: 18),
+                  ),
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -1352,8 +1616,8 @@ class _NoRankingsFound extends StatelessWidget {
       );
 }
 
-class _UpgradeRequired extends StatelessWidget {
-  const _UpgradeRequired();
+class _AiResultsUnavailable extends StatelessWidget {
+  const _AiResultsUnavailable();
 
   @override
   Widget build(BuildContext context) => const Center(
@@ -1362,14 +1626,14 @@ class _UpgradeRequired extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.workspace_premium_outlined,
+              Icon(Icons.hourglass_empty_outlined,
                   size: 34, color: BrandColors.orange),
               SizedBox(height: 10),
-              Text('AI Candidate Ranking is a paid feature',
+              Text('AI results are not available for this job yet',
                   style: TextStyle(
                       fontWeight: FontWeight.w700, color: BrandColors.navy)),
               SizedBox(height: 4),
-              Text('Upgrade your plan to unlock AI-ranked candidate lists.',
+              Text('Enable ranking or summaries in the job workflow settings.',
                   style: TextStyle(fontSize: 12, color: BrandColors.muted)),
             ],
           ),

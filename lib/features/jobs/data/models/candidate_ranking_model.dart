@@ -99,7 +99,10 @@ class CandidateRankingResult {
         entries = const [],
         isLocked = false,
         summaryEnabled = false,
-        rankingEnabled = false;
+        rankingEnabled = false,
+        aiStatus = 'idle',
+        analyzedCount = 0,
+        failedCount = 0;
 
   const CandidateRankingResult({
     required this.totalRanked,
@@ -113,6 +116,9 @@ class CandidateRankingResult {
     this.isLocked = false,
     this.summaryEnabled = false,
     this.rankingEnabled = true,
+    this.aiStatus = 'idle',
+    this.analyzedCount = 0,
+    this.failedCount = 0,
   });
 
   final int totalRanked;
@@ -126,6 +132,9 @@ class CandidateRankingResult {
   final bool isLocked;
   final bool summaryEnabled;
   final bool rankingEnabled;
+  final String aiStatus;
+  final int analyzedCount;
+  final int failedCount;
 
   factory CandidateRankingResult.fromApiJson(Map<String, dynamic> json) {
     final rawEntries =
@@ -173,6 +182,9 @@ class CandidateRankingResult {
       isLocked: json['locked'] == true,
       summaryEnabled: json['summaryEnabled'] == true,
       rankingEnabled: json['rankingEnabled'] != false,
+      aiStatus: (json['aiStatus'] ?? 'idle').toString(),
+      analyzedCount: (json['analyzed'] as num?)?.toInt() ?? 0,
+      failedCount: (json['failed'] as num?)?.toInt() ?? 0,
     );
   }
 }

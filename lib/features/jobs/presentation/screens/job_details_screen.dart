@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/brand_color.dart';
 import '../../application/job_management_provider.dart';
 import '../../data/models/job_management_model.dart';
+import 'package:talentbridge/features/hiring_pipeline/application/hiring_pipeline_provider.dart';
+import 'package:talentbridge/features/hiring_pipeline/data/models/hiring_pipeline_model.dart';
 import 'post_job_screen.dart';
 import '../../../auth/application/auth_provider.dart';
 import '../../../auth/data/models/user_model.dart';
@@ -39,6 +41,9 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
     final jobAsync = ref.watch(jobDetailProvider(widget.jobId));
     final isRecruiter =
         ref.watch(authProvider).user?.role == UserRole.recruiter;
+    final pipelines = isRecruiter
+        ? ref.watch(pipelinesProvider).valueOrNull ?? const <HiringPipeline>[]
+        : const <HiringPipeline>[];
 
     return jobAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -73,6 +78,7 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
           job: job,
           isRecruiter: isRecruiter,
           jobId: widget.jobId,
+          pipelines: pipelines,
           onEdit: () => setState(() => _isEditing = true),
         );
       },
@@ -85,11 +91,13 @@ class _Body extends StatelessWidget {
       {required this.job,
       required this.isRecruiter,
       required this.jobId,
+      required this.pipelines,
       required this.onEdit});
 
   final JobDetail job;
   final bool isRecruiter;
   final String jobId;
+  final List<HiringPipeline> pipelines;
   final VoidCallback onEdit;
 
   @override
@@ -240,6 +248,10 @@ class _Body extends StatelessWidget {
                         jobId: jobId,
                         isWide: isWide,
                         onEdit: onEdit),
+                    if (isRecruiter) ...[
+                      const SizedBox(height: 14),
+                      _HiringPipelineOverview(job: job, pipelines: pipelines),
+                    ],
                     const SizedBox(height: 14),
                     Wrap(
                       spacing: 12,
@@ -277,6 +289,83 @@ class _Body extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _HiringPipelineOverview extends StatelessWidget {
+  const _HiringPipelineOverview({required this.job, required this.pipelines});
+
+  final JobDetail job;
+  final List<HiringPipeline> pipelines;
+
+  @override
+  Widget build(BuildContext context) {
+    final customPipeline = job.pipelineTier == 'Custom'
+        ? pipelines.where((item) => item.id == job.pipelineId).firstOrNull
+        : null;
+    final stages = hiringPipelineFlowFor(
+      job.pipelineTier,
+      customStages: customPipeline?.stages ?? const [],
+    );
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: BrandColors.border),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.account_tree_outlined,
+              size: 17, color: BrandColors.orange),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '${customPipeline?.name ?? job.pipelineTier} hiring pipeline',
+              style: const TextStyle(
+                  color: BrandColors.navy,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800),
+            ),
+          ),
+          Text('${stages.length} stages',
+              style: const TextStyle(fontSize: 10, color: BrandColors.muted)),
+        ]),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 6,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            for (var i = 0; i < stages.length; i++) ...[
+              if (i > 0)
+                const Icon(Icons.chevron_right,
+                    size: 14, color: BrandColors.muted),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                decoration: BoxDecoration(
+                  color: i == 0
+                      ? const Color(0xFFFFF0DE)
+                      : const Color(0xFFF5F7FA),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(stages[i],
+                    style: const TextStyle(
+                        color: BrandColors.navy,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 9),
+        const Text(
+          'Review AI results after the job closes before moving candidates into later stages.',
+          style: TextStyle(fontSize: 10.5, color: BrandColors.muted),
+        ),
+      ]),
     );
   }
 }
@@ -352,6 +441,8 @@ class _Header extends StatelessWidget {
             jobId: jobId,
             onEdit: onEdit,
             canShare: job.status == JobBackendStatus.published,
+            showAiReview: job.status == JobBackendStatus.closed &&
+                (job.aiRanking || job.aiSummary),
           )
         : _CandidateActions(job: job, jobId: jobId);
 
@@ -508,10 +599,14 @@ class _MetaItem extends StatelessWidget {
 
 class _RecruiterActions extends StatelessWidget {
   const _RecruiterActions(
-      {required this.jobId, required this.onEdit, required this.canShare});
+      {required this.jobId,
+      required this.onEdit,
+      required this.canShare,
+      required this.showAiReview});
   final String jobId;
   final VoidCallback onEdit;
   final bool canShare;
+  final bool showAiReview;
 
   @override
   Widget build(BuildContext context) {
@@ -540,12 +635,14 @@ class _RecruiterActions extends StatelessWidget {
           label: const Text('Edit Posting'),
         ),
         ElevatedButton(
-          onPressed: () => context.go('/jobs/$jobId/candidates'),
+          onPressed: () => context.go(showAiReview
+              ? '/jobs/$jobId/candidate-ranking'
+              : '/jobs/$jobId/candidates'),
           style: ElevatedButton.styleFrom(
               backgroundColor: BrandColors.orange,
               foregroundColor: Colors.white,
               elevation: 0),
-          child: const Text('View Candidates'),
+          child: Text(showAiReview ? 'Review AI Results' : 'View Candidates'),
         ),
       ],
     );

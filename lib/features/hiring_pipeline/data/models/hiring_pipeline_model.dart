@@ -18,6 +18,16 @@ class StageTypeMeta {
 const Map<String, StageTypeMeta> kStageTypeMeta = {
   'APPLIED': StageTypeMeta('Application', Icons.description_outlined,
       'Standard application portal, sourcing UTMs & resume ingest.'),
+  'CV_PARSING': StageTypeMeta('Parse', Icons.description_outlined,
+      'Extract structured candidate details from the uploaded CV.'),
+  'AI_MATCHING': StageTypeMeta('Match', Icons.auto_awesome_outlined,
+      'Compare candidate experience and skills with the job requirements.'),
+  'AI_RANKING': StageTypeMeta('Rank', Icons.leaderboard_outlined,
+      'Order completed matches by job fit.'),
+  'AI_SUMMARY': StageTypeMeta('Summarise', Icons.summarize_outlined,
+      'Create a recruiter-facing summary of each candidate.'),
+  'COMPARE': StageTypeMeta('Compare', Icons.compare_arrows_outlined,
+      'Review shortlisted candidates side by side.'),
   'SCREENING': StageTypeMeta('Screening', Icons.fact_check_outlined,
       'Initial recruiter screening scorecard and experience validation.'),
   'ASSESSMENT': StageTypeMeta('Assessment', Icons.assignment_outlined,
@@ -45,6 +55,32 @@ StageTypeMeta stageMetaFor(String type) =>
         _prettify(type), Icons.flag_outlined, 'Custom pipeline gate.');
 
 bool isAssessmentType(String type) => type.toUpperCase().contains('ASSESSMENT');
+
+/// Client display flow for the built-in pipelines. Candidate progression is
+/// still owned by the API; this is the job-specific flow the recruiter chose.
+List<String> hiringPipelineFlowFor(
+  String tier, {
+  List<PipelineStage> customStages = const [],
+}) {
+  const aiStages = ['Post Job', 'Parse', 'Match', 'Rank', 'Summarise'];
+  switch (tier.toLowerCase()) {
+    case 'premium':
+      return [...aiStages, 'Assess', 'Compare', 'Hire'];
+    case 'custom':
+      final configured = customStages
+          .where((stage) => stage.type.toUpperCase() != 'APPLIED')
+          .map((stage) => stage.name.trim())
+          .where((name) => name.isNotEmpty)
+          .toList();
+      if (configured.isEmpty) return [...aiStages, 'Custom stages', 'Hire'];
+      if (!configured.any((name) => name.toLowerCase() == 'hire')) {
+        configured.add('Hire');
+      }
+      return [...aiStages, ...configured];
+    default:
+      return [...aiStages, 'Hire'];
+  }
+}
 
 class PipelineStage {
   const PipelineStage({

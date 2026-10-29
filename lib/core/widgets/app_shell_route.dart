@@ -45,7 +45,14 @@ import 'logout_success_dialog.dart';
 /// marks it for recompute next time something reads it.
 void _invalidateDataFor(WidgetRef ref, String route) {
   final path = Uri.parse(route).path;
-  if (path == '/messages') {
+  if (path == '/dashboard') {
+    final role = ref.read(authProvider).user?.role;
+    if (role == UserRole.recruiter || role == UserRole.admin) {
+      ref.invalidate(recruiterDashboardProvider);
+    } else {
+      ref.invalidate(dashboardProvider);
+    }
+  } else if (path == '/messages') {
     ref.invalidate(messageThreadsProvider);
     ref.invalidate(candidateContactsProvider);
   } else if (path == '/jobs') {

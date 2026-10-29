@@ -20,8 +20,9 @@ final jobDetailProvider =
 
 final pendingInterviewAutomationProvider =
     FutureProvider.autoDispose.family<Map<String, dynamic>?, String>(
-  (ref, jobId) =>
-      ref.watch(jobManagementRepositoryProvider).getPendingInterviewAutomation(jobId),
+  (ref, jobId) => ref
+      .watch(jobManagementRepositoryProvider)
+      .getPendingInterviewAutomation(jobId),
 );
 
 class JobManagementState {
@@ -65,6 +66,11 @@ class JobManagementNotifier extends StateNotifier<JobManagementState> {
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
+  }
+
+  Future<void> deleteJob(String jobId) async {
+    await _repository.deleteJob(jobId);
+    await load();
   }
 }
 

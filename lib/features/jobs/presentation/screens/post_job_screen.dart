@@ -447,7 +447,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
           Tooltip(
             message: _aiJobDescriptionAvailable
                 ? 'AI job description generation is not connected yet.'
-                : 'Your current plan doesn\'t include AI job description generation. Upgrade your plan to unlock it.',
+                : 'AI job description generation is unavailable right now.',
             child: Opacity(
               opacity: _aiJobDescriptionAvailable ? 1 : .45,
               child: TextButton.icon(
@@ -593,7 +593,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
           maxLength: 400,
           inputFormatters: [
             LengthLimitingTextInputFormatter(400),
-            _WordCountLimitingTextInputFormatter(60),
+            const _WordCountLimitingTextInputFormatter(60),
           ],
           onChanged: (_) => setState(() {}),
           decoration: _input('e.g. 3+ years, or entry level').copyWith(
@@ -657,7 +657,76 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
           const SizedBox(height: 12),
           _customPipelineSelection(),
         ],
+        const SizedBox(height: 12),
+        _pipelineFlowPreview(),
       ]));
+
+  Widget _pipelineFlowPreview() {
+    final selectedPipeline =
+        _pipelineTier == 'Custom' && _selectedPipelineId != null
+            ? (ref.read(pipelinesProvider).value ?? const <HiringPipeline>[])
+                .where((pipeline) => pipeline.id == _selectedPipelineId)
+                .firstOrNull
+            : null;
+    final stages = hiringPipelineFlowFor(
+      _pipelineTier,
+      customStages: selectedPipeline?.stages ?? const [],
+    );
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE5EBF3)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('SELECTED FLOW',
+            style: TextStyle(
+                color: BrandColors.muted,
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+                letterSpacing: .5)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            for (var i = 0; i < stages.length; i++) ...[
+              if (i > 0)
+                const Icon(Icons.chevron_right,
+                    size: 14, color: BrandColors.muted),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                decoration: BoxDecoration(
+                  color: i == 0 ? const Color(0xFFFFF0DE) : Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFE5EBF3)),
+                ),
+                child: Text(stages[i],
+                    style: const TextStyle(
+                        color: BrandColors.navy,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 7),
+        Text(
+          switch (_pipelineTier) {
+            'Premium' =>
+              'Assessment and comparison begin after AI review when the job closes.',
+            'Custom' =>
+              'Configured stages follow AI review after the job closes.',
+            _ => 'AI ranking and summaries are reviewed after the job closes.',
+          },
+          style: const TextStyle(fontSize: 9.5, color: BrandColors.muted),
+        ),
+      ]),
+    );
+  }
 
   Widget _customPipelineSelection() {
     final pipeline = _selectedPipelineId == null
@@ -688,28 +757,9 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
     );
   }
 
-  bool get _premiumPipelineAvailable {
-    return true;
-  }
+  bool get _planAutomationAvailable => true;
 
-  bool get _customPipelineAvailable {
-    return true;
-  }
-
-  bool get _planAutomationAvailable {
-    final user = ref.read(authProvider).user;
-    final explicit = user?.capabilities['allowsPlanAutomation'];
-    if (explicit is bool) return explicit;
-    return user?.hasModule(ModuleCodes.jobsPlanAutomation) ?? false;
-  }
-
-  int _planQuota(String module, String limitKey, int requested) {
-    final user = ref.read(authProvider).user;
-    if (user?.hasModule(module) != true) return 0;
-    final ceiling = (user?.limits[limitKey] as num?)?.toInt() ?? 0;
-    if (ceiling == 0) return 0;
-    return ceiling == -1 ? requested : requested.clamp(0, ceiling).toInt();
-  }
+  int _planQuota(String module, String limitKey, int requested) => requested;
 
   bool get _aiJobDescriptionAvailable {
     final user = ref.read(authProvider).user;
@@ -736,11 +786,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
           {required bool enabled, bool opensModal = false}) =>
       Expanded(
         child: Tooltip(
-          message: enabled
-              ? ''
-              : tier == 'Premium'
-                  ? 'Your current plan doesn\'t include the Premium hiring pipeline. Upgrade your plan to unlock it.'
-                  : 'Your current plan doesn\'t include custom hiring pipelines. Upgrade your plan to unlock them.',
+          message: enabled ? '' : '$tier pipeline is unavailable right now.',
           child: Opacity(
             opacity: enabled ? 1 : .42,
             child: InkWell(
@@ -808,10 +854,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
       context: context,
       barrierColor: const Color(0xD90B142A),
       builder: (dialogContext) => _HiringPipelinePickerDialog(
-        premiumAvailable: _premiumPipelineAvailable,
-        customAvailable: _customPipelineAvailable,
         initialSelection: _pipelineTier,
-        accountName: ref.read(authProvider).user?.fullName ?? 'Recruiter',
       ),
     );
     if (selected != null && mounted) {
@@ -840,9 +883,8 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
   Widget _planAutomationCard() {
     final available = _planAutomationAvailable;
     return Tooltip(
-      message: available
-          ? ''
-          : 'Plan Automation & Quotas isn\'t included in your current plan. Upgrade to access it.',
+      message:
+          available ? '' : 'Automation settings are unavailable right now.',
       child: Opacity(
         opacity: available ? 1 : .48,
         child: AbsorbPointer(
@@ -850,7 +892,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
           child: _panel(
             icon: Icons.bar_chart_outlined,
             iconColor: const Color(0xFFFFF1E8),
-            title: 'Plan Automation & Quotas',
+            title: 'Automation & Limits',
             titleTrailing: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
@@ -880,7 +922,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
                     SizedBox(width: 7),
                     Expanded(
                       child: Text(
-                        'Plan automation and quotas are available on eligible plans.',
+                        'Automation settings are temporarily unavailable.',
                         style: TextStyle(
                             color: BrandColors.muted,
                             fontSize: 10,
@@ -892,7 +934,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
                 const SizedBox(height: 12),
               ],
               Row(children: [
-                Expanded(child: _label('CANDIDATE RANKINGS BY PLAN')),
+                Expanded(child: _label('CANDIDATE SHORTLIST SIZE')),
                 Text('${_rankingLimit.round()} Rankings',
                     style: const TextStyle(
                         color: BrandColors.orange,
@@ -900,17 +942,6 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
                         fontWeight: FontWeight.w700)),
               ]),
               const SizedBox(height: 8),
-              _choiceTiles(const ['Standard', 'Premium', 'Custom'], _planTier,
-                  (value) {
-                setState(() {
-                  _planTier = value;
-                  _rankingLimit = switch (value) {
-                    'Standard' => 10,
-                    'Premium' => 20,
-                    _ => 30,
-                  };
-                });
-              }),
               SliderTheme(
                 data: SliderTheme.of(context).copyWith(
                   activeTrackColor: BrandColors.orange,
@@ -932,11 +963,11 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
                 children: [
                   Text('1 Min',
                       style: TextStyle(fontSize: 8, color: BrandColors.muted)),
-                  Text('10 (Std)',
+                  Text('10',
                       style: TextStyle(fontSize: 8, color: BrandColors.muted)),
-                  Text('20 (Prem)',
+                  Text('20',
                       style: TextStyle(fontSize: 8, color: BrandColors.orange)),
-                  Text('30 (Custom)',
+                  Text('30 max',
                       style: TextStyle(fontSize: 8, color: BrandColors.muted)),
                 ],
               ),
@@ -1312,55 +1343,6 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
                         activeThumbColor: Colors.white,
                         activeTrackColor: BrandColors.orange)))
           ]));
-  Widget _choiceTiles(
-    List<String> choices,
-    String selected,
-    ValueChanged<String> onSelected,
-  ) =>
-      Row(
-        children: [
-          for (var i = 0; i < choices.length; i++) ...[
-            if (i > 0) const SizedBox(width: 7),
-            Expanded(
-              child: InkWell(
-                borderRadius: BorderRadius.circular(11),
-                onTap: () => onSelected(choices[i]),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 140),
-                  alignment: Alignment.center,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: selected == choices[i]
-                        ? const Color(0xFFFFF0DE)
-                        : const Color(0xFFF3F6FA),
-                    borderRadius: BorderRadius.circular(11),
-                    border: Border.all(
-                      color: selected == choices[i]
-                          ? const Color(0xFFFFC88F)
-                          : const Color(0xFFE5EBF3),
-                      width: selected == choices[i] ? 1.5 : 1,
-                    ),
-                  ),
-                  child: Text(
-                    choices[i],
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: selected == choices[i]
-                          ? BrandColors.orange
-                          : BrandColors.muted,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ],
-      );
-
   Widget _quotaRow(
     String title,
     String subtitle,
@@ -1654,24 +1636,9 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
   }
 
   String _nextPipelineRoute({required String? jobId}) {
-    final selectedPipeline =
-        _pipelineTier == 'Custom' && _selectedPipelineId != null
-            ? (ref.read(pipelinesProvider).value ?? const [])
-                .where((item) => item.id == _selectedPipelineId)
-                .firstOrNull
-            : null;
-    final hasAssessmentStage = _pipelineTier == 'Premium' ||
-        selectedPipeline?.stages.any((stage) => isAssessmentType(stage.type)) ==
-            true;
-    if (hasAssessmentStage) {
-      final query = Uri(queryParameters: {
-        if (jobId != null) 'jobId': jobId,
-        if (_selectedPipelineId != null) 'pipelineId': _selectedPipelineId!,
-        'pipelineTier': _pipelineTier.toLowerCase(),
-      }).query;
-      return '/competency-assessments/new${query.isEmpty ? '' : '?$query'}';
-    }
-    return jobId == null ? '/jobs' : '/jobs/$jobId/candidates';
+    // Publishing starts the job's application phase. Premium assessments are
+    // part of the selected flow, but the PRD activates them after AI review.
+    return jobId == null ? '/jobs' : '/jobs/$jobId';
   }
 
   /// Builds the full [JobDraft] from the current form state and persists
@@ -1840,16 +1807,10 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
 
 class _HiringPipelinePickerDialog extends StatefulWidget {
   const _HiringPipelinePickerDialog({
-    required this.premiumAvailable,
-    required this.customAvailable,
     required this.initialSelection,
-    required this.accountName,
   });
 
-  final bool premiumAvailable;
-  final bool customAvailable;
   final String initialSelection;
-  final String accountName;
 
   @override
   State<_HiringPipelinePickerDialog> createState() =>
@@ -1864,18 +1825,13 @@ class _HiringPipelinePickerDialogState
   void initState() {
     super.initState();
     _selected = switch (widget.initialSelection) {
-      'Premium' when widget.premiumAvailable => 'Premium',
-      'Custom' when widget.customAvailable => 'Custom',
+      'Premium' => 'Premium',
+      'Custom' => 'Custom',
       _ => 'Standard',
     };
   }
 
-  bool _available(String tier) => switch (tier) {
-        'Standard' => true,
-        'Premium' => widget.premiumAvailable,
-        'Custom' => widget.customAvailable,
-        _ => false,
-      };
+  bool _available(String _) => true;
 
   @override
   Widget build(BuildContext context) {
@@ -1892,7 +1848,6 @@ class _HiringPipelinePickerDialogState
           child: Column(
             children: [
               _header(),
-              _planBanner(),
               Expanded(
                 child: LayoutBuilder(builder: (context, constraints) {
                   final wide = constraints.maxWidth >= 850;
@@ -1900,7 +1855,7 @@ class _HiringPipelinePickerDialogState
                   final cards = [
                     _pipelineCard(
                       tier: 'Standard',
-                      level: 'TIER 1',
+                      level: 'BUILT-IN',
                       title: 'STANDARD PIPELINE',
                       description:
                           'A streamlined AI-powered hiring process for quickly identifying the strongest candidates.',
@@ -1917,7 +1872,7 @@ class _HiringPipelinePickerDialogState
                     ),
                     _pipelineCard(
                       tier: 'Premium',
-                      level: 'TIER 2 • FULL SUITE',
+                      level: 'BUILT-IN • FULL SUITE',
                       title: 'PREMIUM PIPELINE',
                       description:
                           'A more detailed hiring workflow with candidate assessments and comparative analytics.',
@@ -1936,7 +1891,7 @@ class _HiringPipelinePickerDialogState
                     ),
                     _pipelineCard(
                       tier: 'Custom',
-                      level: 'TIER 3 • ENTERPRISE',
+                      level: 'USER-DEFINED',
                       title: 'CUSTOM WORKFLOWS',
                       description:
                           'Choose a saved workflow created by your team. Its stages define the process for this role.',
@@ -1999,7 +1954,7 @@ class _HiringPipelinePickerDialogState
                           fontWeight: FontWeight.w800)),
                   SizedBox(height: 4),
                   Text(
-                    'Choose an automated recruiting workflow. Pipelines adapt to your active subscription plan.',
+                    'Choose the recruiting workflow this job will follow.',
                     style: TextStyle(color: BrandColors.muted, fontSize: 11),
                   ),
                 ],
@@ -2014,62 +1969,6 @@ class _HiringPipelinePickerDialogState
         ),
       );
 
-  Widget _planBanner() => Container(
-        color: BrandColors.navy,
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-        child: Wrap(
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 14,
-          runSpacing: 8,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                  color: const Color(0xFF0BB98A),
-                  borderRadius: BorderRadius.circular(6)),
-              child: const Text('YOUR PLAN',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w800)),
-            ),
-            Text('Logged in as ${widget.accountName}',
-                style: const TextStyle(color: Colors.white70, fontSize: 11)),
-            _planStatus('Standard', true),
-            _planStatus('Premium', widget.premiumAvailable),
-            _planStatus('Custom (Business Plan)', widget.customAvailable),
-          ],
-        ),
-      );
-
-  Widget _planStatus(String label, bool unlocked) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Tooltip(
-            message: unlocked
-                ? ''
-                : label.startsWith('Premium')
-                    ? 'Your current plan doesn\'t include the Premium hiring pipeline. Upgrade your plan to unlock it.'
-                    : 'Your current plan doesn\'t include custom hiring pipelines. Upgrade your plan to unlock them.',
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(unlocked ? Icons.check : Icons.lock_outline,
-                    size: 13,
-                    color: unlocked ? const Color(0xFF10C99A) : Colors.white54),
-                const SizedBox(width: 4),
-                Text(label,
-                    style: TextStyle(
-                        color:
-                            unlocked ? const Color(0xFF10C99A) : Colors.white54,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600)),
-              ],
-            ),
-          ),
-        ],
-      );
-
   Widget _pipelineCard({
     required String tier,
     required String level,
@@ -2081,9 +1980,7 @@ class _HiringPipelinePickerDialogState
     final available = _available(tier);
     final selected = _selected == tier;
     final locked = !available;
-    final lockedReason = tier == 'Premium'
-        ? 'Your current plan doesn\'t include the Premium hiring pipeline. Upgrade your plan to unlock it.'
-        : 'Your current plan doesn\'t include custom hiring pipelines. Upgrade your plan to unlock them.';
+    const lockedReason = 'This pipeline is currently unavailable.';
     return Tooltip(
       message: locked ? lockedReason : '',
       child: SizedBox(
@@ -2187,11 +2084,8 @@ class _HiringPipelinePickerDialogState
                               : null,
                           icon: Icon(locked ? Icons.lock_outline : Icons.check,
                               size: 14),
-                          label: Text(locked
-                              ? 'Available on ${tier == 'Custom' ? 'Business' : 'Premium'}'
-                              : selected
-                                  ? 'Active Selection'
-                                  : 'Select $tier'),
+                          label: Text(
+                              selected ? 'Active Selection' : 'Select $tier'),
                           style: FilledButton.styleFrom(
                             backgroundColor: selected
                                 ? BrandColors.orange
@@ -2212,7 +2106,7 @@ class _HiringPipelinePickerDialogState
                         const SizedBox(height: 8),
                         const Center(
                           child: Text(
-                              'Upgrade to Business Plan to build custom stages',
+                              'Custom stages are available in your workflow builder.',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                   color: Color(0xFF8798AA), fontSize: 8.5)),

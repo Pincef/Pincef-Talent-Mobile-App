@@ -264,6 +264,7 @@ class JobPosting {
     this.aiRanking = false,
     this.aiSummary = false,
     this.aiStatus = 'idle',
+    this.createdById,
   });
 
   /// Required for routing to edit/publish/close actions — the previous
@@ -289,6 +290,7 @@ class JobPosting {
   final bool aiRanking;
   final bool aiSummary;
   final String aiStatus;
+  final String? createdById;
 
   /// Maps a raw job object from GET /jobs/mine (job.controller.ts's
   /// listMyCompanyJobs, wrapping job.service.ts's JobWithStats) into the
@@ -301,6 +303,10 @@ class JobPosting {
   factory JobPosting.fromApiJson(Map<String, dynamic> json) {
     final backendStatus =
         JobBackendStatusJson.fromJson(json['status'] as String? ?? 'draft');
+    final postedBy = json['postedById'];
+    final creatorId = postedBy is Map
+        ? (postedBy['_id'] ?? postedBy['id'])?.toString()
+        : postedBy?.toString();
     return JobPosting(
       id: (json['_id'] ?? json['id'] ?? '') as String,
       title: json['title'] as String? ?? 'Untitled role',
@@ -323,6 +329,7 @@ class JobPosting {
       aiRanking: (json['aiConfig'] as Map?)?['ranking'] as bool? ?? false,
       aiSummary: (json['aiConfig'] as Map?)?['summary'] as bool? ?? false,
       aiStatus: (json['aiStatus'] ?? 'idle').toString(),
+      createdById: creatorId,
     );
   }
 }

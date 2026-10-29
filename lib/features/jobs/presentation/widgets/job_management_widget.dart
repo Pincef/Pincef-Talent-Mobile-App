@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/entitlements/module_codes.dart';
 import '../../../../core/theme/brand_color.dart';
+import '../../../../core/widgets/app_toast.dart';
 import '../../../auth/application/auth_provider.dart';
+import '../../application/job_management_provider.dart';
 import '../../data/models/job_management_model.dart';
 
 // ============================================================
@@ -321,6 +323,7 @@ class JobPostingCard extends ConsumerWidget {
                 user?.hasModule(ModuleCodes.aiCandidateMatch) == true) ||
             (job.aiSummary &&
                 user?.hasModule(ModuleCodes.aiCandidateSummary) == true));
+    final canDelete = job.createdById != null && job.createdById == user?.id;
 
     return InkWell(
       onTap: () => context.push(deadlinePassed
@@ -355,6 +358,27 @@ class JobPostingCard extends ConsumerWidget {
                   spacing: 6,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
+                    if (canDelete)
+                      PopupMenuButton<String>(
+                        tooltip: 'Job actions',
+                        icon: const Icon(Icons.more_horiz,
+                            color: BrandColors.muted, size: 20),
+                        onSelected: (value) {
+                          if (value == 'delete') _confirmDelete(context, ref);
+                        },
+                        itemBuilder: (context) => const [
+                          PopupMenuItem(
+                            value: 'delete',
+                            child: Row(children: [
+                              Icon(Icons.delete_outline,
+                                  size: 18, color: Color(0xFFB42318)),
+                              SizedBox(width: 9),
+                              Text('Delete job',
+                                  style: TextStyle(color: Color(0xFFB42318))),
+                            ]),
+                          ),
+                        ],
+                      ),
                     if (job.status == JobPipelineStatus.active &&
                         job.isScanning)
                       Container(
@@ -459,6 +483,44 @@ class JobPostingCard extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete this job?'),
+        content: const Text(
+          'This removes the posting from your job list and public listings. Existing applications and hiring history will be retained.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFB42318),
+              foregroundColor: Colors.white,
+            ),
+            icon: const Icon(Icons.delete_outline, size: 16),
+            label: const Text('Delete job'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await ref.read(jobManagementProvider.notifier).deleteJob(job.id);
+      if (context.mounted) {
+        AppToast.success(context, 'Job deleted.');
+      }
+    } catch (error) {
+      if (context.mounted) {
+        AppToast.error(context, 'Could not delete job: $error');
+      }
+    }
   }
 }
 

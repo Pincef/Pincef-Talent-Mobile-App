@@ -161,17 +161,21 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
     );
     final user = ref.watch(authProvider).user;
     jobAsync.whenData((job) {
+      final jobClosed = job.status == JobBackendStatus.closed;
       final deadlinePassed = job.status != JobBackendStatus.draft &&
           job.applicationDeadline != null &&
           !job.applicationDeadline!.isAfter(DateTime.now());
       final shouldShowAiReview = (job.aiRanking &&
               user?.hasModule('ai.candidate_match') == true) ||
           (job.aiSummary && user?.hasModule('ai.candidate_summary') == true);
-      if (deadlinePassed && shouldShowAiReview && !_deadlineRedirectQueued) {
+      if ((jobClosed || deadlinePassed) &&
+          shouldShowAiReview &&
+          !_deadlineRedirectQueued) {
         _deadlineRedirectQueued = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted)
+          if (mounted) {
             context.replace('/jobs/${widget.jobId}/candidate-ranking');
+          }
         });
       }
     });
@@ -446,12 +450,14 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
           .read(jobManagementRepositoryProvider)
           .takeOverInterviewAutomation(widget.jobId);
       ref.invalidate(pendingInterviewAutomationProvider(widget.jobId));
-      if (mounted)
+      if (mounted) {
         AppToast.success(
             context, 'Automatic invitations stopped. You are in control.');
+      }
     } catch (error) {
-      if (mounted)
+      if (mounted) {
         AppToast.error(context, "Couldn't take over automation: $error");
+      }
     }
   }
 
