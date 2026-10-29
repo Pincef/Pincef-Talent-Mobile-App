@@ -51,6 +51,17 @@ class JobManagementRepository {
     );
   }
 
+  /// Generate editable job details from a recruiter-authored role idea.
+  /// Salary and application deadline are intentionally excluded from the
+  /// request and response so the recruiter remains responsible for them.
+  Future<Map<String, dynamic>> generateJobDetails(
+      Map<String, dynamic> context) {
+    return _request(
+      () => _dio.post('/jobs/generate-details', data: context),
+      (data) => Map<String, dynamic>.from(data as Map),
+    );
+  }
+
   /// Merges [draft]'s fields into the existing job.
   ///
   /// Maps to: PATCH /jobs/:jobId -> updateJob(jobId, companyId, input).
