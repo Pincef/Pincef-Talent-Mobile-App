@@ -22,9 +22,16 @@ import '../../data/models/candidate_ranking_model.dart';
 /// the card-selection state for this one action).
 ///
 class AiCandidateRankingScreen extends ConsumerStatefulWidget {
-  const AiCandidateRankingScreen({super.key, required this.jobId});
+  const AiCandidateRankingScreen({
+    super.key,
+    required this.jobId,
+    required this.originRoute,
+    required this.originLabel,
+  });
 
   final String jobId;
+  final String originRoute;
+  final String originLabel;
 
   @override
   ConsumerState<AiCandidateRankingScreen> createState() =>
@@ -71,7 +78,12 @@ class _AiCandidateRankingScreenState
             children: [
               _Breadcrumb(
                   jobTitle: jobTitle,
-                  onBackToJobs: () => context.go('/candidate-comparison')),
+                  originLabel: widget.originLabel,
+                  onBack: () => context.go(
+                        widget.originRoute == '/jobs/${widget.jobId}/candidates'
+                            ? '${widget.originRoute}?showCandidates=true'
+                            : widget.originRoute,
+                      )),
               const SizedBox(height: 14),
               _Header(
                 isWide: isWide,
@@ -239,18 +251,23 @@ class _RankingFailed extends StatelessWidget {
 }
 
 class _Breadcrumb extends StatelessWidget {
-  const _Breadcrumb({required this.jobTitle, required this.onBackToJobs});
+  const _Breadcrumb({
+    required this.jobTitle,
+    required this.originLabel,
+    required this.onBack,
+  });
   final String jobTitle;
-  final VoidCallback onBackToJobs;
+  final String originLabel;
+  final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           InkWell(
-            onTap: onBackToJobs,
-            child: const Text('Candidate Comparison',
-                style: TextStyle(
+            onTap: onBack,
+            child: Text(originLabel,
+                style: const TextStyle(
                     fontSize: 11.5,
                     color: BrandColors.muted,
                     fontWeight: FontWeight.w600)),
@@ -290,8 +307,8 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final subtitle = candidateCount == null
-        ? 'Comparison data includes match score, role fit, relevant strengths, and experience.'
-        : 'Comparing $candidateCount candidates by AI match score, role fit, strengths, and experience.';
+        ? 'Automated rankings use match score, role fit, relevant strengths, and experience.'
+        : 'Automated ranking of $candidateCount candidates by match score, role fit, strengths, and experience.';
 
     return Wrap(
       alignment: WrapAlignment.spaceBetween,
@@ -304,7 +321,7 @@ class _Header extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Candidate Comparison',
+              const Text('Automated Ranking',
                   style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
@@ -399,7 +416,7 @@ class _RankingBodyState extends ConsumerState<_RankingBody> {
               ButtonSegment<bool>(
                 value: false,
                 icon: Icon(Icons.leaderboard_outlined),
-                label: Text('AI Ranking'),
+                label: Text('Automated Ranking'),
               ),
               ButtonSegment<bool>(
                 value: true,
