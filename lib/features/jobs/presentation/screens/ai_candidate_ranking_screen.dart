@@ -352,6 +352,16 @@ class _Breadcrumb extends StatelessWidget {
                     color: BrandColors.navy,
                     fontWeight: FontWeight.w700)),
           ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 6),
+            child: Text('/',
+                style: TextStyle(fontSize: 11.5, color: BrandColors.muted)),
+          ),
+          const Text('AI Candidate Ranking',
+              style: TextStyle(
+                  fontSize: 11.5,
+                  color: BrandColors.navy,
+                  fontWeight: FontWeight.w700)),
         ],
       );
 }
@@ -983,6 +993,23 @@ class _RankingListState extends ConsumerState<_RankingList> {
     }
   }
 
+  void _openCandidateProfile(CandidateRankingEntry entry) =>
+      context.push('/jobs/${widget.jobId}/candidates/${entry.candidateId}');
+
+  void _openAiMatch(CandidateRankingEntry entry) => context.push(
+        '/jobs/${widget.jobId}/candidates/${entry.candidateId}/ai-match',
+        extra: entry,
+      );
+
+  void _openCvParsing(CandidateRankingEntry entry) => context.push(
+        '/jobs/${widget.jobId}/candidates/${entry.candidateId}/cv-parsing',
+      );
+
+  void _openSummary(CandidateRankingEntry entry) => context.push(
+        '/jobs/${widget.jobId}/candidates/${entry.candidateId}/summary',
+        extra: entry,
+      );
+
   void _beginReordering() {
     setState(() {
       _draftOrder = [...widget.entries];
@@ -1185,53 +1212,94 @@ class _RankingListState extends ConsumerState<_RankingList> {
               flex: 3,
               child: Row(
                 children: [
-                  _EntryAvatar(name: entry.name, url: entry.avatarUrl),
+                  Semantics(
+                    button: true,
+                    label: 'Open ${entry.name} candidate profile',
+                    child: InkWell(
+                      onTap: () => _openCandidateProfile(entry),
+                      borderRadius: BorderRadius.circular(24),
+                      child:
+                          _EntryAvatar(name: entry.name, url: entry.avatarUrl),
+                    ),
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(entry.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: BrandColors.navy)),
+                    child: InkWell(
+                      onTap: () => _openCandidateProfile(entry),
+                      child: Text(entry.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: BrandColors.navy,
+                              decoration: TextDecoration.underline,
+                              decorationColor: BrandColors.border)),
+                    ),
                   ),
                 ],
               ),
             ),
             Expanded(
               flex: 1,
-              child: Text('${entry.score}%',
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: _colorForLevel(entry.fitLevel))),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Semantics(
+                  button: true,
+                  label: 'Open ${entry.name} AI CV-to-job match details',
+                  child: InkWell(
+                    onTap: () => _openAiMatch(entry),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 6),
+                      child: Text('${entry.score}%',
+                          style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: _colorForLevel(entry.fitLevel),
+                              decoration: TextDecoration.underline)),
+                    ),
+                  ),
+                ),
+              ),
             ),
             Expanded(
               flex: 4,
               child: Padding(
                 padding: const EdgeInsets.only(right: 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(entry.fitLabel,
-                        style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: _colorForLevel(entry.fitLevel))),
-                    const SizedBox(height: 2),
-                    Text(entry.insight,
-                        style: const TextStyle(
-                            fontSize: 10.5,
-                            color: BrandColors.muted,
-                            height: 1.35)),
-                    if (entry.strengths.isNotEmpty) ...[
-                      const SizedBox(height: 5),
-                      Text('Strengths: ${entry.strengths.join(', ')}',
-                          style: const TextStyle(
-                              fontSize: 9.5, color: BrandColors.navy)),
-                    ],
-                  ],
+                child: Semantics(
+                  button: true,
+                  label: 'Open ${entry.name} CV parsing results',
+                  child: InkWell(
+                    onTap: () => _openCvParsing(entry),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(entry.fitLabel,
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: _colorForLevel(entry.fitLevel))),
+                          const SizedBox(height: 2),
+                          Text(entry.insight,
+                              style: const TextStyle(
+                                  fontSize: 10.5,
+                                  color: BrandColors.muted,
+                                  height: 1.35)),
+                          if (entry.strengths.isNotEmpty) ...[
+                            const SizedBox(height: 5),
+                            Text('Strengths: ${entry.strengths.join(', ')}',
+                                style: const TextStyle(
+                                    fontSize: 9.5, color: BrandColors.navy)),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -1255,8 +1323,7 @@ class _RankingListState extends ConsumerState<_RankingList> {
             SizedBox(
               width: 136,
               child: _RowActions(
-                onReview: () => context.push(
-                    '/jobs/${widget.jobId}/candidates/${entry.candidateId}'),
+                onSummary: () => _openSummary(entry),
                 onMessage: () => _message(entry),
                 onShortlist: entry.applicationStatus == 'submitted'
                     ? () => _shortlist(entry)
@@ -1283,38 +1350,78 @@ class _RankingListState extends ConsumerState<_RankingList> {
               children: [
                 _RankBadge(rank: entry.rank, level: entry.fitLevel),
                 const SizedBox(width: 10),
-                _EntryAvatar(name: entry.name, url: entry.avatarUrl),
+                Semantics(
+                  button: true,
+                  label: 'Open ${entry.name} candidate profile',
+                  child: InkWell(
+                    onTap: () => _openCandidateProfile(entry),
+                    borderRadius: BorderRadius.circular(24),
+                    child: _EntryAvatar(name: entry.name, url: entry.avatarUrl),
+                  ),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(entry.name,
-                      style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: BrandColors.navy)),
+                  child: InkWell(
+                    onTap: () => _openCandidateProfile(entry),
+                    child: Text(entry.name,
+                        style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: BrandColors.navy,
+                            decoration: TextDecoration.underline,
+                            decorationColor: BrandColors.border)),
+                  ),
                 ),
-                Text('${entry.score}%',
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: _colorForLevel(entry.fitLevel))),
+                InkWell(
+                  onTap: () => _openAiMatch(entry),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                    child: Text('${entry.score}%',
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: _colorForLevel(entry.fitLevel),
+                            decoration: TextDecoration.underline)),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 10),
-            Text(entry.fitLabel,
-                style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: _colorForLevel(entry.fitLevel))),
-            const SizedBox(height: 2),
-            Text(entry.insight,
-                style: const TextStyle(
-                    fontSize: 11, color: BrandColors.muted, height: 1.4)),
-            if (entry.strengths.isNotEmpty) ...[
-              const SizedBox(height: 5),
-              Text('Strengths: ${entry.strengths.join(', ')}',
-                  style:
-                      const TextStyle(fontSize: 10.5, color: BrandColors.navy)),
-            ],
+            Semantics(
+              button: true,
+              label: 'Open ${entry.name} CV parsing results',
+              child: InkWell(
+                onTap: () => _openCvParsing(entry),
+                borderRadius: BorderRadius.circular(6),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(entry.fitLabel,
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: _colorForLevel(entry.fitLevel))),
+                      const SizedBox(height: 2),
+                      Text(entry.insight,
+                          style: const TextStyle(
+                              fontSize: 11,
+                              color: BrandColors.muted,
+                              height: 1.4)),
+                      if (entry.strengths.isNotEmpty) ...[
+                        const SizedBox(height: 5),
+                        Text('Strengths: ${entry.strengths.join(', ')}',
+                            style: const TextStyle(
+                                fontSize: 10.5, color: BrandColors.navy)),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(height: 8),
             Row(
               children: [
@@ -1333,8 +1440,7 @@ class _RankingListState extends ConsumerState<_RankingList> {
             ),
             const SizedBox(height: 10),
             _RowActions(
-              onReview: () => context.push(
-                  '/jobs/${widget.jobId}/candidates/${entry.candidateId}'),
+              onSummary: () => _openSummary(entry),
               onMessage: () => _message(entry),
               onShortlist: entry.applicationStatus == 'submitted'
                   ? () => _shortlist(entry)
@@ -1355,12 +1461,12 @@ class _RankingListState extends ConsumerState<_RankingList> {
 
 class _RowActions extends StatelessWidget {
   const _RowActions(
-      {required this.onReview,
+      {required this.onSummary,
       required this.onMessage,
       required this.canMessage,
       this.onShortlist,
       this.expand = false});
-  final VoidCallback onReview;
+  final VoidCallback onSummary;
   final VoidCallback onMessage;
   final bool canMessage;
   final VoidCallback? onShortlist;
@@ -1371,14 +1477,14 @@ class _RowActions extends StatelessWidget {
     final reviewButton = SizedBox(
       height: 30,
       child: OutlinedButton(
-        onPressed: onReview,
+        onPressed: onSummary,
         style: OutlinedButton.styleFrom(
           foregroundColor: BrandColors.orange,
           side: const BorderSide(color: BrandColors.orange),
           padding: const EdgeInsets.symmetric(horizontal: 10),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         ),
-        child: const Text('Review',
+        child: const Text('Summary',
             style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700)),
       ),
     );
