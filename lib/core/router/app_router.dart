@@ -31,6 +31,8 @@ import '../../features/jobs/presentation/screens/job_details_screen.dart';
 import '../../features/jobs/presentation/screens/public_job_screen.dart';
 import '../../features/jobs/presentation/screens/job_candidates_screen.dart';
 import '../../features/jobs/presentation/screens/candidate_profile_preview_screen.dart';
+import '../../features/jobs/presentation/screens/candidate_ai_review_screen.dart';
+import '../../features/jobs/data/models/candidate_ranking_model.dart';
 import '../../features/jobs/presentation/screens/ai_candidate_ranking_screen.dart';
 import '../../features/jobs/presentation/screens/candidate_comparison_jobs_screen.dart';
 import '../../features/jobs/presentation/screens/candidate_comparison_detail_screen.dart';
@@ -330,8 +332,42 @@ final routerProvider = Provider<GoRouter>((ref) {
                   // that screen's onViewProfile. Null on a direct/deep
                   // link, which CandidateProfilePreviewScreen already
                   // handles gracefully.
-                  applicant: state.extra as JobApplicantSummary?,
+                  applicant: state.extra is JobApplicantSummary
+                      ? state.extra as JobApplicantSummary
+                      : null,
                 ),
+                routes: [
+                  GoRoute(
+                    path: 'ai-match',
+                    builder: (context, state) => CandidateAiReviewScreen(
+                      jobId: state.pathParameters['jobId']!,
+                      candidateId: state.pathParameters['candidateId']!,
+                      view: CandidateAiReviewView.match,
+                      rankingEntry: state.extra is CandidateRankingEntry
+                          ? state.extra as CandidateRankingEntry
+                          : null,
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'cv-parsing',
+                    builder: (context, state) => CandidateAiReviewScreen(
+                      jobId: state.pathParameters['jobId']!,
+                      candidateId: state.pathParameters['candidateId']!,
+                      view: CandidateAiReviewView.parsing,
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'summary',
+                    builder: (context, state) => CandidateAiReviewScreen(
+                      jobId: state.pathParameters['jobId']!,
+                      candidateId: state.pathParameters['candidateId']!,
+                      view: CandidateAiReviewView.summary,
+                      rankingEntry: state.extra is CandidateRankingEntry
+                          ? state.extra as CandidateRankingEntry
+                          : null,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
