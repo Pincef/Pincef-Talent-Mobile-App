@@ -529,7 +529,8 @@ class _RankingBodyState extends ConsumerState<_RankingBody> {
               entries: result.entries,
               total: result.totalRanked),
         const SizedBox(height: 20),
-        if (!_showSummaries) _AutomateWorkflowCard(entries: result.entries),
+        if (!_showSummaries)
+          _AutomateWorkflowCard(jobId: widget.jobId, entries: result.entries),
       ],
     );
   }
@@ -829,12 +830,9 @@ class _StatsRow extends StatelessWidget {
         color: BrandColors.orange,
       ),
       if (result.summaryEnabled)
-        _StatCard(
-          icon: Icons.hub_outlined,
-          label: 'MOST COMMON AI SKILL',
-          value: result.topSkillLabel,
-          sub: '${result.topSkillOverlapPercent}% of AI summaries mention',
-          color: const Color(0xFF6366F1),
+        _SkillOverlapCard(
+          skill: result.topSkillLabel,
+          overlap: result.topSkillOverlapPercent,
         ),
     ];
 
@@ -911,6 +909,53 @@ class _StatCard extends StatelessWidget {
                 ],
               ),
             ),
+          ],
+        ),
+      );
+}
+
+class _SkillOverlapCard extends StatelessWidget {
+  const _SkillOverlapCard({required this.skill, required this.overlap});
+
+  final String skill;
+  final int overlap;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        constraints: const BoxConstraints(minHeight: 112),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE9C7B9)),
+          boxShadow: const [
+            BoxShadow(
+                color: Color(0x080D1935), blurRadius: 8, offset: Offset(0, 3)),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text('SKILL OVERLAP',
+                style: TextStyle(
+                    color: BrandColors.muted,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: .5)),
+            const SizedBox(height: 7),
+            Text(skill,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    color: BrandColors.navy,
+                    fontSize: 27,
+                    fontWeight: FontWeight.w800)),
+            Text('$overlap% of top matches possess',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    color: BrandColors.muted, fontSize: 12, height: 1.35)),
           ],
         ),
       );
@@ -1003,6 +1048,7 @@ class _RankingListState extends ConsumerState<_RankingList> {
 
   void _openCvParsing(CandidateRankingEntry entry) => context.push(
         '/jobs/${widget.jobId}/candidates/${entry.candidateId}/cv-parsing',
+        extra: entry,
       );
 
   void _openSummary(CandidateRankingEntry entry) => context.push(
@@ -1624,67 +1670,163 @@ class _LegendDot extends StatelessWidget {
       );
 }
 
-class _AutomateWorkflowCard extends StatelessWidget {
-  const _AutomateWorkflowCard({required this.entries});
+class _AutomateWorkflowCard extends ConsumerWidget {
+  const _AutomateWorkflowCard({required this.jobId, required this.entries});
+  final String jobId;
   final List<CandidateRankingEntry> entries;
 
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-            color: BrandColors.navy, borderRadius: BorderRadius.circular(12)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Expanded(
-                  child: Text('Next Hiring Steps',
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white)),
-                ),
-                if (entries.isNotEmpty)
-                  SizedBox(
-                    height: 26,
-                    width: 26 + (entries.length > 1 ? 14 : 0),
-                    child: Stack(
-                      children: [
-                        for (var i = 0; i < entries.length.clamp(0, 2); i++)
-                          Positioned(
-                            left: i * 14.0,
-                            child: _EntryAvatar(
-                                name: entries[i].name,
-                                url: entries[i].avatarUrl),
-                          ),
-                      ],
-                    ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final workflowAsync = ref.watch(nextWorkflowActivationProvider(jobId));
+    final workflow = workflowAsync.valueOrNull;
+    final activated = workflow?['status'] == 'completed';
+    final job = ref.watch(jobDetailProvider(jobId)).valueOrNull;
+    final canActivate =
+        (workflow?['status'] == 'pending' || workflow?['status'] == 'failed') &&
+            !activated;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+          color: BrandColors.navy, borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text('Next Hiring Pipeline',
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white)),
+              ),
+              if (entries.isNotEmpty)
+                SizedBox(
+                  height: 26,
+                  width: 26 + (entries.length > 1 ? 14 : 0),
+                  child: Stack(
+                    children: [
+                      for (var i = 0; i < entries.length.clamp(0, 2); i++)
+                        Positioned(
+                          left: i * 14.0,
+                          child: _EntryAvatar(
+                              name: entries[i].name, url: entries[i].avatarUrl),
+                        ),
+                    ],
                   ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            const _WorkflowStep(label: 'Review AI-ranked candidates'),
-            const _WorkflowStep(
-                label: 'Invite shortlisted candidates to assessment'),
-            const _WorkflowStep(
-                label: 'Schedule interviews and track outcomes'),
-            const SizedBox(height: 16),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const _WorkflowStep(
+              label: 'AI candidate ranking completed', completed: true),
+          _WorkflowStep(
+            label: workflow == null
+                ? 'Next pipeline stage'
+                : 'Next stage: ${workflow['stageName']}',
+            completed: activated,
+          ),
+          if (workflowAsync.isLoading) ...[
+            const SizedBox(height: 10),
+            const LinearProgressIndicator(),
+          ] else if (workflow == null) ...[
+            const SizedBox(height: 10),
+            const Text(
+                'No pending workflow activation is available for this job.',
+                style: TextStyle(fontSize: 11.5, color: Colors.white70)),
+          ] else ...[
+            const SizedBox(height: 10),
+            if (activated)
+              Row(children: [
+                const Icon(Icons.check_circle,
+                    color: Color(0xFF34D399), size: 18),
+                const SizedBox(width: 8),
+                Text(
+                    'Workflow activated ${workflow['activationSource'] == 'automatic' ? 'automatically' : 'manually'}',
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w700)),
+              ])
+            else ...[
+              Text(
+                  workflow['status'] == 'failed'
+                      ? 'Automatic activation needs attention. You can retry it now.'
+                      : 'If you do nothing, this step activates in 5 days. A reminder is sent one day before.',
+                  style: const TextStyle(
+                      fontSize: 11.5, color: Colors.white70, height: 1.4)),
+              const SizedBox(height: 10),
+              FilledButton.icon(
+                onPressed: canActivate && job != null
+                    ? () async {
+                        final router = GoRouter.of(context);
+                        try {
+                          final activatedWorkflow = await ref
+                              .read(jobManagementRepositoryProvider)
+                              .activateNextWorkflow(jobId);
+                          ref.invalidate(nextWorkflowActivationProvider(jobId));
+                          final isAssessment =
+                              workflow['stageType']?.toString().toLowerCase() ==
+                                  'assessment';
+                          if (isAssessment) {
+                            final assessmentId =
+                                activatedWorkflow?['assessmentId']?.toString();
+                            if (assessmentId != null &&
+                                assessmentId.isNotEmpty) {
+                              router.go(
+                                  '/competency-assessments/$assessmentId/edit');
+                            } else {
+                              final query = <String, String>{
+                                'jobId': jobId,
+                                if (job.pipelineId != null)
+                                  'pipelineId': job.pipelineId!,
+                                'pipelineTier': job.pipelineTier,
+                              };
+                              router.go(Uri(
+                                      path: '/competency-assessments/new',
+                                      queryParameters: query)
+                                  .toString());
+                            }
+                          } else {
+                            router.go('/jobs/$jobId/candidates');
+                          }
+                        } catch (error) {
+                          if (context.mounted) {
+                            AppToast.error(context,
+                                'Could not activate the workflow: $error');
+                          }
+                        }
+                      }
+                    : null,
+                icon: const Icon(Icons.play_arrow_rounded),
+                label: Text(canActivate
+                    ? (workflow['status'] == 'failed'
+                        ? 'Retry activation'
+                        : 'Activate workflow')
+                    : 'Workflow unavailable'),
+              ),
+            ],
           ],
-        ),
-      );
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
 }
 
 class _WorkflowStep extends StatelessWidget {
-  const _WorkflowStep({required this.label});
+  const _WorkflowStep({required this.label, required this.completed});
   final String label;
+  final bool completed;
 
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 5),
         child: Row(
           children: [
-            const Icon(Icons.check_circle, size: 14, color: Color(0xFF34D399)),
+            Icon(
+              completed ? Icons.check_circle : Icons.radio_button_unchecked,
+              size: 14,
+              color: completed ? const Color(0xFF34D399) : Colors.white54,
+            ),
             const SizedBox(width: 8),
             Text(label,
                 style: const TextStyle(fontSize: 11.5, color: Colors.white70)),
