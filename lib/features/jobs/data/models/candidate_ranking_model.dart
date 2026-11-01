@@ -25,6 +25,8 @@ class CandidateRankingEntry {
     this.previousCompanies = const [],
     this.strengths = const [],
     this.resumeSummary,
+    this.sourceCvUrl,
+    this.parsedResume,
   });
 
   final int rank;
@@ -50,6 +52,8 @@ class CandidateRankingEntry {
   final List<String> previousCompanies;
   final List<String> strengths;
   final Map<String, dynamic>? resumeSummary;
+  final String? sourceCvUrl;
+  final Map<String, dynamic>? parsedResume;
 
   RankingFitLevel get fitLevel => _fitLevelFromScore(score);
 
@@ -81,6 +85,10 @@ class CandidateRankingEntry {
           const [],
       resumeSummary: json['resumeSummary'] is Map
           ? Map<String, dynamic>.from(json['resumeSummary'] as Map)
+          : null,
+      sourceCvUrl: json['sourceCvUrl'] as String?,
+      parsedResume: json['parsedResume'] is Map
+          ? Map<String, dynamic>.from(json['parsedResume'] as Map)
           : null,
     );
   }
@@ -143,11 +151,13 @@ class CandidateRankingResult {
     final entries = rawEntries.map(CandidateRankingEntry.fromApiJson).toList()
       ..sort((a, b) => a.rank.compareTo(b.rank));
 
+    final topMatches = entries.where((entry) => entry.score >= 90).toList();
+    if (topMatches.isEmpty && entries.isNotEmpty) topMatches.add(entries.first);
     final skillCounts = <String, int>{};
-    var summarizedCandidates = 0;
-    for (final entry in entries) {
+    var summarizedTopMatches = 0;
+    for (final entry in topMatches) {
       final summary = entry.resumeSummary;
-      if (summary != null && summary.isNotEmpty) summarizedCandidates++;
+      if (summary != null && summary.isNotEmpty) summarizedTopMatches++;
       final skills = summary?['skills'] as List? ?? const [];
       for (final skill in skills.whereType<Map>()) {
         final name = skill['name']?.toString().trim() ?? '';
@@ -171,9 +181,9 @@ class CandidateRankingResult {
       topSkillLabel: commonSkill.isNotEmpty
           ? commonSkill.first.key
           : (json['topSkillLabel'] ?? '—') as String,
-      topSkillOverlapPercent: summarizedCandidates == 0
+      topSkillOverlapPercent: summarizedTopMatches == 0
           ? 0
-          : ((commonSkill.first.value / summarizedCandidates) * 100).round(),
+          : ((commonSkill.first.value / summarizedTopMatches) * 100).round(),
       marketReasoning:
           (json['marketReasoning'] as List?)?.cast<String>() ?? const [],
       skillGapReasoning:
