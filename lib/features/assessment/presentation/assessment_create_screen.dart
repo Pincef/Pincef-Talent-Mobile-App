@@ -37,6 +37,7 @@ class _AssessmentCreateScreenState
   String? _jobId;
   String? _pipelineId;
   String? _stageName;
+  bool _automaticPipelineStage = false;
   String _mode = 'manual';
   String _kind = 'internal';
   String _channel = 'email';
@@ -173,7 +174,10 @@ class _AssessmentCreateScreenState
     }
   }
 
-  Map<String, dynamic> _payload({bool forUpdate = false}) {
+  Map<String, dynamic> _payload({
+    bool forUpdate = false,
+    bool includeUnacceptedDraftQuestions = false,
+  }) {
     final payload = <String, dynamic>{
       'title': _title.text.trim(),
       'purpose': _purpose.text.trim(),
@@ -184,7 +188,8 @@ class _AssessmentCreateScreenState
       'passingScore': int.tryParse(_passing.text) ?? 75,
       'questions': _kind == 'internal'
           ? _questions
-              .where((q) => q['accepted'] != false)
+              .where((q) =>
+                  includeUnacceptedDraftQuestions || q['accepted'] != false)
               .map(_serializeQuestion)
               .toList()
           : <Map<String, dynamic>>[],
@@ -264,6 +269,12 @@ class _AssessmentCreateScreenState
         _questions = questions;
       });
       ref.invalidate(recruiterAssessmentsProvider);
+      if (_mode == 'full_ai' && _automaticPipelineStage && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'AI questions were generated and saved as a draft. Recruiters will be reminded before automatic publishing.'),
+        ));
+      }
       if (questions.isEmpty && _kind == 'internal')
         throw StateError('AI returned no questions. Try again.');
     } catch (e) {
@@ -327,8 +338,10 @@ class _AssessmentCreateScreenState
         if (_testId == null) {
           throw StateError('The assessment could not be generated. Try again.');
         }
-        final draftPayload = _payload(forUpdate: true)
-          ..['autoGenerateAfterDeadline'] = false;
+        final draftPayload = _payload(
+          forUpdate: true,
+          includeUnacceptedDraftQuestions: true,
+        )..['autoGenerateAfterDeadline'] = false;
         await repo.update(_testId!, draftPayload);
       }
       ref.invalidate(recruiterAssessmentsProvider);
@@ -850,7 +863,7 @@ class _AssessmentCreateScreenState
                           title: const Text(
                               'Generate assessment after job application deadline'),
                           subtitle: const Text(
-                              'Questions are generated now for your review. At the job deadline, the assessment is published to shortlisted candidates and stays open for 7 days.'),
+                              'After the job deadline, AI saves questions as a draft, reminds recruiters one day before publishing, then sends the assessment to AI-ranked candidates if nobody publishes sooner.'),
                           value: _autoGenerateAfterDeadline,
                           onChanged: (value) => setState(
                               () => _autoGenerateAfterDeadline = value)),
@@ -1136,6 +1149,8 @@ class _AssessmentCreateScreenState
 
   void _applyStageDefaults(PipelineStage stage) {
     _stageName = stage.name;
+    _automaticPipelineStage = stage.assessmentMode.toLowerCase() == 'auto' ||
+        stage.assessmentMode.toLowerCase() == 'full_ai';
     _duration.text = '${stage.durationMins}';
     _passing.text = '${stage.passingScore}';
     _mode = switch (stage.assessmentMode.toLowerCase()) {
