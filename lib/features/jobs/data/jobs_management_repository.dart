@@ -117,6 +117,17 @@ class JobManagementRepository {
         (_) {},
       );
 
+  Future<Map<String, dynamic>?> getNextWorkflowActivation(String jobId) =>
+      _request(
+        () => _dio.get('/jobs/$jobId/automation/next-workflow'),
+        (data) => data == null ? null : Map<String, dynamic>.from(data as Map),
+      );
+
+  Future<Map<String, dynamic>?> activateNextWorkflow(String jobId) => _request(
+        () => _dio.post('/jobs/$jobId/automation/next-workflow/activate'),
+        (data) => data == null ? null : Map<String, dynamic>.from(data as Map),
+      );
+
   /// Candidate-facing browse. Maps to: GET /jobs -> listPublishedJobs(query).
   /// Unlike /jobs/mine, this route is already paginated/filterable
   /// server-side (job.dto.ts's listJobsQuerySchema), so filters are sent as
