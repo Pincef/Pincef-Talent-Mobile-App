@@ -354,6 +354,9 @@ final routerProvider = Provider<GoRouter>((ref) {
                       jobId: state.pathParameters['jobId']!,
                       candidateId: state.pathParameters['candidateId']!,
                       view: CandidateAiReviewView.parsing,
+                      rankingEntry: state.extra is CandidateRankingEntry
+                          ? state.extra as CandidateRankingEntry
+                          : null,
                     ),
                   ),
                   GoRoute(
