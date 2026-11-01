@@ -51,7 +51,12 @@ class CandidateAiReviewScreen extends ConsumerWidget {
               candidateId: candidateId,
               rankingEntry: rankingEntry,
             )
-          : _ParsingView(data: data, jobId: jobId, candidateId: candidateId),
+          : _ParsingView(
+              data: data,
+              jobId: jobId,
+              candidateId: candidateId,
+              rankingEntry: rankingEntry,
+            ),
     );
   }
 }
@@ -74,7 +79,18 @@ class _MatchView extends StatelessWidget {
     final profile = data.profile;
     final score = rankingEntry?.score ?? analysis?.score;
     final status = analysis?.status;
-    final skills = profile.skills.take(12).toList();
+    final applicationSkills =
+        (rankingEntry?.parsedResume?['skills'] as List? ?? const [])
+            .whereType<String>()
+            .toList();
+    final skills =
+        (applicationSkills.isNotEmpty ? applicationSkills : profile.skills)
+            .take(12)
+            .toList();
+    final applicationExperience =
+        rankingEntry?.parsedResume?['experience'] as List?;
+    final experienceCount =
+        applicationExperience?.length ?? profile.experience.length;
     return _PageFrame(
       jobId: jobId,
       candidateId: candidateId,
@@ -222,7 +238,7 @@ class _MatchView extends StatelessWidget {
           _Panel(
             title: 'Profile context',
             child: Text(
-              '${profile.experience.length} work history item(s) · ${profile.education.length} education item(s) · ${profile.skills.length} listed skills',
+              '$experienceCount work history item(s) · ${profile.education.length} education item(s) · ${skills.length} listed skills',
               style: const TextStyle(color: BrandColors.muted, height: 1.5),
             ),
           ),
@@ -237,15 +253,28 @@ class _ParsingView extends ConsumerWidget {
     required this.data,
     required this.jobId,
     required this.candidateId,
+    this.rankingEntry,
   });
 
   final CandidateProfileViewData data;
   final String jobId;
   final String candidateId;
+  final CandidateRankingEntry? rankingEntry;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = data.profile;
+    final parsed = rankingEntry?.parsedResume;
+    final extractedSkills =
+        (parsed?['skills'] as List? ?? const []).whereType<String>().toList();
+    final extractedExperience = (parsed?['experience'] as List? ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+    final extractedEducation = (parsed?['education'] as List? ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
     final args = (candidateId: candidateId, jobId: jobId);
     return _PageFrame(
       jobId: jobId,
@@ -253,7 +282,9 @@ class _ParsingView extends ConsumerWidget {
       currentLabel: 'AI CV Parsing',
       eyebrow: 'CV EXTRACTION',
       title: 'AI CV Parsing Results',
-      subtitle: 'Extracted candidate information from the profile CV',
+      subtitle: rankingEntry == null
+          ? 'Extracted candidate information from the candidate profile'
+          : 'Extracted from the exact CV used for this application’s AI review',
       candidateName: data.user.fullName,
       candidateImageUrl: data.user.profileImage?.url,
       actions: [
@@ -281,7 +312,31 @@ class _ParsingView extends ConsumerWidget {
         ),
       ],
       children: [
-        if (profile.cvFiles.isNotEmpty)
+        if (rankingEntry?.sourceCvUrl?.isNotEmpty == true)
+          _Panel(
+            title: 'Original application CV',
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.picture_as_pdf_outlined,
+                  color: BrandColors.orange),
+              title: Text(
+                  rankingEntry?.parsedResume?['originalName']?.toString() ??
+                      'CV used for this application'),
+              subtitle:
+                  const Text('The exact CV used for this job’s AI review'),
+              trailing: IconButton(
+                tooltip: 'Open application CV',
+                icon: const Icon(Icons.open_in_new),
+                onPressed: () async {
+                  final uri = Uri.tryParse(rankingEntry!.sourceCvUrl!);
+                  if (uri != null) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  }
+                },
+              ),
+            ),
+          )
+        else if (profile.cvFiles.isNotEmpty)
           _Panel(
             title: 'Original CV document',
             child: Column(
@@ -323,55 +378,92 @@ class _ParsingView extends ConsumerWidget {
         ),
         _Panel(
           title: 'Work history',
-          child: profile.experience.isEmpty
+          child: (extractedExperience.isEmpty && profile.experience.isEmpty)
               ? const Text('No work history has been extracted.')
               : Column(
-                  children: profile.experience
-                      .map((item) => ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: const Icon(Icons.work_outline,
-                                color: BrandColors.orange),
-                            title: Text(item.title),
-                            subtitle: Text([
-                              if (item.company?.isNotEmpty == true)
-                                item.company!,
-                              if (item.description?.isNotEmpty == true)
-                                item.description!,
-                            ].join(' · ')),
-                          ))
-                      .toList(),
+                  children: extractedExperience.isNotEmpty
+                      ? extractedExperience
+                          .map((item) => ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: const Icon(Icons.work_outline,
+                                    color: BrandColors.orange),
+                                title:
+                                    Text(item['title']?.toString() ?? 'Role'),
+                                subtitle: Text([
+                                  item['company']?.toString(),
+                                  item['description']?.toString(),
+                                ]
+                                    .whereType<String>()
+                                    .where((value) => value.isNotEmpty)
+                                    .join(' · ')),
+                              ))
+                          .toList()
+                      : profile.experience
+                          .map((item) => ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: const Icon(Icons.work_outline,
+                                    color: BrandColors.orange),
+                                title: Text(item.title),
+                                subtitle: Text([
+                                  if (item.company?.isNotEmpty == true)
+                                    item.company!,
+                                  if (item.description?.isNotEmpty == true)
+                                    item.description!,
+                                ].join(' · ')),
+                              ))
+                          .toList(),
                 ),
         ),
         _Panel(
           title: 'Skills and expertise',
-          child: profile.skills.isEmpty
+          child: extractedSkills.isEmpty && profile.skills.isEmpty
               ? const Text('No skills have been extracted.')
               : Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: profile.skills
+                  children: (extractedSkills.isNotEmpty
+                          ? extractedSkills
+                          : profile.skills)
                       .map((skill) => Chip(label: Text(skill)))
                       .toList(),
                 ),
         ),
         _Panel(
           title: 'Education',
-          child: profile.education.isEmpty
+          child: (extractedEducation.isEmpty && profile.education.isEmpty)
               ? const Text('No education has been extracted.')
               : Column(
-                  children: profile.education
-                      .map((item) => ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: const Icon(Icons.school_outlined,
-                                color: BrandColors.orange),
-                            title: Text(item.institution),
-                            subtitle: Text([
-                              if (item.degree?.isNotEmpty == true) item.degree!,
-                              if (item.fieldOfStudy?.isNotEmpty == true)
-                                item.fieldOfStudy!,
-                            ].join(' · ')),
-                          ))
-                      .toList(),
+                  children: extractedEducation.isNotEmpty
+                      ? extractedEducation
+                          .map((item) => ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: const Icon(Icons.school_outlined,
+                                    color: BrandColors.orange),
+                                title: Text(item['institution']?.toString() ??
+                                    'Institution'),
+                                subtitle: Text([
+                                  item['degree']?.toString(),
+                                  item['fieldOfStudy']?.toString(),
+                                ]
+                                    .whereType<String>()
+                                    .where((value) => value.isNotEmpty)
+                                    .join(' · ')),
+                              ))
+                          .toList()
+                      : profile.education
+                          .map((item) => ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: const Icon(Icons.school_outlined,
+                                    color: BrandColors.orange),
+                                title: Text(item.institution),
+                                subtitle: Text([
+                                  if (item.degree?.isNotEmpty == true)
+                                    item.degree!,
+                                  if (item.fieldOfStudy?.isNotEmpty == true)
+                                    item.fieldOfStudy!,
+                                ].join(' · ')),
+                              ))
+                          .toList(),
                 ),
         ),
         if (profile.certifications.isNotEmpty)
