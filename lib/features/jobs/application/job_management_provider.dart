@@ -25,6 +25,13 @@ final pendingInterviewAutomationProvider =
       .getPendingInterviewAutomation(jobId),
 );
 
+final nextWorkflowActivationProvider =
+    FutureProvider.autoDispose.family<Map<String, dynamic>?, String>(
+  (ref, jobId) => ref
+      .watch(jobManagementRepositoryProvider)
+      .getNextWorkflowActivation(jobId),
+);
+
 class JobManagementState {
   const JobManagementState({this.summary, this.isLoading = false, this.error});
 
