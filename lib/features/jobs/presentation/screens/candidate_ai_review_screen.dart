@@ -94,9 +94,9 @@ class _MatchView extends StatelessWidget {
     return _PageFrame(
       jobId: jobId,
       candidateId: candidateId,
-      currentLabel: 'AI CV-to-Job Matching',
-      eyebrow: 'CANDIDATE MATCH',
-      title: 'AI CV-to-Job Matching',
+      currentLabel: 'Job Match Results',
+      eyebrow: 'AI TO CV JOB MATCH',
+      title: 'Job Match Results',
       subtitle: 'How ${data.user.fullName} aligns with this role',
       candidateName: data.user.fullName,
       candidateImageUrl: data.user.profileImage?.url,
