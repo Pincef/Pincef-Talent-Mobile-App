@@ -143,6 +143,7 @@ class _AiCandidateRankingScreenState
               _Breadcrumb(
                   jobTitle: jobTitle,
                   originLabel: widget.originLabel,
+                  onJobDetails: () => context.go('/jobs/$jobId'),
                   onBack: () => context.go(
                         widget.originRoute == '/jobs/${widget.jobId}/candidates'
                             ? '${widget.originRoute}?showCandidates=true'
@@ -322,10 +323,12 @@ class _Breadcrumb extends StatelessWidget {
     required this.jobTitle,
     required this.originLabel,
     required this.onBack,
+    required this.onJobDetails,
   });
   final String jobTitle;
   final String originLabel;
   final VoidCallback onBack;
+  final VoidCallback onJobDetails;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -345,12 +348,20 @@ class _Breadcrumb extends StatelessWidget {
                 style: TextStyle(fontSize: 11.5, color: BrandColors.muted)),
           ),
           Flexible(
-            child: Text(jobTitle,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    fontSize: 11.5,
-                    color: BrandColors.navy,
-                    fontWeight: FontWeight.w700)),
+            child: Semantics(
+              button: true,
+              label: 'Open $jobTitle job details',
+              child: InkWell(
+                onTap: onJobDetails,
+                child: Text(jobTitle,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 11.5,
+                        color: BrandColors.orange,
+                        fontWeight: FontWeight.w700,
+                        decoration: TextDecoration.underline)),
+              ),
+            ),
           ),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 6),
@@ -1038,9 +1049,6 @@ class _RankingListState extends ConsumerState<_RankingList> {
     }
   }
 
-  void _openCandidateProfile(CandidateRankingEntry entry) =>
-      context.push('/jobs/${widget.jobId}/candidates/${entry.candidateId}');
-
   void _openAiMatch(CandidateRankingEntry entry) => context.push(
         '/jobs/${widget.jobId}/candidates/${entry.candidateId}/ai-match',
         extra: entry,
@@ -1229,7 +1237,7 @@ class _RankingListState extends ConsumerState<_RankingList> {
             Expanded(flex: 1, child: Text('SCORE', style: _headerStyle)),
             Expanded(
                 flex: 4,
-                child: Text('AI INSIGHTS & EXPLANATION', style: _headerStyle)),
+                child: Text('AI TO CV JOB MATCH', style: _headerStyle)),
             Expanded(flex: 2, child: Text('EXPERIENCE', style: _headerStyle)),
             SizedBox(width: 100, child: Text('ACTION', style: _headerStyle)),
           ],
@@ -1260,9 +1268,9 @@ class _RankingListState extends ConsumerState<_RankingList> {
                 children: [
                   Semantics(
                     button: true,
-                    label: 'Open ${entry.name} candidate profile',
+                    label: 'Open ${entry.name} parsed CV results',
                     child: InkWell(
-                      onTap: () => _openCandidateProfile(entry),
+                      onTap: () => _openCvParsing(entry),
                       borderRadius: BorderRadius.circular(24),
                       child:
                           _EntryAvatar(name: entry.name, url: entry.avatarUrl),
@@ -1271,7 +1279,7 @@ class _RankingListState extends ConsumerState<_RankingList> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: InkWell(
-                      onTap: () => _openCandidateProfile(entry),
+                      onTap: () => _openCvParsing(entry),
                       child: Text(entry.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -1292,7 +1300,7 @@ class _RankingListState extends ConsumerState<_RankingList> {
                 alignment: Alignment.centerLeft,
                 child: Semantics(
                   button: true,
-                  label: 'Open ${entry.name} AI CV-to-job match details',
+                  label: 'Open ${entry.name} job match results',
                   child: InkWell(
                     onTap: () => _openAiMatch(entry),
                     borderRadius: BorderRadius.circular(6),
@@ -1316,9 +1324,9 @@ class _RankingListState extends ConsumerState<_RankingList> {
                 padding: const EdgeInsets.only(right: 10),
                 child: Semantics(
                   button: true,
-                  label: 'Open ${entry.name} CV parsing results',
+                  label: 'Open ${entry.name} AI CV-to-job match results',
                   child: InkWell(
-                    onTap: () => _openCvParsing(entry),
+                    onTap: () => _openAiMatch(entry),
                     borderRadius: BorderRadius.circular(6),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 2),
@@ -1398,9 +1406,9 @@ class _RankingListState extends ConsumerState<_RankingList> {
                 const SizedBox(width: 10),
                 Semantics(
                   button: true,
-                  label: 'Open ${entry.name} candidate profile',
+                  label: 'Open ${entry.name} parsed CV results',
                   child: InkWell(
-                    onTap: () => _openCandidateProfile(entry),
+                    onTap: () => _openCvParsing(entry),
                     borderRadius: BorderRadius.circular(24),
                     child: _EntryAvatar(name: entry.name, url: entry.avatarUrl),
                   ),
@@ -1408,7 +1416,7 @@ class _RankingListState extends ConsumerState<_RankingList> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: InkWell(
-                    onTap: () => _openCandidateProfile(entry),
+                    onTap: () => _openCvParsing(entry),
                     child: Text(entry.name,
                         style: const TextStyle(
                             fontSize: 13,
@@ -1437,9 +1445,9 @@ class _RankingListState extends ConsumerState<_RankingList> {
             const SizedBox(height: 10),
             Semantics(
               button: true,
-              label: 'Open ${entry.name} CV parsing results',
+              label: 'Open ${entry.name} AI CV-to-job match results',
               child: InkWell(
-                onTap: () => _openCvParsing(entry),
+                onTap: () => _openAiMatch(entry),
                 borderRadius: BorderRadius.circular(6),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 3),
