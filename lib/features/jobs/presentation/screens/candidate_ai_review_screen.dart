@@ -248,7 +248,7 @@ class _MatchView extends StatelessWidget {
   }
 }
 
-class _ParsingView extends ConsumerWidget {
+class _ParsingView extends StatelessWidget {
   const _ParsingView({
     required this.data,
     required this.jobId,
@@ -262,7 +262,7 @@ class _ParsingView extends ConsumerWidget {
   final CandidateRankingEntry? rankingEntry;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final profile = data.profile;
     final parsed = rankingEntry?.parsedResume;
     final extractedSkills =
@@ -281,15 +281,25 @@ class _ParsingView extends ConsumerWidget {
       return value.trim();
     }
 
-    final args = (candidateId: candidateId, jobId: jobId);
+    String manualContact(String? value) =>
+        value == null || value.trim().isEmpty ? 'Not provided' : value.trim();
+    final email = rankingEntry == null
+        ? manualContact(data.user.email)
+        : extractedContact('email');
+    final phone = rankingEntry == null
+        ? manualContact(data.user.phone)
+        : extractedContact('phone');
     return _PageFrame(
       jobId: jobId,
       candidateId: candidateId,
-      currentLabel: 'AI CV Parsing',
-      eyebrow: 'CV EXTRACTION',
-      title: 'AI CV Parsing Results',
+      currentLabel:
+          rankingEntry == null ? 'Candidate Profile' : 'AI CV Parsing',
+      eyebrow: rankingEntry == null ? 'CANDIDATE PROFILE' : 'CV EXTRACTION',
+      title: rankingEntry == null
+          ? 'Candidate Profile Details'
+          : 'AI CV Parsing Results',
       subtitle: rankingEntry == null
-          ? 'Extracted candidate information from the candidate profile'
+          ? 'Details entered manually by the candidate.'
           : 'Extracted from the exact CV used for this application’s AI review',
       candidateName: data.user.fullName,
       candidateImageUrl: data.user.profileImage?.url,
@@ -298,23 +308,6 @@ class _ParsingView extends ConsumerWidget {
           onPressed: () => context.push('/jobs/$jobId/candidates/$candidateId'),
           icon: const Icon(Icons.person_outline),
           label: const Text('View Candidate Profile'),
-        ),
-        FilledButton.icon(
-          onPressed: () async {
-            try {
-              await ref
-                  .read(candidateProfileViewRepositoryProvider)
-                  .requestCvParsing(candidateId, jobId);
-              ref.invalidate(candidateProfileViewProvider(args));
-            } catch (error) {
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Could not parse CV: $error')));
-              }
-            }
-          },
-          icon: const Icon(Icons.refresh),
-          label: const Text('Re-run parsing'),
         ),
       ],
       children: [
@@ -372,8 +365,8 @@ class _ParsingView extends ConsumerWidget {
           title: 'Contact information',
           child: Wrap(spacing: 32, runSpacing: 16, children: [
             _ValueBlock(label: 'FULL NAME', value: data.user.fullName),
-            _ValueBlock(label: 'EMAIL', value: extractedContact('email')),
-            _ValueBlock(label: 'PHONE', value: extractedContact('phone')),
+            _ValueBlock(label: 'EMAIL', value: email),
+            _ValueBlock(label: 'PHONE', value: phone),
             _ValueBlock(
                 label: 'LOCATION',
                 value: profile.location?.displayString.isNotEmpty == true
