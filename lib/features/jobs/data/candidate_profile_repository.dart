@@ -69,8 +69,4 @@ class CandidateProfileViewRepository {
     return CandidateJobAnalysis.fromJson(
         response.data['data'] as Map<String, dynamic>);
   }
-
-  Future<void> requestCvParsing(String candidateId, String jobId) async {
-    await _dio.post('/candidate-profile/$candidateId/jobs/$jobId/parse-cv');
-  }
 }
