@@ -275,6 +275,12 @@ class _ParsingView extends ConsumerWidget {
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
         .toList();
+    String extractedContact(String key) {
+      final value = parsed?[key];
+      if (value is! String || value.trim().isEmpty) return 'Not provided';
+      return value.trim();
+    }
+
     final args = (candidateId: candidateId, jobId: jobId);
     return _PageFrame(
       jobId: jobId,
@@ -366,9 +372,8 @@ class _ParsingView extends ConsumerWidget {
           title: 'Contact information',
           child: Wrap(spacing: 32, runSpacing: 16, children: [
             _ValueBlock(label: 'FULL NAME', value: data.user.fullName),
-            _ValueBlock(label: 'EMAIL', value: data.user.email),
-            _ValueBlock(
-                label: 'PHONE', value: data.user.phone ?? 'Not provided'),
+            _ValueBlock(label: 'EMAIL', value: extractedContact('email')),
+            _ValueBlock(label: 'PHONE', value: extractedContact('phone')),
             _ValueBlock(
                 label: 'LOCATION',
                 value: profile.location?.displayString.isNotEmpty == true
