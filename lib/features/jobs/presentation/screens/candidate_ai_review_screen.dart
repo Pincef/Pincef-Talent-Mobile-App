@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/brand_color.dart';
 import '../../application/candidate_profile_provider.dart';
+import '../../application/candidate_ranking_provider.dart';
 import '../../application/job_management_provider.dart';
 import '../../data/models/candidate_analysis_model.dart';
 import '../../data/models/candidate_profile_model.dart';
@@ -61,7 +62,7 @@ class CandidateAiReviewScreen extends ConsumerWidget {
   }
 }
 
-class _MatchView extends StatelessWidget {
+class _MatchView extends ConsumerWidget {
   const _MatchView({
     required this.data,
     required this.jobId,
@@ -74,11 +75,13 @@ class _MatchView extends StatelessWidget {
   final CandidateRankingEntry? rankingEntry;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final analysis = data.analysis;
     final profile = data.profile;
     final score = rankingEntry?.score ?? analysis?.score;
     final status = analysis?.status;
+    final job = ref.watch(jobDetailProvider(jobId)).valueOrNull;
+    final ranking = ref.watch(candidateRankingProvider(jobId)).valueOrNull;
     final applicationSkills =
         (rankingEntry?.parsedResume?['skills'] as List? ?? const [])
             .whereType<String>()
@@ -91,6 +94,77 @@ class _MatchView extends StatelessWidget {
         rankingEntry?.parsedResume?['experience'] as List?;
     final experienceCount =
         applicationExperience?.length ?? profile.experience.length;
+    final requiredSkills = job?.requiredSkills ?? const <String>[];
+    final matchedSkills = requiredSkills
+        .where((required) => _containsSkill(skills, required))
+        .toList();
+    final missingSkills = requiredSkills
+        .where((required) => !_containsSkill(skills, required))
+        .toList();
+    final candidateYears =
+        (rankingEntry?.parsedResume?['yearsOfExperience'] as num?)
+                ?.toDouble() ??
+            rankingEntry?.experienceYears?.toDouble();
+    final minimumYears = _firstNumber(job?.minYearsOfExperience);
+    final experienceMeetsRequirement = candidateYears != null &&
+        minimumYears != null &&
+        candidateYears >= minimumYears;
+    final requirements = <(String, String)>[
+      for (final skill in matchedSkills)
+        (skill, 'Evidence found in the CV attached to this application.'),
+      if (minimumYears != null && experienceMeetsRequirement)
+        (
+          '${minimumYears.round()}+ years relevant experience',
+          'The application CV indicates about ${candidateYears.round()} years of experience.'
+        ),
+      if (job?.educationLevelLabel != null &&
+          _educationMatches(
+            rankingEntry?.parsedResume?['education'],
+            job!.educationLevelLabel!,
+            job.fieldOfStudy,
+          ))
+        (
+          job.educationLevelLabel!,
+          'A matching qualification or field of study appears in the application CV.'
+        ),
+    ];
+    final gaps = <String>[
+      for (final skill in missingSkills)
+        'No evidence for $skill was found in the application CV.',
+      if (minimumYears != null &&
+          candidateYears != null &&
+          !experienceMeetsRequirement)
+        'The CV indicates about ${candidateYears.round()} years of experience; this role asks for ${minimumYears.round()}+.',
+      if (minimumYears != null && candidateYears == null)
+        'Experience duration could not be confirmed from this CV.',
+      if (job?.educationLevelLabel != null &&
+          !_educationMatches(
+            rankingEntry?.parsedResume?['education'],
+            job!.educationLevelLabel!,
+            job.fieldOfStudy,
+          ))
+        'The requested ${job.educationLevelLabel}${job.fieldOfStudy?.isNotEmpty == true ? ' in ${job.fieldOfStudy}' : ''} was not clearly found in the application CV.',
+    ];
+    final comparisonEntries =
+        ranking?.entries ?? const <CandidateRankingEntry>[];
+    final comparisonCandidate = _findComparisonCandidate(
+      comparisonEntries,
+      rankingEntry,
+      candidateId,
+    );
+    final comparisonScore = comparisonCandidate?.score ?? score;
+    final averageScore = ranking?.avgMatchScore;
+    final scoreDifference = comparisonScore != null && averageScore != null
+        ? (comparisonScore - averageScore).round()
+        : null;
+    final currentSkillOverlap = _skillOverlap(requiredSkills, skills);
+    final averageSkillOverlap = _averageSkillOverlap(
+      requiredSkills,
+      comparisonEntries,
+    );
+    final averageExperience = _averageExperience(comparisonEntries);
+    final candidateRank = comparisonCandidate?.rank;
+    final comparisonTotal = ranking?.totalRanked ?? comparisonEntries.length;
     return _PageFrame(
       jobId: jobId,
       candidateId: candidateId,
@@ -199,9 +273,22 @@ class _MatchView extends StatelessWidget {
               );
             }),
           ),
+          _MatchEvidenceGrid(
+            requirements: requirements,
+            gaps: gaps,
+            requiredSkillsAvailable: requiredSkills.isNotEmpty,
+            comparisonName: data.user.fullName,
+            scoreDifference: scoreDifference,
+            candidateRank: candidateRank,
+            totalCandidates: comparisonTotal,
+            candidateYears: candidateYears,
+            averageExperience: averageExperience,
+            skillOverlap: currentSkillOverlap,
+            averageSkillOverlap: averageSkillOverlap,
+          ),
           if (skills.isNotEmpty)
             _Panel(
-              title: 'Candidate skills from CV',
+              title: 'Skills found in application CV',
               child: Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -216,7 +303,7 @@ class _MatchView extends StatelessWidget {
             ),
           if (rankingEntry?.strengths.isNotEmpty == true)
             _Panel(
-              title: 'Match highlights',
+              title: 'AI match highlights',
               child: Column(
                 children: rankingEntry!.strengths
                     .map((highlight) => Padding(
@@ -236,9 +323,9 @@ class _MatchView extends StatelessWidget {
               ),
             ),
           _Panel(
-            title: 'Profile context',
+            title: 'Application CV context',
             child: Text(
-              '$experienceCount work history item(s) · ${profile.education.length} education item(s) · ${skills.length} listed skills',
+              '$experienceCount work history item(s) · ${rankingEntry?.parsedResume?['education'] is List ? (rankingEntry!.parsedResume!['education'] as List).length : profile.education.length} education item(s) · ${skills.length} listed skills',
               style: const TextStyle(color: BrandColors.muted, height: 1.5),
             ),
           ),
@@ -246,6 +333,384 @@ class _MatchView extends StatelessWidget {
       ],
     );
   }
+}
+
+bool _containsSkill(List<String> skills, String requiredSkill) {
+  String normalize(String value) =>
+      value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  final required = normalize(requiredSkill);
+  if (required.isEmpty) return false;
+  return skills.any((skill) {
+    final candidate = normalize(skill);
+    return candidate == required ||
+        (candidate.length >= 5 && required.contains(candidate)) ||
+        (required.length >= 5 && candidate.contains(required));
+  });
+}
+
+int? _firstNumber(String? value) {
+  final match = RegExp(r'\d+(?:\.\d+)?').firstMatch(value ?? '');
+  return match == null ? null : double.tryParse(match.group(0)!)?.round();
+}
+
+bool _educationMatches(dynamic rawEducation, String level, String? field) {
+  final education = (rawEducation as List? ?? const []).whereType<Map>();
+  final levelTerms = switch (level.toLowerCase()) {
+    'high school' => ['high school', 'secondary school', 'ged'],
+    'associate degree' => ['associate', 'a.a.', 'a.s.', 'a.a.s.'],
+    "bachelor's degree" => ['bachelor', 'b.a.', 'b.s.', 'b.sc', 'b.eng'],
+    "master's degree" => ['master', 'm.a.', 'm.s.', 'm.sc', 'mba', 'm.eng'],
+    'doctorate' => ['doctor', 'ph.d', 'phd', 'd.phil'],
+    _ => [level.toLowerCase()],
+  };
+  final normalizedField = field?.trim().toLowerCase();
+  return education.any((item) {
+    final text = [item['degree'], item['fieldOfStudy']]
+        .whereType<String>()
+        .join(' ')
+        .toLowerCase();
+    final levelFound = levelTerms.any(text.contains);
+    final fieldFound = normalizedField == null ||
+        normalizedField.isEmpty ||
+        text.contains(normalizedField);
+    return levelFound && fieldFound;
+  });
+}
+
+CandidateRankingEntry? _findComparisonCandidate(
+  List<CandidateRankingEntry> entries,
+  CandidateRankingEntry? source,
+  String candidateId,
+) {
+  for (final entry in entries) {
+    if (source != null && entry.applicationId == source.applicationId) {
+      return entry;
+    }
+  }
+  for (final entry in entries) {
+    if (entry.candidateId == candidateId) return entry;
+  }
+  return source;
+}
+
+int? _skillOverlap(List<String> requirements, List<String> skills) {
+  if (requirements.isEmpty || skills.isEmpty) return null;
+  final matched =
+      requirements.where((item) => _containsSkill(skills, item)).length;
+  return (matched / requirements.length * 100).round();
+}
+
+int? _averageSkillOverlap(
+  List<String> requirements,
+  List<CandidateRankingEntry> entries,
+) {
+  final values = entries
+      .map((entry) => (entry.parsedResume?['skills'] as List? ?? const [])
+          .whereType<String>()
+          .toList())
+      .map((skills) => _skillOverlap(requirements, skills))
+      .whereType<int>()
+      .toList();
+  if (values.isEmpty) return null;
+  return (values.reduce((a, b) => a + b) / values.length).round();
+}
+
+double? _experienceYears(CandidateRankingEntry entry) =>
+    (entry.parsedResume?['yearsOfExperience'] as num?)?.toDouble() ??
+    entry.experienceYears?.toDouble();
+
+double? _averageExperience(List<CandidateRankingEntry> entries) {
+  final values = entries.map(_experienceYears).whereType<double>().toList();
+  if (values.isEmpty) return null;
+  return values.reduce((a, b) => a + b) / values.length;
+}
+
+class _MatchEvidenceGrid extends StatelessWidget {
+  const _MatchEvidenceGrid({
+    required this.requirements,
+    required this.gaps,
+    required this.requiredSkillsAvailable,
+    required this.comparisonName,
+    required this.scoreDifference,
+    required this.candidateRank,
+    required this.totalCandidates,
+    required this.candidateYears,
+    required this.averageExperience,
+    required this.skillOverlap,
+    required this.averageSkillOverlap,
+  });
+
+  final List<(String, String)> requirements;
+  final List<String> gaps;
+  final bool requiredSkillsAvailable;
+  final String comparisonName;
+  final int? scoreDifference;
+  final int? candidateRank;
+  final int totalCandidates;
+  final double? candidateYears;
+  final double? averageExperience;
+  final int? skillOverlap;
+  final int? averageSkillOverlap;
+
+  @override
+  Widget build(BuildContext context) {
+    final matchedCard = _Panel(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.check_circle_outline,
+              color: Color(0xFF16A34A), size: 20),
+          const SizedBox(width: 9),
+          const Expanded(
+              child: Text('Matched Requirements',
+                  style: TextStyle(
+                      color: BrandColors.navy,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800))),
+          _CountPill(
+              label: '${requirements.length} criteria met', positive: true),
+        ]),
+        const SizedBox(height: 14),
+        if (requirements.isEmpty)
+          Text(
+            requiredSkillsAvailable
+                ? 'No matching requirements could be confirmed from the application CV.'
+                : 'This job has no structured requirements available for comparison.',
+            style: const TextStyle(color: BrandColors.muted, height: 1.5),
+          )
+        else
+          for (final item in requirements)
+            _CriterionTile(label: item.$1, evidence: item.$2, positive: true),
+      ]),
+    );
+
+    final considerationCard = _Panel(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.warning_amber_rounded,
+              color: BrandColors.orange, size: 21),
+          const SizedBox(width: 9),
+          const Expanded(
+              child: Text('Gaps & Considerations',
+                  style: TextStyle(
+                      color: BrandColors.navy,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800))),
+          _CountPill(label: '${gaps.length} to review', positive: false),
+        ]),
+        const SizedBox(height: 14),
+        if (gaps.isEmpty)
+          const Text('No gaps were identified from the available CV evidence.',
+              style: TextStyle(color: BrandColors.muted, height: 1.5))
+        else
+          for (final gap in gaps) _CriterionTile(label: gap, positive: false),
+        const SizedBox(height: 14),
+        _CandidateComparisonCard(
+          name: comparisonName,
+          scoreDifference: scoreDifference,
+          rank: candidateRank,
+          total: totalCandidates,
+          years: candidateYears,
+          averageYears: averageExperience,
+          skillOverlap: skillOverlap,
+          averageSkillOverlap: averageSkillOverlap,
+        ),
+      ]),
+    );
+
+    return LayoutBuilder(builder: (context, constraints) {
+      if (constraints.maxWidth < 650) {
+        return Column(children: [
+          matchedCard,
+          const SizedBox(height: 16),
+          considerationCard
+        ]);
+      }
+      return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(flex: 11, child: matchedCard),
+        const SizedBox(width: 16),
+        Expanded(flex: 10, child: considerationCard),
+      ]);
+    });
+  }
+}
+
+class _CountPill extends StatelessWidget {
+  const _CountPill({required this.label, required this.positive});
+  final String label;
+  final bool positive;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = positive ? const Color(0xFF079669) : const Color(0xFFB66A00);
+    final background =
+        positive ? const Color(0xFFE7FBF3) : const Color(0xFFFFF5DB);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+          color: background, borderRadius: BorderRadius.circular(20)),
+      child: Text(label,
+          style: TextStyle(
+              fontSize: 11, fontWeight: FontWeight.w700, color: color)),
+    );
+  }
+}
+
+class _CriterionTile extends StatelessWidget {
+  const _CriterionTile({
+    required this.label,
+    this.evidence,
+    required this.positive,
+  });
+  final String label;
+  final String? evidence;
+  final bool positive;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = positive ? const Color(0xFF0B9C6B) : BrandColors.orange;
+    final background =
+        positive ? const Color(0xFFF7FAFC) : const Color(0xFFFFFAF5);
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 9),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: const Color(0xFFE8EEF4)),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(positive ? Icons.check_circle_outline : Icons.error_outline,
+            color: color, size: 17),
+        const SizedBox(width: 9),
+        Expanded(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label,
+                style: const TextStyle(
+                    color: BrandColors.navy,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    height: 1.35)),
+            if (evidence?.isNotEmpty == true) ...[
+              const SizedBox(height: 4),
+              Text(evidence!,
+                  style: const TextStyle(
+                      color: BrandColors.muted, fontSize: 12, height: 1.4)),
+            ],
+          ]),
+        ),
+      ]),
+    );
+  }
+}
+
+class _CandidateComparisonCard extends StatelessWidget {
+  const _CandidateComparisonCard({
+    required this.name,
+    required this.scoreDifference,
+    required this.rank,
+    required this.total,
+    required this.years,
+    required this.averageYears,
+    required this.skillOverlap,
+    required this.averageSkillOverlap,
+  });
+
+  final String name;
+  final int? scoreDifference;
+  final int? rank;
+  final int total;
+  final double? years;
+  final double? averageYears;
+  final int? skillOverlap;
+  final int? averageSkillOverlap;
+
+  @override
+  Widget build(BuildContext context) {
+    final topPercent = rank != null && total > 0
+        ? ((rank! / total) * 100).ceil().clamp(1, 100)
+        : null;
+    final scoreText = scoreDifference == null
+        ? 'Comparison score is not available yet.'
+        : scoreDifference! > 0
+            ? '$name scores ${scoreDifference!.abs()} percentage points above the applicant average.'
+            : scoreDifference! < 0
+                ? '$name scores ${scoreDifference!.abs()} percentage points below the applicant average.'
+                : '$name is currently at the applicant average.';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4F9FF),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: const Color(0xFFD7E8FF)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.groups_outlined, color: Color(0xFF3978FF), size: 17),
+          const SizedBox(width: 7),
+          const Expanded(
+              child: Text('CANDIDATE COMPARISON',
+                  style: TextStyle(
+                      color: Color(0xFF3978FF),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: .5))),
+          if (topPercent != null)
+            Text('TOP $topPercent%',
+                style: const TextStyle(
+                    color: Color(0xFF3978FF),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800)),
+        ]),
+        const SizedBox(height: 9),
+        Text(scoreText,
+            style: const TextStyle(
+                color: BrandColors.navy, fontSize: 12, height: 1.4)),
+        const SizedBox(height: 10),
+        Wrap(spacing: 7, runSpacing: 7, children: [
+          if (years != null)
+            _ComparisonMetric(
+                label: 'Experience',
+                value: '${years!.toStringAsFixed(years! % 1 == 0 ? 0 : 1)} yrs',
+                average: averageYears == null
+                    ? null
+                    : '${averageYears!.toStringAsFixed(averageYears! % 1 == 0 ? 0 : 1)} yr avg'),
+          if (skillOverlap != null)
+            _ComparisonMetric(
+                label: 'Skills overlap',
+                value: '$skillOverlap%',
+                average: averageSkillOverlap == null
+                    ? null
+                    : '$averageSkillOverlap% avg'),
+        ]),
+      ]),
+    );
+  }
+}
+
+class _ComparisonMetric extends StatelessWidget {
+  const _ComparisonMetric({
+    required this.label,
+    required this.value,
+    this.average,
+  });
+  final String label;
+  final String value;
+  final String? average;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(color: const Color(0xFFD7E8FF)),
+        ),
+        child: Text('$label: $value${average == null ? '' : ' (vs $average)'}',
+            style: const TextStyle(color: BrandColors.muted, fontSize: 10)),
+      );
 }
 
 class _ParsingView extends StatelessWidget {
