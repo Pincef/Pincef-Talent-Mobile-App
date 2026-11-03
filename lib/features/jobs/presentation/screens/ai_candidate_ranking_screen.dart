@@ -1538,7 +1538,7 @@ class _RowActions extends StatelessWidget {
         style: OutlinedButton.styleFrom(
           foregroundColor: BrandColors.orange,
           side: const BorderSide(color: BrandColors.orange),
-          padding: const EdgeInsets.symmetric(horizontal: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         ),
         child: const Text('Summary',
@@ -1592,10 +1592,10 @@ class _RowActions extends StatelessWidget {
     }
     return Row(mainAxisSize: MainAxisSize.min, children: [
       reviewButton,
-      const SizedBox(width: 4),
+      const SizedBox(width: 3),
       if (onShortlist != null) ...[
         shortlistButton,
-        const SizedBox(width: 4),
+        const SizedBox(width: 3),
       ],
       messageButton,
     ]);
