@@ -203,8 +203,8 @@ class _CandidateAssessmentSessionScreenState
           barrierDismissible: false,
           builder: (context) => AlertDialog(
                 title: Text(timedOut ? 'Time is up' : 'Assessment submitted'),
-                content: Text(
-                    'Your response has been recorded. Your score is ${result['overallScore'] ?? 0}%. You can safely leave this screen.'),
+                content: const Text(
+                    'Your assessment has been submitted successfully. You can safely leave this screen.'),
                 actions: [
                   FilledButton(
                       onPressed: () {
@@ -251,9 +251,7 @@ class _CandidateAssessmentSessionScreenState
       ]));
     if (_session?['external'] == true) return _externalView();
     if (_finished)
-      return Center(
-          child: Text(
-              'Assessment submitted. Score: ${_session?['overallScore'] ?? 0}%'));
+      return const Center(child: Text('Assessment submitted successfully.'));
     if (_questions.isEmpty)
       return const Center(
           child:
