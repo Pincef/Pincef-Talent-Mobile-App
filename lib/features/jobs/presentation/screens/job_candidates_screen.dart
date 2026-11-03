@@ -78,20 +78,33 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
     ApplicationBackendStatus status,
   ) async {
     final isReject = status == ApplicationBackendStatus.rejected;
-    if (isReject) {
+    final isOffer = status == ApplicationBackendStatus.offered;
+    final isHire = status == ApplicationBackendStatus.hired;
+    if (isReject || isOffer || isHire) {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Reject candidate?'),
-          content: Text(
-              'This will mark ${applicant.candidate.fullName} as not selected and send them an application update email.'),
+          title: Text(isReject
+              ? 'Reject candidate?'
+              : isOffer
+                  ? 'Record an offer?'
+                  : 'Mark candidate as hired?'),
+          content: Text(isReject
+              ? 'This will mark ${applicant.candidate.fullName} as not selected and send them an application update email.'
+              : isOffer
+                  ? 'This will mark ${applicant.candidate.fullName} as offered and send them an application update email.'
+                  : 'This will mark ${applicant.candidate.fullName} as hired and send them an application update email.'),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(context, false),
                 child: const Text('Cancel')),
             FilledButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Reject candidate')),
+                child: Text(isReject
+                    ? 'Reject candidate'
+                    : isOffer
+                        ? 'Record offer'
+                        : 'Mark as hired')),
           ],
         ),
       );
@@ -112,7 +125,11 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
             context,
             isReject
                 ? 'Candidate rejected and notified.'
-                : 'Candidate shortlisted.');
+                : isOffer
+                    ? 'Offer recorded and candidate notified.'
+                    : isHire
+                        ? 'Candidate marked as hired.'
+                        : 'Candidate shortlisted.');
       }
     } catch (e) {
       if (mounted) AppToast.error(context, "Couldn't update candidate: $e");
@@ -1015,6 +1032,16 @@ class _CandidateCard extends StatelessWidget {
                     const PopupMenuItem(
                       value: ApplicationBackendStatus.rejected,
                       child: Text('Reject and email candidate'),
+                    ),
+                  if (applicant.status != ApplicationBackendStatus.offered)
+                    const PopupMenuItem(
+                      value: ApplicationBackendStatus.offered,
+                      child: Text('Make offer'),
+                    ),
+                  if (applicant.status != ApplicationBackendStatus.hired)
+                    const PopupMenuItem(
+                      value: ApplicationBackendStatus.hired,
+                      child: Text('Mark as hired'),
                     ),
                 ],
               ),
