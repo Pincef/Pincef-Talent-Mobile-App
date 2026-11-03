@@ -125,22 +125,6 @@ class CandidateProfilePreviewScreen extends ConsumerWidget {
                       : () => AppToast.info(context,
                           'Candidate messaging is available on Pro and Business plans.'),
                 ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      try {
-                        await ref.read(candidateProfileViewRepositoryProvider).requestCvParsing(candidateId, jobId);
-                        ref.invalidate(candidateProfileViewProvider(args));
-                        if (context.mounted) AppToast.success(context, 'CV parsing queued');
-                      } catch (e) {
-                        if (context.mounted) AppToast.error(context, 'Could not parse CV: $e');
-                      }
-                    },
-                    icon: const Icon(Icons.auto_awesome_outlined, size: 17),
-                    label: const Text('Parse CV'),
-                  ),
-                ),
                 const SizedBox(height: 18),
                 if (wide)
                   Row(
