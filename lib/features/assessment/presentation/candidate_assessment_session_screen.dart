@@ -360,6 +360,8 @@ class _CandidateAssessmentSessionScreenState
                                               ),
                                           ] else
                                             TextFormField(
+                                                key: ValueKey(
+                                                    'answer-$questionId'),
                                                 initialValue:
                                                     _answers[questionId],
                                                 minLines: 7,
