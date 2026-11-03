@@ -364,174 +364,191 @@ class _CandidateResultState extends ConsumerState<_CandidateResult> {
         (status == 'submitted' || status == 'graded') && questions.isNotEmpty;
     final submitted = candidate['submittedAt'] != null ||
         candidate['status']?.toString().toLowerCase() == 'completed';
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: ExpansionTile(
-        tilePadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
-        leading: CircleAvatar(
-          radius: 23,
-          backgroundColor: const Color(0xFFFFF0E8),
-          child: Text((first.isEmpty ? '?' : first[0]).toUpperCase(),
-              style: const TextStyle(
-                  color: BrandColors.orange, fontWeight: FontWeight.w800)),
-        ),
-        title: Text(name.isEmpty ? 'Candidate' : name,
-            style: const TextStyle(fontWeight: FontWeight.w700)),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                _ResultTag(
-                  label: status == 'submitted'
-                      ? 'Needs review'
-                      : (candidate['status'] ?? 'Invited').toString(),
-                  color: status == 'submitted'
-                      ? const Color(0xFF8A5700)
-                      : submitted
-                          ? const Color(0xFF16794B)
-                          : BrandColors.muted,
-                  background: status == 'submitted'
-                      ? const Color(0xFFFFF5D9)
-                      : submitted
-                          ? const Color(0xFFE9F7EF)
-                          : const Color(0xFFF1F3F6),
-                ),
-                Text(
-                    '${candidate['violationCount'] ?? 0} focus warnings${candidate['timedOut'] == true ? ' · Timed out' : ''}',
-                    style: const TextStyle(
-                        fontSize: 12, color: BrandColors.muted)),
-              ]),
-        ),
-        trailing: score == null
-            ? const Text('—', style: TextStyle(color: BrandColors.muted))
-            : Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                decoration: BoxDecoration(
-                    color: const Color(0xFFFFF0E8),
-                    borderRadius: BorderRadius.circular(20)),
-                child: Text('$score%',
-                    style: const TextStyle(
-                        color: BrandColors.orange,
-                        fontWeight: FontWeight.w800))),
-        childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-                color: const Color(0xFFF7F8FA),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFE8EBF0))),
-            child: Wrap(spacing: 24, runSpacing: 14, children: [
-              if (person['email'] != null)
-                _CandidateMeta(
-                    icon: Icons.email_outlined,
-                    label: 'Email',
-                    value: '${person['email']}'),
-              if (candidate['startedAt'] != null)
-                _CandidateMeta(
-                    icon: Icons.play_circle_outline,
-                    label: 'Started',
-                    value: _formatResultDate(candidate['startedAt'])),
-              if (candidate['submittedAt'] != null)
-                _CandidateMeta(
-                    icon: Icons.task_alt,
-                    label: 'Submitted',
-                    value: _formatResultDate(candidate['submittedAt'])),
-              if (candidate['timeSpentSeconds'] != null)
-                _CandidateMeta(
-                    icon: Icons.timer_outlined,
-                    label: 'Time spent',
-                    value: '${candidate['timeSpentSeconds']} sec'),
-            ]),
+    return LayoutBuilder(builder: (context, constraints) {
+      final compact = constraints.maxWidth < 520;
+      final scoreBadge = score == null
+          ? const Text('—', style: TextStyle(color: BrandColors.muted))
+          : Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                  color: const Color(0xFFFFF0E8),
+                  borderRadius: BorderRadius.circular(20)),
+              child: Text('$score%',
+                  style: const TextStyle(
+                      color: BrandColors.orange, fontWeight: FontWeight.w800)));
+      return Card(
+        clipBehavior: Clip.antiAlias,
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+          leading: CircleAvatar(
+            radius: 23,
+            backgroundColor: const Color(0xFFFFF0E8),
+            child: Text((first.isEmpty ? '?' : first[0]).toUpperCase(),
+                style: const TextStyle(
+                    color: BrandColors.orange, fontWeight: FontWeight.w800)),
           ),
-          const SizedBox(height: 18),
-          Row(children: [
-            const Icon(Icons.fact_check_outlined,
-                size: 19, color: BrandColors.orange),
-            const SizedBox(width: 8),
-            const Text('Response review',
-                style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: BrandColors.navy)),
-            const Spacer(),
-            if (canReview)
-              TextButton.icon(
-                onPressed:
-                    _saving ? null : () => setState(() => _editing = !_editing),
-                icon: Icon(_editing ? Icons.close : Icons.rate_review_outlined,
-                    size: 16),
-                label: Text(_editing
-                    ? 'Cancel review'
-                    : candidate['gradingSource'] == 'manual'
-                        ? 'Override scores'
-                        : status == 'graded'
-                            ? 'Override assessment'
-                            : 'Review and score'),
-              ),
-            if (candidate['gradingSource'] == 'manual')
-              const _ResultTag(
-                label: 'Manually reviewed',
-                color: Color(0xFF16794B),
-                background: Color(0xFFE9F7EF),
-              ),
-            if (canReview) const SizedBox(width: 10),
-            Text('${answers.length} responses',
-                style: const TextStyle(color: BrandColors.muted, fontSize: 12)),
-          ]),
-          const SizedBox(height: 4),
-          if (questions.isEmpty)
-            const Align(
-                alignment: Alignment.centerLeft,
-                child: Padding(
-                  padding: EdgeInsets.only(top: 12),
-                  child: Text(
-                      'Question details are not available for this assessment.'),
-                ))
-          else
-            _PagedQuestionResults(
-              questions: questions,
-              answers: answers,
-              manualReview: _editing,
-              draftScores: _draftScores,
-              draftCorrect: _draftCorrect,
-              onPointsChanged: _setPoints,
-              onCorrectChanged: _setCorrect,
+          title: Text(name.isEmpty ? 'Candidate' : name,
+              style: const TextStyle(fontWeight: FontWeight.w700)),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  _ResultTag(
+                    label: status == 'submitted'
+                        ? 'Needs review'
+                        : (candidate['status'] ?? 'Invited').toString(),
+                    color: status == 'submitted'
+                        ? const Color(0xFF8A5700)
+                        : submitted
+                            ? const Color(0xFF16794B)
+                            : BrandColors.muted,
+                    background: status == 'submitted'
+                        ? const Color(0xFFFFF5D9)
+                        : submitted
+                            ? const Color(0xFFE9F7EF)
+                            : const Color(0xFFF1F3F6),
+                  ),
+                  Text(
+                      '${candidate['violationCount'] ?? 0} focus warnings${candidate['timedOut'] == true ? ' · Timed out' : ''}',
+                      style: const TextStyle(
+                          fontSize: 12, color: BrandColors.muted)),
+                  if (compact) scoreBadge,
+                ]),
+          ),
+          trailing: compact ? null : scoreBadge,
+          childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                  color: const Color(0xFFF7F8FA),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE8EBF0))),
+              child: Wrap(spacing: 24, runSpacing: 14, children: [
+                if (person['email'] != null)
+                  _CandidateMeta(
+                      icon: Icons.email_outlined,
+                      label: 'Email',
+                      value: '${person['email']}'),
+                if (candidate['startedAt'] != null)
+                  _CandidateMeta(
+                      icon: Icons.play_circle_outline,
+                      label: 'Started',
+                      value: _formatResultDate(candidate['startedAt'])),
+                if (candidate['submittedAt'] != null)
+                  _CandidateMeta(
+                      icon: Icons.task_alt,
+                      label: 'Submitted',
+                      value: _formatResultDate(candidate['submittedAt'])),
+                if (candidate['timeSpentSeconds'] != null)
+                  _CandidateMeta(
+                      icon: Icons.timer_outlined,
+                      label: 'Time spent',
+                      value: '${candidate['timeSpentSeconds']} sec'),
+              ]),
             ),
-          if (_editing) ...[
-            const SizedBox(height: 14),
-            TextField(
-              controller: _feedbackController,
-              maxLines: 3,
-              maxLength: 2000,
-              decoration: const InputDecoration(
-                labelText: 'Recruiter review notes (optional)',
-                border: OutlineInputBorder(),
+            const SizedBox(height: 18),
+            LayoutBuilder(builder: (context, constraints) {
+              final compact = constraints.maxWidth < 620;
+              final actionLabel = _editing
+                  ? (compact ? 'Cancel' : 'Cancel review')
+                  : candidate['gradingSource'] == 'manual'
+                      ? (compact ? 'Override' : 'Override scores')
+                      : status == 'graded'
+                          ? (compact ? 'Override' : 'Override assessment')
+                          : (compact ? 'Review' : 'Review and score');
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                alignment: WrapAlignment.start,
+                children: [
+                  const Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.fact_check_outlined,
+                        size: 19, color: BrandColors.orange),
+                    SizedBox(width: 8),
+                    Text('Response review',
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: BrandColors.navy)),
+                  ]),
+                  if (canReview)
+                    TextButton.icon(
+                      onPressed: _saving
+                          ? null
+                          : () => setState(() => _editing = !_editing),
+                      icon: Icon(
+                          _editing ? Icons.close : Icons.rate_review_outlined,
+                          size: 16),
+                      label: Text(actionLabel),
+                    ),
+                  if (candidate['gradingSource'] == 'manual')
+                    const _ResultTag(
+                      label: 'Manually reviewed',
+                      color: Color(0xFF16794B),
+                      background: Color(0xFFE9F7EF),
+                    ),
+                  Text('${answers.length} responses',
+                      style: const TextStyle(
+                          color: BrandColors.muted, fontSize: 12)),
+                ],
+              );
+            }),
+            const SizedBox(height: 4),
+            if (questions.isEmpty)
+              const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: EdgeInsets.only(top: 12),
+                    child: Text(
+                        'Question details are not available for this assessment.'),
+                  ))
+            else
+              _PagedQuestionResults(
+                questions: questions,
+                answers: answers,
+                manualReview: _editing,
+                draftScores: _draftScores,
+                draftCorrect: _draftCorrect,
+                onPointsChanged: _setPoints,
+                onCorrectChanged: _setCorrect,
               ),
-            ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton.icon(
-                onPressed: _saving ? null : _saveManualReview,
-                icon: _saving
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.save_outlined),
-                label: Text(_saving ? 'Saving review…' : 'Save manual review'),
+            if (_editing) ...[
+              const SizedBox(height: 14),
+              TextField(
+                controller: _feedbackController,
+                maxLines: 3,
+                maxLength: 2000,
+                decoration: const InputDecoration(
+                  labelText: 'Recruiter review notes (optional)',
+                  border: OutlineInputBorder(),
+                ),
               ),
-            ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton.icon(
+                  onPressed: _saving ? null : _saveManualReview,
+                  icon: _saving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.save_outlined),
+                  label:
+                      Text(_saving ? 'Saving review…' : 'Save manual review'),
+                ),
+              ),
+            ],
           ],
-        ],
-      ),
-    );
+        ),
+      );
+    });
   }
 }
 
@@ -643,19 +660,30 @@ class _QuestionResult extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final id = (question['_id'] ?? question['id'] ?? question['questionId'])
-        ?.toString();
+    final questionIds = <String>{
+      for (final value in [
+        question['questionId'],
+        question['id'],
+        question['_id'],
+      ])
+        if (value != null) value.toString(),
+    };
     final response = answers.cast<Map<String, dynamic>?>().firstWhere(
           (a) =>
               a != null &&
-              ((id != null &&
-                      (a['questionId'] ??
-                                  a['question']?['_id'] ??
-                                  a['question']?['id'])
-                              ?.toString() ==
-                          id) ||
+              ((questionIds.contains(a['questionId']?.toString()) ||
+                      (a['question'] is Map &&
+                          questionIds.contains(
+                              (a['question'] as Map)['questionId']
+                                  ?.toString())) ||
+                      (a['question'] is Map &&
+                          questionIds.contains(
+                              (a['question'] as Map)['_id']?.toString())) ||
+                      (a['question'] is Map &&
+                          questionIds.contains(
+                              (a['question'] as Map)['id']?.toString()))) ||
                   (a['questionText']?.toString() ==
-                      question['question']?.toString())),
+                      (question['question'] ?? question['text'])?.toString())),
           orElse: () => null,
         );
     final questionText = question['question']?.toString() ??
