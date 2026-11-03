@@ -18,6 +18,17 @@ class AssessmentRepository {
   Future<Map<String, dynamic>> getAssessment(String id) async =>
       _map(_data(await _dio.get('/competency-tests/$id')));
 
+  Future<Map<String, dynamic>> reviewAssessment(
+    String testId,
+    String assessmentId, {
+    required List<Map<String, dynamic>> answers,
+    String? feedback,
+  }) async =>
+      _map(_data(await _dio.patch(
+        '/competency-tests/$testId/assessments/$assessmentId/review',
+        data: {'answers': answers, if (feedback != null) 'feedback': feedback},
+      )));
+
   Future<Map<String, dynamic>> createManual(
           Map<String, dynamic> payload) async =>
       _map(_data(await _dio.post('/competency-tests/manual', data: payload)));
