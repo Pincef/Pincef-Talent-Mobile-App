@@ -852,13 +852,16 @@ class _StatsRow extends StatelessWidget {
           Padding(padding: const EdgeInsets.only(bottom: 12), child: c),
       ]);
     }
-    return Row(
-      children: [
-        for (var i = 0; i < cards.length; i++) ...[
-          if (i > 0) const SizedBox(width: 14),
-          Expanded(child: cards[i]),
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < cards.length; i++) ...[
+            if (i > 0) const SizedBox(width: 14),
+            Expanded(child: cards[i]),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
@@ -880,6 +883,7 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
+        constraints: const BoxConstraints(minHeight: 112),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
