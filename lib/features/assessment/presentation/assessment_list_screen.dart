@@ -156,7 +156,9 @@ class AssessmentDetailsScreen extends ConsumerWidget {
                   value: '${analytics['completionRate'] ?? 0}%'),
               _MetricTile(
                   label: 'Average score',
-                  value: '${analytics['averageScore'] ?? 0}%'),
+                  value: analytics['averageScore'] == null
+                      ? '—'
+                      : '${analytics['averageScore']}%'),
             ]),
             const SizedBox(height: 22),
             const Text('Candidate results',
@@ -166,7 +168,7 @@ class AssessmentDetailsScreen extends ConsumerWidget {
               const Text('No candidates have been invited yet.'),
             if (candidates.isNotEmpty)
               _PagedAssessmentResults(
-                  candidates: candidates, questions: questions),
+                  testId: testId, candidates: candidates, questions: questions),
           ]),
         );
       },
@@ -175,8 +177,12 @@ class AssessmentDetailsScreen extends ConsumerWidget {
 }
 
 class _PagedAssessmentResults extends StatefulWidget {
-  const _PagedAssessmentResults(
-      {required this.candidates, required this.questions});
+  const _PagedAssessmentResults({
+    required this.testId,
+    required this.candidates,
+    required this.questions,
+  });
+  final String testId;
   final List<Map<String, dynamic>> candidates;
   final List<Map<String, dynamic>> questions;
 
@@ -196,7 +202,12 @@ class _PagedAssessmentResultsState extends State<_PagedAssessmentResults> {
     final visible = widget.candidates.skip(page * _pageSize).take(_pageSize);
     return Column(children: [
       for (final candidate in visible)
-        _CandidateResult(candidate: candidate, questions: widget.questions),
+        _CandidateResult(
+          key: ValueKey(candidate['id'] ?? candidate['_id']),
+          testId: widget.testId,
+          candidate: candidate,
+          questions: widget.questions,
+        ),
       if (pageCount > 1)
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -219,13 +230,121 @@ class _PagedAssessmentResultsState extends State<_PagedAssessmentResults> {
   }
 }
 
-class _CandidateResult extends StatelessWidget {
-  const _CandidateResult({required this.candidate, required this.questions});
+class _CandidateResult extends ConsumerStatefulWidget {
+  const _CandidateResult({
+    super.key,
+    required this.testId,
+    required this.candidate,
+    required this.questions,
+  });
+  final String testId;
   final Map<String, dynamic> candidate;
   final List<Map<String, dynamic>> questions;
 
   @override
+  ConsumerState<_CandidateResult> createState() => _CandidateResultState();
+}
+
+class _CandidateResultState extends ConsumerState<_CandidateResult> {
+  late Map<String, dynamic> _candidate;
+  final Map<String, double> _draftScores = {};
+  final Map<String, bool> _draftCorrect = {};
+  final TextEditingController _feedbackController = TextEditingController();
+  bool _editing = false;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _candidate = Map<String, dynamic>.from(widget.candidate);
+    _loadDraftScores();
+  }
+
+  @override
+  void dispose() {
+    _feedbackController.dispose();
+    super.dispose();
+  }
+
+  List<Map<String, dynamic>> get _answers {
+    final raw = _candidate['answers'] ?? _candidate['responses'];
+    return raw is List
+        ? raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+        : <Map<String, dynamic>>[];
+  }
+
+  String? _questionId(Map<String, dynamic> question) =>
+      (question['questionId'] ?? question['_id'] ?? question['id'])?.toString();
+
+  void _loadDraftScores() {
+    for (final question in widget.questions) {
+      final id = _questionId(question);
+      if (id == null) continue;
+      final response = _answers.cast<Map<String, dynamic>?>().firstWhere(
+            (answer) => answer?['questionId']?.toString() == id,
+            orElse: () => null,
+          );
+      final points = response?['pointsAwarded'];
+      _draftScores[id] = points is num ? points.toDouble() : 0;
+      _draftCorrect[id] = response?['isCorrect'] == true;
+    }
+  }
+
+  void _setPoints(String questionId, double points) {
+    setState(() => _draftScores[questionId] = points);
+  }
+
+  void _setCorrect(String questionId, bool correct, double maxPoints) {
+    setState(() {
+      _draftCorrect[questionId] = correct;
+      _draftScores[questionId] = correct ? maxPoints : 0;
+    });
+  }
+
+  Future<void> _saveManualReview() async {
+    final assessmentId = (_candidate['id'] ?? _candidate['_id']).toString();
+    if (assessmentId.isEmpty || assessmentId == 'null') return;
+    setState(() => _saving = true);
+    try {
+      final result =
+          await ref.read(assessmentRepositoryProvider).reviewAssessment(
+                widget.testId,
+                assessmentId,
+                answers: [
+                  for (final question in widget.questions)
+                    if (_questionId(question) case final id?)
+                      {
+                        'questionId': id,
+                        'pointsAwarded': _draftScores[id] ?? 0,
+                      },
+                ],
+                feedback: _feedbackController.text.trim(),
+              );
+      if (!mounted) return;
+      setState(() {
+        _candidate = {..._candidate, ...result};
+        _editing = false;
+        _loadDraftScores();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Manual scores saved and assessment updated.')),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not save review: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final candidate = _candidate;
+    final questions = widget.questions;
     final person = candidate['candidate'] is Map
         ? Map<String, dynamic>.from(candidate['candidate'] as Map)
         : const <String, dynamic>{};
@@ -240,6 +359,9 @@ class _CandidateResult extends StatelessWidget {
     final last = person['lastName']?.toString() ?? '';
     final name = '$first $last'.trim();
     final score = candidate['overallScore'];
+    final status = candidate['status']?.toString().toLowerCase();
+    final canReview =
+        (status == 'submitted' || status == 'graded') && questions.isNotEmpty;
     final submitted = candidate['submittedAt'] != null ||
         candidate['status']?.toString().toLowerCase() == 'completed';
     return Card(
@@ -263,12 +385,19 @@ class _CandidateResult extends StatelessWidget {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 _ResultTag(
-                  label: (candidate['status'] ?? 'Invited').toString(),
-                  color:
-                      submitted ? const Color(0xFF16794B) : BrandColors.muted,
-                  background: submitted
-                      ? const Color(0xFFE9F7EF)
-                      : const Color(0xFFF1F3F6),
+                  label: status == 'submitted'
+                      ? 'Needs review'
+                      : (candidate['status'] ?? 'Invited').toString(),
+                  color: status == 'submitted'
+                      ? const Color(0xFF8A5700)
+                      : submitted
+                          ? const Color(0xFF16794B)
+                          : BrandColors.muted,
+                  background: status == 'submitted'
+                      ? const Color(0xFFFFF5D9)
+                      : submitted
+                          ? const Color(0xFFE9F7EF)
+                          : const Color(0xFFF1F3F6),
                 ),
                 Text(
                     '${candidate['violationCount'] ?? 0} focus warnings${candidate['timedOut'] == true ? ' · Timed out' : ''}',
@@ -331,6 +460,27 @@ class _CandidateResult extends StatelessWidget {
                     fontWeight: FontWeight.w800,
                     color: BrandColors.navy)),
             const Spacer(),
+            if (canReview)
+              TextButton.icon(
+                onPressed:
+                    _saving ? null : () => setState(() => _editing = !_editing),
+                icon: Icon(_editing ? Icons.close : Icons.rate_review_outlined,
+                    size: 16),
+                label: Text(_editing
+                    ? 'Cancel review'
+                    : candidate['gradingSource'] == 'manual'
+                        ? 'Override scores'
+                        : status == 'graded'
+                            ? 'Override assessment'
+                            : 'Review and score'),
+              ),
+            if (candidate['gradingSource'] == 'manual')
+              const _ResultTag(
+                label: 'Manually reviewed',
+                color: Color(0xFF16794B),
+                background: Color(0xFFE9F7EF),
+              ),
+            if (canReview) const SizedBox(width: 10),
             Text('${answers.length} responses',
                 style: const TextStyle(color: BrandColors.muted, fontSize: 12)),
           ]),
@@ -344,7 +494,41 @@ class _CandidateResult extends StatelessWidget {
                       'Question details are not available for this assessment.'),
                 ))
           else
-            _PagedQuestionResults(questions: questions, answers: answers),
+            _PagedQuestionResults(
+              questions: questions,
+              answers: answers,
+              manualReview: _editing,
+              draftScores: _draftScores,
+              draftCorrect: _draftCorrect,
+              onPointsChanged: _setPoints,
+              onCorrectChanged: _setCorrect,
+            ),
+          if (_editing) ...[
+            const SizedBox(height: 14),
+            TextField(
+              controller: _feedbackController,
+              maxLines: 3,
+              maxLength: 2000,
+              decoration: const InputDecoration(
+                labelText: 'Recruiter review notes (optional)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.icon(
+                onPressed: _saving ? null : _saveManualReview,
+                icon: _saving
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save_outlined),
+                label: Text(_saving ? 'Saving review…' : 'Save manual review'),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -352,9 +536,23 @@ class _CandidateResult extends StatelessWidget {
 }
 
 class _PagedQuestionResults extends StatefulWidget {
-  const _PagedQuestionResults({required this.questions, required this.answers});
+  const _PagedQuestionResults({
+    required this.questions,
+    required this.answers,
+    required this.manualReview,
+    required this.draftScores,
+    required this.draftCorrect,
+    required this.onPointsChanged,
+    required this.onCorrectChanged,
+  });
   final List<Map<String, dynamic>> questions;
   final List<Map<String, dynamic>> answers;
+  final bool manualReview;
+  final Map<String, double> draftScores;
+  final Map<String, bool> draftCorrect;
+  final void Function(String questionId, double points) onPointsChanged;
+  final void Function(String questionId, bool correct, double maxPoints)
+      onCorrectChanged;
 
   @override
   State<_PagedQuestionResults> createState() => _PagedQuestionResultsState();
@@ -375,7 +573,20 @@ class _PagedQuestionResultsState extends State<_PagedQuestionResults> {
         _QuestionResult(
             index: index,
             question: widget.questions[index],
-            answers: widget.answers),
+            answers: widget.answers,
+            manualReview: widget.manualReview,
+            draftScore: widget.draftScores[(widget.questions[index]
+                        ['questionId'] ??
+                    widget.questions[index]['_id'] ??
+                    widget.questions[index]['id'])
+                ?.toString()],
+            draftCorrect: widget.draftCorrect[(widget.questions[index]
+                        ['questionId'] ??
+                    widget.questions[index]['_id'] ??
+                    widget.questions[index]['id'])
+                ?.toString()],
+            onPointsChanged: widget.onPointsChanged,
+            onCorrectChanged: widget.onCorrectChanged),
       if (pageCount > 1)
         Padding(
           padding: const EdgeInsets.only(top: 14),
@@ -412,10 +623,23 @@ class _PagedQuestionResultsState extends State<_PagedQuestionResults> {
 
 class _QuestionResult extends StatelessWidget {
   const _QuestionResult(
-      {required this.index, required this.question, required this.answers});
+      {required this.index,
+      required this.question,
+      required this.answers,
+      required this.manualReview,
+      required this.draftScore,
+      required this.draftCorrect,
+      required this.onPointsChanged,
+      required this.onCorrectChanged});
   final int index;
   final Map<String, dynamic> question;
   final List<Map<String, dynamic>> answers;
+  final bool manualReview;
+  final double? draftScore;
+  final bool? draftCorrect;
+  final void Function(String questionId, double points) onPointsChanged;
+  final void Function(String questionId, bool correct, double maxPoints)
+      onCorrectChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -442,7 +666,22 @@ class _QuestionResult extends StatelessWidget {
         response?['selectedOption'] ??
         response?['text'];
     final correct = question['correctAnswer'] ?? question['answerKey'];
-    final isCorrect = response?['isCorrect'];
+    final type = question['type']?.toString();
+    final maxPoints = question['points'] ?? question['marks'];
+    final maxPointsValue = maxPoints is num ? maxPoints.toDouble() : 0.0;
+    final questionId =
+        (question['questionId'] ?? question['_id'] ?? question['id'])
+            ?.toString();
+    final points = manualReview
+        ? draftScore
+        : (response?['pointsAwarded'] is num
+            ? (response!['pointsAwarded'] as num).toDouble()
+            : null);
+    final pointsLabel =
+        points == null ? '—' : points.toStringAsFixed(points % 1 == 0 ? 0 : 1);
+    final isCorrect = manualReview && type == 'multiple_choice'
+        ? draftCorrect
+        : response?['isCorrect'];
     final hasResponse =
         yourAnswer != null && yourAnswer.toString().trim().isNotEmpty;
     final answerColor = isCorrect == true
@@ -455,8 +694,6 @@ class _QuestionResult extends StatelessWidget {
         : isCorrect == false
             ? const Color(0xFFFFF0ED)
             : const Color(0xFFF4F6FA);
-    final points = response?['pointsAwarded'];
-    final maxPoints = question['points'] ?? question['marks'];
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(top: 12),
@@ -498,7 +735,7 @@ class _QuestionResult extends StatelessWidget {
                   ? Icons.check_circle_outline
                   : Icons.cancel_outlined,
             )
-          else if (correct == null)
+          else if (points == null)
             const _ResultTag(
                 label: 'Review',
                 color: Color(0xFF8A5700),
@@ -517,6 +754,12 @@ class _QuestionResult extends StatelessWidget {
             color: answerColor,
             background: answerBackground,
           );
+          final rubric = question['gradingRubric']?.toString();
+          final reference = question['referenceAnswer']?.toString();
+          final guidance = [
+            if (reference?.isNotEmpty == true) 'Reference: $reference',
+            if (rubric?.isNotEmpty == true) 'Rubric: $rubric',
+          ].join('\n\n');
           final correctPanel = correct != null
               ? _AnswerPanel(
                   label: 'CORRECT ANSWER',
@@ -524,12 +767,16 @@ class _QuestionResult extends StatelessWidget {
                   icon: Icons.verified_outlined,
                   color: const Color(0xFF16794B),
                   background: const Color(0xFFE9F7EF))
-              : const _AnswerPanel(
-                  label: 'GRADING',
-                  value: 'This response is reviewed manually.',
+              : _AnswerPanel(
+                  label: guidance.isNotEmpty ? 'REVIEW GUIDANCE' : 'GRADING',
+                  value: guidance.isNotEmpty
+                      ? guidance
+                      : points == null
+                          ? 'This response needs a score.'
+                          : 'Response scored.',
                   icon: Icons.rate_review_outlined,
-                  color: Color(0xFF8A5700),
-                  background: Color(0xFFFFF5D9));
+                  color: const Color(0xFF8A5700),
+                  background: const Color(0xFFFFF5D9));
           if (stacked) {
             return Column(children: [
               responsePanel,
@@ -543,6 +790,43 @@ class _QuestionResult extends StatelessWidget {
             Expanded(child: correctPanel),
           ]);
         }),
+        if (manualReview) ...[
+          const SizedBox(height: 12),
+          if (type == 'multiple_choice')
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('Mark this response as correct'),
+              value: draftCorrect ?? false,
+              onChanged: questionId == null
+                  ? null
+                  : (value) => onCorrectChanged(
+                        questionId,
+                        value == true,
+                        maxPointsValue,
+                      ),
+            )
+          else
+            SizedBox(
+              width: 220,
+              child: TextFormField(
+                key: ValueKey('score-$questionId-$manualReview'),
+                initialValue: (draftScore ?? 0).toString(),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                onChanged: questionId == null
+                    ? null
+                    : (value) {
+                        final score = double.tryParse(value);
+                        if (score != null) onPointsChanged(questionId, score);
+                      },
+                decoration: InputDecoration(
+                  labelText: 'Points awarded (max ${maxPoints ?? 0})',
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+            ),
+        ],
         if (points != null || maxPoints != null) ...[
           const SizedBox(height: 12),
           Row(children: [
@@ -550,7 +834,7 @@ class _QuestionResult extends StatelessWidget {
                 size: 16, color: BrandColors.orange),
             const SizedBox(width: 6),
             Text(
-                'Points awarded: ${points ?? '—'}${maxPoints != null ? ' / $maxPoints' : ''}',
+                'Points awarded: $pointsLabel${maxPoints != null ? ' / $maxPoints' : ''}',
                 style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
