@@ -358,8 +358,7 @@ class _Breadcrumb extends StatelessWidget {
                     style: const TextStyle(
                         fontSize: 11.5,
                         color: BrandColors.orange,
-                        fontWeight: FontWeight.w700,
-                        decoration: TextDecoration.underline)),
+                        fontWeight: FontWeight.w700)),
               ),
             ),
           ),
