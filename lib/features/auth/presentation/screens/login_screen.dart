@@ -9,9 +9,12 @@ import '../../../../core/widgets/brand_header.dart';
 import '../../../../core/widgets/brand_footer.dart';
 import '../../application/auth_provider.dart';
 import '../../../../core/widgets/app_toast.dart';
+import '../../../../core/router/return_destination.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.returnTo});
+
+  final String? returnTo;
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -53,7 +56,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (!mounted) return;
       // Auth graduation, not a forward flow — replace so back doesn't
       // return to a stale login form.
-      context.go('/dashboard');
+      context.go(safeSharedJobDestination(widget.returnTo) ?? '/dashboard');
     } catch (_) {
       final message = ref.read(authProvider).error;
       AppToast.error(
