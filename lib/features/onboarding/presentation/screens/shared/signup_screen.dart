@@ -10,6 +10,7 @@ import '../../../../onboarding/application/selected_role_provider.dart';
 import '../../../../auth/application/auth_provider.dart';
 import '../../../../auth/data/models/user_model.dart';
 import '../../../../../core/widgets/app_toast.dart';
+import '../../../../../core/router/return_destination.dart';
 
 class SignUpScreen extends ConsumerStatefulWidget {
   const SignUpScreen({super.key, this.returnTo});
@@ -77,15 +78,17 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
 
       if (!mounted) return;
       AppToast.success(context, 'Account created successfully.');
+      final sharedJobDestination = safeSharedJobDestination(widget.returnTo);
       context.go(
         role == UserRole.recruiter
             ? '/recruiter-company-setup'
-            : Uri(
-                path: '/candidate-profile-setup',
-                queryParameters: {
-                  if (widget.returnTo != null) 'returnTo': widget.returnTo!,
-                },
-              ).toString(),
+            : sharedJobDestination ??
+                Uri(
+                  path: '/candidate-profile-setup',
+                  queryParameters: {
+                    if (widget.returnTo != null) 'returnTo': widget.returnTo!,
+                  },
+                ).toString(),
       );
     } catch (e) {
       if (mounted) {
@@ -348,7 +351,16 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                                   fontSize: 13, color: BrandColors.muted),
                             ),
                             TextButton(
-                              onPressed: () => context.go('/login'),
+                              onPressed: () => context.go(Uri(
+                                path: '/login',
+                                queryParameters: {
+                                  if (safeSharedJobDestination(
+                                          widget.returnTo) !=
+                                      null)
+                                    'returnTo': safeSharedJobDestination(
+                                        widget.returnTo)!,
+                                },
+                              ).toString()),
                               style: TextButton.styleFrom(
                                 padding: EdgeInsets.zero,
                                 minimumSize: const Size(0, 0),
