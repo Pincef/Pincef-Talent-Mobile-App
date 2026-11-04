@@ -19,3 +19,24 @@ String? safeSharedJobDestination(String? value) {
   }
   return '/shared/jobs/${segments[2]}';
 }
+
+/// Repairs legacy share links that placed the job route in the URL path but
+/// left the current Flutter hash route attached (for example `#/jobs`).
+String? legacySharedJobDestination(Uri browserUri) {
+  final match =
+      RegExp(r'^/shared/jobs/([a-fA-F0-9]{24})/?$').firstMatch(browserUri.path);
+  if (match == null || browserUri.fragment.startsWith('/shared/jobs/')) {
+    return null;
+  }
+  return '/shared/jobs/${match.group(1)}';
+}
+
+/// Builds an external URL using Flutter's default hash based web routing.
+Uri sharedJobUrl(Uri currentUri, String jobId) => Uri(
+      scheme: currentUri.scheme,
+      userInfo: currentUri.userInfo,
+      host: currentUri.host,
+      port: currentUri.hasPort ? currentUri.port : null,
+      path: '/',
+      fragment: '/shared/jobs/$jobId',
+    );
