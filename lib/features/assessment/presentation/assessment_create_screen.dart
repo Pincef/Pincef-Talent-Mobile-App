@@ -511,7 +511,8 @@ class _AssessmentCreateScreenState
     final assessmentStage = assessmentStages.firstOrNull;
     if (_stageName == null && assessmentStage != null)
       _stageName = assessmentStage.name;
-    if (assessmentStage?.assessmentMode.toLowerCase() == 'auto' &&
+    if (['auto', 'full_ai']
+            .contains(assessmentStage?.assessmentMode.toLowerCase()) &&
         !_pipelineGenerationQueued &&
         _testId == null) {
       _pipelineGenerationQueued = true;
