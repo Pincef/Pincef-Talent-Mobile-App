@@ -156,6 +156,14 @@ class JobManagementRepository {
     );
   }
 
+  Future<JobDetail> getPublicJobDetail(String jobId) {
+    return _request(
+      () => _dio.get('/jobs/public/$jobId',
+          options: Options(extra: {'skipAuth': true})),
+      (data) => JobDetail.fromApiJson(data as Map<String, dynamic>),
+    );
+  }
+
   /// Unwraps the `{ status: 'success', data: ... }` envelope every
   /// job.controller.ts endpoint returns, and turns a DioException into a
   /// plain Exception carrying the backend's error message (e.g. the
