@@ -18,7 +18,7 @@ class PublicJobScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final jobAsync = ref.watch(jobDetailProvider(jobId));
+    final jobAsync = ref.watch(publicJobDetailProvider(jobId));
     final user = ref.watch(authProvider).user;
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
@@ -32,7 +32,8 @@ class PublicJobScreen extends ConsumerWidget {
                 title: 'Job unavailable',
                 message: 'This job link may be invalid or no longer active.',
                 action: TextButton(
-                  onPressed: () => ref.invalidate(jobDetailProvider(jobId)),
+                  onPressed: () =>
+                      ref.invalidate(publicJobDetailProvider(jobId)),
                   child: const Text('Try again'),
                 ),
               ),
