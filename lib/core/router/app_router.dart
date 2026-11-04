@@ -49,6 +49,7 @@ import '../../features/assessment/presentation/assessment_create_screen.dart';
 import '../../features/assessment/presentation/candidate_assessments_screen.dart';
 import '../../features/assessment/presentation/candidate_assessment_session_screen.dart';
 import '../widgets/app_shell_route.dart';
+import 'return_destination.dart';
 
 const _publicRoutes = {
   '/welcome',
@@ -141,6 +142,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (isLoggedIn &&
           _authEntryRoutes.contains(state.matchedLocation) &&
           !_postSignupRoutes.contains(state.matchedLocation)) {
+        final returnTo =
+            safeSharedJobDestination(state.uri.queryParameters['returnTo']);
+        if (returnTo != null) return returnTo;
         return '/dashboard';
       }
 
@@ -179,7 +183,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
           path: '/choose-role',
           builder: (context, state) => const RoleSelectionScreen()),
-      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(
+        path: '/login',
+        builder: (context, state) => LoginScreen(
+          returnTo: state.uri.queryParameters['returnTo'],
+        ),
+      ),
       GoRoute(
           path: '/forgot-password',
           builder: (context, state) => const ForgotPasswordScreen()),
