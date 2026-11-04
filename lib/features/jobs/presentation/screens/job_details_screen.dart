@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:talentbridge/core/widgets/app_toast.dart';
+import '../../../../core/router/return_destination.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/brand_color.dart';
@@ -616,10 +617,7 @@ class _RecruiterActions extends StatelessWidget {
         if (canShare)
           OutlinedButton.icon(
             onPressed: () async {
-              final shareUrl = Uri.base
-                  .replace(
-                      path: '/shared/jobs/$jobId', query: null, fragment: null)
-                  .toString();
+              final shareUrl = sharedJobUrl(Uri.base, jobId).toString();
               await Clipboard.setData(ClipboardData(text: shareUrl));
               if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
