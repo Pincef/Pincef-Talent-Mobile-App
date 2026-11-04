@@ -214,22 +214,40 @@ class _PublicJobContent extends StatelessWidget {
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF0DE),
-                    borderRadius: BorderRadius.circular(12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.asset(
+                    'lib/assets/images/logo.jpeg',
+                    width: 48,
+                    height: 48,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      width: 48,
+                      height: 48,
+                      color: const Color(0xFFFFF0DE),
+                      child: const Icon(Icons.work_outline,
+                          color: BrandColors.orange),
+                    ),
                   ),
-                  child:
-                      const Icon(Icons.work_outline, color: BrandColors.orange),
                 ),
                 const SizedBox(width: 12),
-                const Text('TalentBridge',
-                    style: TextStyle(
-                        color: BrandColors.navy,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 17)),
+                const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('PINCEF TALENTBRIDGE',
+                        style: TextStyle(
+                            color: BrandColors.navy,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                            letterSpacing: .3)),
+                    SizedBox(height: 3),
+                    Text('Smarter hiring starts here',
+                        style: TextStyle(
+                            color: BrandColors.muted,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 11)),
+                  ],
+                ),
               ]),
               const SizedBox(height: 18),
               _Card(
