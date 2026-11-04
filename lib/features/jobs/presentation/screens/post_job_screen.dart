@@ -1767,9 +1767,27 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
   }
 
   String _nextPipelineRoute({required String? jobId}) {
-    // Publishing starts the job's application phase. Premium assessments are
-    // part of the selected flow, but the PRD activates them after AI review.
-    return jobId == null ? '/jobs' : '/jobs/$jobId';
+    if (jobId == null) return '/jobs';
+
+    final tier = _pipelineTier;
+    final selectedPipeline = _selectedPipelineId == null
+        ? null
+        : (ref.read(pipelinesProvider).value ?? const <HiringPipeline>[])
+            .where((pipeline) => pipeline.id == _selectedPipelineId)
+            .firstOrNull;
+    final hasAssessmentStage =
+        selectedPipeline?.stages.any((stage) => isAssessmentType(stage.type)) ??
+            tier.toLowerCase() == 'premium';
+
+    if (!hasAssessmentStage) return '/jobs/$jobId';
+    return Uri(
+      path: '/competency-assessments/new',
+      queryParameters: {
+        'jobId': jobId,
+        'pipelineTier': tier,
+        if (_selectedPipelineId != null) 'pipelineId': _selectedPipelineId!,
+      },
+    ).toString();
   }
 
   /// Builds the full [JobDraft] from the current form state and persists
