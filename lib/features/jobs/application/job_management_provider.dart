@@ -18,6 +18,11 @@ final jobDetailProvider =
   return ref.watch(jobManagementRepositoryProvider).getJobDetail(jobId);
 });
 
+final publicJobDetailProvider =
+    FutureProvider.autoDispose.family<JobDetail, String>((ref, jobId) {
+  return ref.watch(jobManagementRepositoryProvider).getPublicJobDetail(jobId);
+});
+
 final pendingInterviewAutomationProvider =
     FutureProvider.autoDispose.family<Map<String, dynamic>?, String>(
   (ref, jobId) => ref
