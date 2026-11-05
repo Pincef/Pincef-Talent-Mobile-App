@@ -1766,13 +1766,22 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
     }
   }
 
-  String _nextPipelineRoute({required String? jobId}) {
+  Future<String> _nextPipelineRoute({required String? jobId}) async {
     if (jobId == null) return '/jobs';
 
     final tier = _pipelineTier;
+    var pipelines = ref.read(pipelinesProvider).value;
+    if (pipelines == null) {
+      try {
+        pipelines = await ref.read(pipelinesProvider.future);
+      } catch (_) {
+        // Fall through to the job detail route if pipeline data cannot be
+        // confirmed. The job itself has already been saved or published.
+      }
+    }
     final selectedPipeline = _selectedPipelineId == null
         ? null
-        : (ref.read(pipelinesProvider).value ?? const <HiringPipeline>[])
+        : (pipelines ?? const <HiringPipeline>[])
             .where((pipeline) => pipeline.id == _selectedPipelineId)
             .firstOrNull;
     final hasAssessmentStage =
@@ -1919,6 +1928,11 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
             isError: false);
         if (widget.initialJob != null) {
           widget.onSaved?.call();
+        } else {
+          final jobId = ref.read(postJobProvider).draft.id;
+          final nextRoute = await _nextPipelineRoute(jobId: jobId);
+          if (!mounted) return;
+          if (nextRoute != '/jobs/$jobId') context.go(nextRoute);
         }
       }
     } finally {
@@ -1939,7 +1953,8 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
       if (!mounted) return;
       if (published) {
         final jobId = ref.read(postJobProvider).draft.id;
-        final nextRoute = _nextPipelineRoute(jobId: jobId);
+        final nextRoute = await _nextPipelineRoute(jobId: jobId);
+        if (!mounted) return;
         ref.invalidate(
             jobManagementProvider); // forces a fresh load() next time /jobs is shown
         _showToast('Job post published successfully.', isError: false);

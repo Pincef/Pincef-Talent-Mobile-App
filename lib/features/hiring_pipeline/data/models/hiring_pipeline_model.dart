@@ -72,11 +72,11 @@ List<String> hiringPipelineFlowFor(
           .map((stage) => stage.name.trim())
           .where((name) => name.isNotEmpty)
           .toList();
-      if (configured.isEmpty) return [...aiStages, 'Custom stages', 'Hire'];
+      if (configured.isEmpty) return ['Custom stages', 'Hire'];
       if (!configured.any((name) => name.toLowerCase() == 'hire')) {
         configured.add('Hire');
       }
-      return [...aiStages, ...configured];
+      return configured;
     default:
       return [...aiStages, 'Hire'];
   }
