@@ -527,9 +527,8 @@ class JobListing {
   /// rather than a fabricated number.
   final int? matchScore;
 
-  /// Client-only "saved/bookmarked" state — there's no saved-jobs endpoint
-  /// yet, so this doesn't persist across sessions or devices. Swap for a
-  /// real field once one exists.
+  /// Whether this candidate has saved the job. Loaded from their private
+  /// saved-jobs endpoint; never exposed on the public job record.
   final bool isSaved;
 
   JobListing copyWith({bool? isSaved}) => JobListing(
