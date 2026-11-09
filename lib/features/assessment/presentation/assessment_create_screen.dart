@@ -304,22 +304,47 @@ class _AssessmentCreateScreenState
     if (_kind == 'internal') {
       for (var index = 0; index < _questions.length; index++) {
         final question = _questions[index];
-        if (question['accepted'] == false ||
-            question['type'] != 'multiple_choice') continue;
+        if (question['accepted'] == false) continue;
+        if (question['type'] != 'multiple_choice') continue;
         final options = (question['options'] as List? ?? const [])
             .map((option) => option.toString().trim())
             .where((option) => option.isNotEmpty)
+            .map((option) => option.toLowerCase())
             .toSet();
         if (options.length < 2) {
           _showError(StateError(
               'Question ${index + 1} needs at least two answer options.'));
           return false;
         }
-        if (!options.contains(question['correctAnswer']?.toString().trim())) {
+        if (!options.contains(
+            question['correctAnswer']?.toString().trim().toLowerCase())) {
           _showError(StateError(
               'Choose the correct answer for question ${index + 1}.'));
           return false;
         }
+      }
+    }
+    return true;
+  }
+
+  bool _validatePublishQuestionContent() {
+    for (var index = 0; index < _questions.length; index++) {
+      final question = _questions[index];
+      if (question['accepted'] == false) continue;
+      if (question['text']?.toString().trim().isEmpty ?? true) {
+        _showError(StateError('Enter the text for question ${index + 1}.'));
+        return false;
+      }
+      if (question['skillCategory']?.toString().trim().isEmpty ?? true) {
+        _showError(
+            StateError('Choose a skill category for question ${index + 1}.'));
+        return false;
+      }
+      if (question['type'] == 'multiple_choice' &&
+          ((question['points'] as num?)?.toDouble() ?? 0) <= 0) {
+        _showError(
+            StateError('Question ${index + 1} must award at least one point.'));
+        return false;
       }
     }
     return true;
@@ -387,14 +412,80 @@ class _AssessmentCreateScreenState
       return;
     }
     if (_kind == 'internal' &&
+        _questions.where((q) => q['accepted'] != false).isEmpty &&
+        !scheduledAutomation) {
+      if (_mode == 'full_ai') {
+        await _generate();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'AI generated the questions as a draft. Review them, then publish the assessment.'),
+          ));
+        }
+      } else {
+        _showError(StateError(
+            'Add at least one question before publishing the assessment.'));
+      }
+      return;
+    }
+    if (_kind == 'internal' &&
         _mode == 'ai_assisted' &&
         _questions.any((q) => q['accepted'] == false)) {
       _showError(
           StateError('Review or remove every AI question before publishing.'));
       return;
     }
+    if (_kind == 'internal' &&
+        !scheduledAutomation &&
+        !_validatePublishQuestionContent()) {
+      return;
+    }
     setState(() => _busy = true);
     try {
+      if (!scheduledAutomation) {
+        final currentApplications = await ref
+            .read(applicationsRepositoryProvider)
+            .getAllJobApplications(_jobId!);
+        final applicationIds =
+            currentApplications.map((item) => item.id).toSet();
+        final invalidSelections =
+            _selectedApplications.difference(applicationIds);
+        if (invalidSelections.isNotEmpty) {
+          throw StateError(
+              'Some selected candidates are no longer applicants for this job. Refresh the candidate list and select them again.');
+        }
+        final selectedJob = ref
+            .read(jobManagementProvider)
+            .summary
+            ?.postings
+            .where((job) => job.id == _jobId)
+            .firstOrNull;
+        final usesShortlistedPool = _includeShortlisted ||
+            (automaticCandidateSelection && selectedJob?.aiRanking != true);
+        final shortlisted = currentApplications
+            .where(
+                (item) => item.status == ApplicationBackendStatus.shortlisted)
+            .toList(growable: false);
+        if (usesShortlistedPool && shortlisted.isEmpty) {
+          throw StateError(
+              'There are no shortlisted candidates for this job yet. Select individual candidates or shortlist applicants first.');
+        }
+        if (automaticCandidateSelection && currentApplications.isEmpty) {
+          throw StateError(
+              'There are no applicants for this job yet, so the automated assessment has no candidates to invite.');
+        }
+        if (automaticCandidateSelection && selectedJob?.aiRanking == true) {
+          if (selectedJob?.aiStatus != 'done') {
+            throw StateError(
+                'AI ranking for this job is not complete yet. Wait for ranking to finish, then publish the assessment.');
+          }
+          if (!currentApplications.any((item) => item.aiScore != null) &&
+              _selectedApplications.isEmpty) {
+            throw StateError(
+                'No AI-ranked candidates are available for this job yet. Refresh the ranking, or select candidates manually.');
+          }
+        }
+      }
       final repo = ref.read(assessmentRepositoryProvider);
       if (_testId == null) {
         if (_mode == 'manual' || _kind == 'external') {

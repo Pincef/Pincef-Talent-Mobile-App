@@ -110,6 +110,24 @@ class ApplicationsRepository {
     );
   }
 
+  /// Loads the full applicant set for a pre-publish eligibility check. The
+  /// assessment form needs to confirm selected applications and shortlisted
+  /// recipients still exist for the chosen job before it creates/invites.
+  Future<List<JobApplicantSummary>> getAllJobApplications(String jobId) async {
+    const pageSize = 100;
+    final first = await getJobApplications(jobId, limit: pageSize);
+    final applications = [...first.applications];
+    for (var page = 2; page <= first.totalPages; page++) {
+      final result = await getJobApplications(
+        jobId,
+        page: page,
+        limit: pageSize,
+      );
+      applications.addAll(result.applications);
+    }
+    return applications;
+  }
+
   /// Sends an interview invite email for one application and moves it to
   /// INTERVIEWING server-side. `subject`/`body` may contain {tokens} — see
   /// [getInviteTokens] — the backend merges them with the real candidate/
