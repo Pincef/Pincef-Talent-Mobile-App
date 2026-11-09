@@ -63,6 +63,16 @@ class _CandidateEmailDialogState extends ConsumerState<CandidateEmailDialog> {
           'be in touch when we have an update.\n\n'
           'Best regards,\n{{recruiterName}}',
     ),
+    _CandidateEmailTemplate(
+      name: 'Standard offer',
+      subject: 'Congratulations! You’ve been selected for {{jobTitle}}',
+      body: 'Hi {{candidateFirstName}},\n\n'
+          'We are pleased to offer you the position of {{jobTitle}} at '
+          '{{companyName}}. Your company-provided offer document is available '
+          'at the secure link below:\n\n{{offerLink}}\n\n'
+          'Please contact us if you have any questions.\n\n'
+          'Best regards,\n{{recruiterName}}',
+    ),
   ];
 
   static const _knownTokens = {
@@ -72,11 +82,13 @@ class _CandidateEmailDialogState extends ConsumerState<CandidateEmailDialog> {
     'jobTitle',
     'companyName',
     'recruiterName',
+    'offerLink',
   };
 
   final _formKey = GlobalKey<FormState>();
   final _subjectController = TextEditingController();
   final _bodyController = TextEditingController();
+  final _offerLinkController = TextEditingController();
   late _CandidateEmailTemplate _selectedTemplate;
   bool _isSending = false;
   String? _sendError;
@@ -92,14 +104,20 @@ class _CandidateEmailDialogState extends ConsumerState<CandidateEmailDialog> {
   void dispose() {
     _subjectController.dispose();
     _bodyController.dispose();
+    _offerLinkController.dispose();
     super.dispose();
   }
 
   void _applyTemplate(_CandidateEmailTemplate template) {
     _subjectController.text = template.subject;
     _bodyController.text = template.body;
+    _offerLinkController.clear();
     _sendError = null;
   }
+
+  bool get _usesOfferLink =>
+      _subjectController.text.contains('{{offerLink}}') ||
+      _bodyController.text.contains('{{offerLink}}');
 
   String? _validateMessage(String? value) {
     final text = value?.trim() ?? '';
@@ -112,6 +130,12 @@ class _CandidateEmailDialogState extends ConsumerState<CandidateEmailDialog> {
         .toList();
     if (tokens.any((token) => !_knownTokens.contains(token))) {
       return 'This email contains an unsupported dynamic field.';
+    }
+    if (tokens.contains('offerLink')) {
+      final link = Uri.tryParse(_offerLinkController.text.trim());
+      if (link == null || link.scheme != 'https' || link.host.isEmpty) {
+        return 'Enter the company’s secure HTTPS offer link.';
+      }
     }
     final withoutTokens = text.replaceAll(RegExp(r'\{\{[^{}]+\}\}'), '');
     if (withoutTokens.contains('{{') || withoutTokens.contains('}}')) {
@@ -133,6 +157,7 @@ class _CandidateEmailDialogState extends ConsumerState<CandidateEmailDialog> {
             templateName: _selectedTemplate.name,
             subject: _subjectController.text.trim(),
             body: _bodyController.text.trim(),
+            offerLink: _usesOfferLink ? _offerLinkController.text.trim() : null,
           );
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
@@ -268,7 +293,32 @@ class _CandidateEmailDialogState extends ConsumerState<CandidateEmailDialog> {
                             }
                             return null;
                           },
+                          onChanged: (_) => setState(() {}),
                         ),
+                        if (_usesOfferLink) ...[
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _offerLinkController,
+                            enabled: !_isSending,
+                            keyboardType: TextInputType.url,
+                            decoration: const InputDecoration(
+                              labelText: 'Company offer link',
+                              hintText: 'https://…',
+                              helperText:
+                                  'Paste the candidate’s secure offer document link from your company HR or document system.',
+                            ),
+                            validator: (_) {
+                              if (!_usesOfferLink) return null;
+                              final link = Uri.tryParse(
+                                  _offerLinkController.text.trim());
+                              return link == null ||
+                                      link.scheme != 'https' ||
+                                      link.host.isEmpty
+                                  ? 'Enter a secure HTTPS offer link.'
+                                  : null;
+                            },
+                          ),
+                        ],
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: _bodyController,
@@ -287,7 +337,18 @@ class _CandidateEmailDialogState extends ConsumerState<CandidateEmailDialog> {
                             _ProtectMergeFieldsFormatter(),
                             LengthLimitingTextInputFormatter(12000),
                           ],
-                          validator: _validateMessage,
+                          validator: (value) {
+                            final error = _validateMessage(value);
+                            if (error != null) return error;
+                            if (_usesOfferLink &&
+                                !(_offerLinkController.text
+                                    .trim()
+                                    .startsWith('https://'))) {
+                              return 'Enter the company’s secure HTTPS offer link above.';
+                            }
+                            return null;
+                          },
+                          onChanged: (_) => setState(() {}),
                         ),
                         if (_sendError != null) ...[
                           const SizedBox(height: 8),
