@@ -136,13 +136,48 @@ class JobManagementRepository {
     required JobBrowseFilters filters,
     int page = 1,
     int limit = 20,
-  }) {
-    return _request(
+  }) async {
+    final result = await _request(
       () => _dio.get('/jobs',
           queryParameters: filters.toQuery(page: page, limit: limit)),
       (data) => JobBrowseResult.fromApiJson(data as Map<String, dynamic>),
     );
+    final savedIds = await listSavedJobIds();
+    return JobBrowseResult(
+      jobs: result.jobs
+          .map((job) => job.copyWith(isSaved: savedIds.contains(job.id)))
+          .toList(growable: false),
+      total: result.total,
+      page: result.page,
+      totalPages: result.totalPages,
+    );
   }
+
+  Future<Set<String>> listSavedJobIds() => _request(
+        () => _dio.get('/jobs/saved'),
+        (data) => ((data as Map<String, dynamic>)['jobs'] as List? ?? const [])
+            .whereType<Map>()
+            .map((job) => (job['_id'] ?? job['id']).toString())
+            .where((id) => id.isNotEmpty)
+            .toSet(),
+      );
+
+  Future<List<JobListing>> listSavedJobs() => _request(
+        () => _dio.get('/jobs/saved'),
+        (data) => ((data as Map<String, dynamic>)['jobs'] as List? ?? const [])
+            .whereType<Map>()
+            .map((job) => JobListing.fromApiJson(
+                  Map<String, dynamic>.from(job),
+                ).copyWith(isSaved: true))
+            .toList(growable: false),
+      );
+
+  Future<void> setJobSaved(String jobId, bool saved) => _request(
+        () => saved
+            ? _dio.post('/jobs/$jobId/save')
+            : _dio.delete('/jobs/$jobId/save'),
+        (_) {},
+      );
 
   /// Maps to: GET /jobs/:jobId -> getJobById(jobId). Public, unauthenticated
   /// — shared by both the recruiter's and candidate's Job Detail screens
