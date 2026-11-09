@@ -68,7 +68,7 @@ class PublicJobScreen extends ConsumerWidget {
                         ).toString());
                       },
                       applyLabel: user == null
-                          ? 'Create an account to apply'
+                          ? 'Click to apply'
                           : user.role == UserRole.candidate
                               ? 'Continue to apply'
                               : 'Candidate account required',
@@ -331,7 +331,7 @@ class _PublicJobContent extends StatelessWidget {
               Center(
                 child: TextButton.icon(
                   onPressed: onApply,
-                  icon: const Icon(Icons.person_add_alt_1_outlined, size: 17),
+                  icon: const Icon(Icons.send_outlined, size: 17),
                   label: Text(applyLabel),
                 ),
               ),
