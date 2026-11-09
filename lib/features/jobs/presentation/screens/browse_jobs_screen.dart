@@ -26,11 +26,30 @@ class _BrowseJobsScreenState extends ConsumerState<BrowseJobsScreen> {
     return _Body(
       state: state,
       onFilterChanged: notifier.applyFilters,
-      onToggleSaved: notifier.toggleSaved,
+      onSavedOnlyChanged: notifier.setSavedOnly,
+      onToggleSaved: _toggleSaved,
       onLoadMore: notifier.loadMore,
       onRetry: notifier.refresh,
       onApply: (jobId) => context.push('/jobs/$jobId'),
     );
+  }
+
+  Future<void> _toggleSaved(String jobId) async {
+    final jobs = ref.read(browseJobsProvider).jobs;
+    final index = jobs.indexWhere((item) => item.id == jobId);
+    final wasSaved = index >= 0 ? jobs[index].isSaved : false;
+    try {
+      await ref.read(browseJobsProvider.notifier).toggleSaved(jobId);
+      if (!mounted) return;
+      AppToast.success(
+        context,
+        wasSaved ? 'Removed from saved jobs.' : 'Job saved for later.',
+      );
+    } catch (error) {
+      if (mounted) {
+        AppToast.error(context, 'Could not update saved jobs: $error');
+      }
+    }
   }
 }
 
@@ -38,6 +57,7 @@ class _Body extends StatelessWidget {
   const _Body({
     required this.state,
     required this.onFilterChanged,
+    required this.onSavedOnlyChanged,
     required this.onToggleSaved,
     required this.onLoadMore,
     required this.onRetry,
@@ -46,7 +66,8 @@ class _Body extends StatelessWidget {
 
   final BrowseJobsState state;
   final ValueChanged<JobBrowseFilters> onFilterChanged;
-  final ValueChanged<String> onToggleSaved;
+  final ValueChanged<bool> onSavedOnlyChanged;
+  final Future<void> Function(String) onToggleSaved;
   final VoidCallback onLoadMore;
   final VoidCallback onRetry;
   final ValueChanged<String> onApply;
@@ -84,16 +105,23 @@ class _Body extends StatelessWidget {
                     color: BrandColors.navy)),
             const SizedBox(height: 4),
             Text(
-              state.total > 0
-                  ? 'Discover ${state.total} open ${state.total == 1 ? 'opportunity' : 'opportunities'}.'
-                  : 'Discover open opportunities.',
+              state.showSavedOnly
+                  ? '${state.total} saved ${state.total == 1 ? 'job' : 'jobs'}.'
+                  : state.total > 0
+                      ? 'Discover ${state.total} open ${state.total == 1 ? 'opportunity' : 'opportunities'}.'
+                      : 'Discover open opportunities.',
               style: const TextStyle(fontSize: 12.5, color: BrandColors.muted),
             ),
             const SizedBox(height: 16),
-            _FilterChips(filters: state.filters, onChanged: onFilterChanged),
+            _FilterChips(
+              filters: state.filters,
+              showSavedOnly: state.showSavedOnly,
+              onChanged: onFilterChanged,
+              onSavedOnlyChanged: onSavedOnlyChanged,
+            ),
             const SizedBox(height: 16),
             if (state.jobs.isEmpty)
-              const _EmptyState()
+              _EmptyState(savedOnly: state.showSavedOnly)
             else
               ...state.jobs.map((job) => Padding(
                     padding: const EdgeInsets.only(bottom: 14),
@@ -134,7 +162,9 @@ class _Body extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState();
+  const _EmptyState({this.savedOnly = false});
+
+  final bool savedOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -146,10 +176,12 @@ class _EmptyState extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: BrandColors.border),
       ),
-      child: const Center(
+      child: Center(
         child: Text(
-          'No jobs match your current filters.',
-          style: TextStyle(fontSize: 12.5, color: BrandColors.muted),
+          savedOnly
+              ? 'You have not saved any jobs yet.'
+              : 'No jobs match your current filters.',
+          style: const TextStyle(fontSize: 12.5, color: BrandColors.muted),
         ),
       ),
     );
@@ -167,10 +199,17 @@ class _EmptyState extends StatelessWidget {
 /// those would either do nothing or silently misfilter. These four are
 /// real, backed by job.dto.ts's listJobsQuerySchema.employmentType filter.
 class _FilterChips extends StatelessWidget {
-  const _FilterChips({required this.filters, required this.onChanged});
+  const _FilterChips({
+    required this.filters,
+    required this.showSavedOnly,
+    required this.onChanged,
+    required this.onSavedOnlyChanged,
+  });
 
   final JobBrowseFilters filters;
+  final bool showSavedOnly;
   final ValueChanged<JobBrowseFilters> onChanged;
+  final ValueChanged<bool> onSavedOnlyChanged;
 
   static const _options = <String, String?>{
     'All Jobs': null,
@@ -185,16 +224,29 @@ class _FilterChips extends StatelessWidget {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: _options.entries.map((entry) {
-        final selected = filters.employmentType == entry.value;
-        return _Chip(
-          label: entry.key,
-          selected: selected,
-          onTap: () => onChanged(entry.value == null
-              ? filters.copyWith(clearEmploymentType: true)
-              : filters.copyWith(employmentType: entry.value)),
-        );
-      }).toList(),
+      children: [
+        ChoiceChip(
+          label: const Text('All jobs'),
+          selected: !showSavedOnly,
+          onSelected: (_) => onSavedOnlyChanged(false),
+        ),
+        ChoiceChip(
+          label: const Text('Saved jobs'),
+          avatar: const Icon(Icons.bookmark_outline, size: 16),
+          selected: showSavedOnly,
+          onSelected: (_) => onSavedOnlyChanged(true),
+        ),
+        ..._options.entries.map((entry) {
+          final selected = filters.employmentType == entry.value;
+          return _Chip(
+            label: entry.key,
+            selected: selected,
+            onTap: () => onChanged(entry.value == null
+                ? filters.copyWith(clearEmploymentType: true)
+                : filters.copyWith(employmentType: entry.value)),
+          );
+        }),
+      ],
     );
   }
 }
@@ -242,7 +294,7 @@ class _JobListingCard extends StatelessWidget {
       {required this.job, required this.onToggleSaved, required this.onApply});
 
   final JobListing job;
-  final VoidCallback onToggleSaved;
+  final Future<void> Function() onToggleSaved;
   final VoidCallback onApply;
 
   @override
@@ -314,7 +366,7 @@ class _JobListingCard extends StatelessWidget {
                               color: BrandColors.navy)),
                       const Spacer(),
                       IconButton(
-                        onPressed: onToggleSaved,
+                        onPressed: () => onToggleSaved(),
                         visualDensity: VisualDensity.compact,
                         icon: Icon(
                           job.isSaved ? Icons.bookmark : Icons.bookmark_border,
