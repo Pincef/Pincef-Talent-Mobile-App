@@ -199,6 +199,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
         'roleIdea': roleIdea,
         'companyContext': _companyOverview.text.trim(),
         'currentDescription': _overview.text.trim(),
+        'locationContext': _aiLocationContext,
         'industry': _industry,
         'employmentType': _employmentTypeValues[_employment],
         'workplaceType': _workplaceTypeValues[_workplace],
@@ -1554,6 +1555,14 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
         _city,
         _stateName,
         _countryName
+      ].where((value) => value != null && value.trim().isNotEmpty).join(', ');
+
+  // AI receives the chosen locality only; never send the street address as
+  // unnecessary detail when tailoring job copy to its local context.
+  String get _aiLocationContext => [
+        _city,
+        _stateName,
+        _countryName,
       ].where((value) => value != null && value.trim().isNotEmpty).join(', ');
   void _onCountryChanged(String? code, List<CountryEntry> countries) {
     if (code == null) return;
