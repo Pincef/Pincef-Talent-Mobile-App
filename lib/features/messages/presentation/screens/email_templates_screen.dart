@@ -33,7 +33,7 @@ class _EmailTemplatesScreenState extends State<EmailTemplatesScreen> {
       subject: 'We received your application for {jobTitle}',
       body: 'Hi {candidateName},\n\n'
           'Thank you for applying for the {jobTitle} position at {companyName}. '
-          'Your application is now with our hiring team. We will review your experience '
+          'Your application is now with our hiring team. We will review your application '
           'and get back to you as soon as we can.\n\n'
           'Best regards,\n{companyName} Recruiting Team',
       variables: ['{candidateName}', '{jobTitle}', '{companyName}'],
@@ -42,7 +42,7 @@ class _EmailTemplatesScreenState extends State<EmailTemplatesScreen> {
       tint: Color(0xFFE6F6F1),
     ),
     _EmailTemplateInfo(
-      title: 'Standard Rejection - Engineering',
+      title: 'Standard Rejection',
       category: 'Applications',
       stage: 'Application stage',
       timing: 'Sent after a hiring decision',
@@ -62,7 +62,7 @@ class _EmailTemplatesScreenState extends State<EmailTemplatesScreen> {
       tint: Color(0xFFEEF1F6),
     ),
     _EmailTemplateInfo(
-      title: 'Competency Assessment Invitation - Engineering',
+      title: 'Competency Assessment Invitation',
       category: 'Assessments',
       stage: 'Assessment stage',
       timing: 'Sent when an assessment is assigned',
@@ -91,7 +91,7 @@ class _EmailTemplatesScreenState extends State<EmailTemplatesScreen> {
       tint: Color(0xFFF0EBFA),
     ),
     _EmailTemplateInfo(
-      title: 'Technical Interview Invitation - Stage 3',
+      title: 'Technical Interview Invitation',
       category: 'Interviews',
       stage: 'Interview stage',
       timing: 'Sent when a candidate advances',
@@ -100,10 +100,9 @@ class _EmailTemplatesScreenState extends State<EmailTemplatesScreen> {
       subject: 'Interview Invitation: {jobTitle} at {companyName}',
       body: 'Dear {candidateName},\n\n'
           'We were very impressed by your background and assessment performance for the {jobTitle} role at {companyName}!\n\n'
-          'We would love to invite you for a 45-minute technical discussion with {interviewerName}. During this session, you’ll dive into real-world architecture questions and review key components of our design workflow.\n\n'
+          'We would love to invite you for a 45-minute technical discussion with {interviewerName}.\n\n'
           'To choose a time slot that works best for your schedule, please select an available time via the link below:\n'
           '{meetingLink}\n\n'
-          'If none of the available slots work, or if you need adjustments, you can request an alternate time here: {rescheduleLink}\n\n'
           'We look forward to speaking with you!\n\n'
           'Best regards,\nThe {companyName} Recruiting Team',
       variables: [
@@ -138,7 +137,7 @@ class _EmailTemplatesScreenState extends State<EmailTemplatesScreen> {
       tint: Color(0xFFE6F6F1),
     ),
     _EmailTemplateInfo(
-      title: 'Standard Offer - Tech Roles',
+      title: 'Standard Offer',
       category: 'Offers',
       stage: 'Offer stage',
       timing: 'Sent when a candidate is selected',
@@ -149,14 +148,14 @@ class _EmailTemplatesScreenState extends State<EmailTemplatesScreen> {
           'We are absolutely thrilled to offer you the position of {jobTitle} at {companyName}! Throughout the interview process, our team was incredibly impressed by your skills, experience, and unique perspective you bring. We believe you will be a fantastic addition to our team and play a key role in our upcoming projects.\n\n'
           'Your anticipated start date will be {startDate}. You can review the full details of your offer package by clicking the button below.\n\n'
           'Please let us know if you have any questions. We can’t wait to welcome you aboard!\n'
-          '{offerLink}\n'
+          '{{offerLink}}\n'
           'Best regards,\nThe {companyName} Recruiting Team',
       variables: [
         '{candidateName}',
         '{jobTitle}',
         '{companyName}',
         '{startDate}',
-        '{offerLink}',
+        '{{offerLink}}',
       ],
       icon: Icons.celebration_outlined,
       accent: Color(0xFFD17A18),
