@@ -166,6 +166,8 @@ class _AssessmentCreateScreenState
         _questions = (test['questions'] as List? ?? const []).map((q) {
           final item = Map<String, dynamic>.from(q as Map);
           item['accepted'] = _mode != 'ai_assisted';
+          item['_generatedByAi'] =
+              item['isAiGenerated'] as bool? ?? _mode != 'manual';
           return item;
         }).toList();
       });
@@ -226,6 +228,7 @@ class _AssessmentCreateScreenState
         'type': question['type']?.toString() ?? 'multiple_choice',
         'skillCategory': question['skillCategory']?.toString() ?? 'General',
         'points': (question['points'] as num?)?.toInt() ?? 10,
+        'isAiGenerated': question['isAiGenerated'] == true,
         if (question['type'] != 'multiple_choice') ...{
           'referenceAnswer':
               question['referenceAnswer']?.toString().trim() ?? '',
@@ -262,6 +265,8 @@ class _AssessmentCreateScreenState
         final item = Map<String, dynamic>.from(q as Map);
         item['accepted'] = existingAcceptance[item['questionId']?.toString()] ??
             _mode != 'ai_assisted';
+        item['isAiGenerated'] = item['isAiGenerated'] as bool? ?? true;
+        item['_generatedByAi'] = item['isAiGenerated'] == true;
         return item;
       }).toList();
       setState(() {
@@ -453,6 +458,8 @@ class _AssessmentCreateScreenState
         'correctAnswer': 'Option A',
         'points': 10,
         'accepted': true,
+        'isAiGenerated': false,
+        '_generatedByAi': false,
       }));
 
   @override
@@ -1037,45 +1044,45 @@ class _AssessmentCreateScreenState
       Card(
           child: Padding(
               padding: const EdgeInsets.all(18),
-              child: Row(children: [
-                const Expanded(
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      Text('Questions',
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.w700)),
-                      Text(
-                          'AI-assisted questions remain editable until you publish.')
-                    ])),
-                if (_mode != 'manual')
-                  OutlinedButton.icon(
-                      onPressed: _busy
-                          ? null
-                          : () => _generate(append: _questions.isNotEmpty),
-                      icon: const Icon(Icons.auto_awesome),
-                      label: Text(_questions.isEmpty
-                          ? 'Generate questions'
-                          : 'Generate more')),
-                if (_mode == 'ai_assisted' &&
-                    _questions.any((q) => q['accepted'] == false))
-                  TextButton.icon(
-                    onPressed: _busy
-                        ? null
-                        : () => setState(() {
-                              for (final question in _questions) {
-                                question['accepted'] = true;
-                              }
-                            }),
-                    icon: const Icon(Icons.done_all),
-                    label: const Text('Accept all'),
-                  ),
-                if (_mode == 'manual')
-                  OutlinedButton.icon(
-                      onPressed: _addQuestion,
-                      icon: const Icon(Icons.add),
-                      label: const Text('Add question')),
-              ]))),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Questions',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.w700)),
+                    const Text(
+                        'Review AI drafts and add your own questions before publishing.'),
+                    const SizedBox(height: 12),
+                    Wrap(spacing: 8, runSpacing: 8, children: [
+                      if (_mode != 'manual')
+                        OutlinedButton.icon(
+                            onPressed: _busy
+                                ? null
+                                : () =>
+                                    _generate(append: _questions.isNotEmpty),
+                            icon: const Icon(Icons.auto_awesome),
+                            label: Text(_questions.isEmpty
+                                ? 'Generate questions'
+                                : 'Generate more')),
+                      if (_mode == 'ai_assisted' &&
+                          _questions.any((q) => q['accepted'] == false))
+                        TextButton.icon(
+                          onPressed: _busy
+                              ? null
+                              : () => setState(() {
+                                    for (final question in _questions) {
+                                      question['accepted'] = true;
+                                    }
+                                  }),
+                          icon: const Icon(Icons.done_all),
+                          label: const Text('Accept all'),
+                        ),
+                      OutlinedButton.icon(
+                          onPressed: _busy ? null : _addQuestion,
+                          icon: const Icon(Icons.add),
+                          label: const Text('Add question manually')),
+                    ]),
+                  ]))),
       if (_questions.isEmpty)
         const Padding(
             padding: EdgeInsets.all(22),
@@ -1092,15 +1099,8 @@ class _AssessmentCreateScreenState
           onAccept: () => setState(() => _questions[index]['accepted'] = true),
           onReject: () => setState(() => _questions.removeAt(index)),
           onDelete: () => setState(() => _questions.removeAt(index)),
-          generated: _mode != 'manual',
+          generated: _questions[index]['_generatedByAi'] == true,
         ),
-      if (_mode == 'manual')
-        Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: OutlinedButton.icon(
-                onPressed: _addQuestion,
-                icon: const Icon(Icons.add),
-                label: const Text('Add question'))),
     ]);
   }
 
