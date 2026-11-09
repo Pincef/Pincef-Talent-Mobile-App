@@ -203,6 +203,7 @@ class BrowseJobsState {
     this.page = 1,
     this.totalPages = 1,
     this.filters = const JobBrowseFilters(),
+    this.showSavedOnly = false,
     this.isLoading = false,
     this.isLoadingMore = false,
     this.error,
@@ -213,6 +214,7 @@ class BrowseJobsState {
   final int page;
   final int totalPages;
   final JobBrowseFilters filters;
+  final bool showSavedOnly;
   final bool isLoading;
   final bool isLoadingMore;
   final String? error;
@@ -225,6 +227,7 @@ class BrowseJobsState {
     int? page,
     int? totalPages,
     JobBrowseFilters? filters,
+    bool? showSavedOnly,
     bool? isLoading,
     bool? isLoadingMore,
     String? error,
@@ -236,6 +239,7 @@ class BrowseJobsState {
         page: page ?? this.page,
         totalPages: totalPages ?? this.totalPages,
         filters: filters ?? this.filters,
+        showSavedOnly: showSavedOnly ?? this.showSavedOnly,
         isLoading: isLoading ?? this.isLoading,
         isLoadingMore: isLoadingMore ?? this.isLoadingMore,
         error: clearError ? null : (error ?? this.error),
@@ -275,15 +279,39 @@ class BrowseJobsNotifier extends StateNotifier<BrowseJobsState> {
     return _fetch(page: state.page + 1, filters: state.filters, append: true);
   }
 
-  /// Client-only toggle — see JobListing.isSaved for why this doesn't
-  /// persist yet (no saved-jobs endpoint exists).
-  void toggleSaved(String jobId) {
+  Future<void> setSavedOnly(bool value) async {
+    if (state.showSavedOnly == value) return;
+    state = state.copyWith(showSavedOnly: value);
+    await _fetch(page: 1, filters: state.filters);
+  }
+
+  Future<void> toggleSaved(String jobId) async {
+    final index = state.jobs.indexWhere((job) => job.id == jobId);
+    if (index < 0) return;
+    final previous = state.jobs[index].isSaved;
     state = state.copyWith(
       jobs: [
         for (final job in state.jobs)
-          if (job.id == jobId) job.copyWith(isSaved: !job.isSaved) else job,
+          if (job.id == jobId) job.copyWith(isSaved: !previous) else job,
       ],
     );
+    try {
+      await _repository.setJobSaved(jobId, !previous);
+      if (state.showSavedOnly && previous) {
+        state = state.copyWith(
+          jobs: state.jobs.where((job) => job.id != jobId).toList(),
+          total: state.total - 1,
+        );
+      }
+    } catch (_) {
+      state = state.copyWith(
+        jobs: [
+          for (final job in state.jobs)
+            if (job.id == jobId) job.copyWith(isSaved: previous) else job,
+        ],
+      );
+      rethrow;
+    }
   }
 
   Future<void> _fetch({
@@ -299,8 +327,12 @@ class BrowseJobsNotifier extends StateNotifier<BrowseJobsState> {
       clearError: true,
     );
     try {
-      final result =
-          await _repository.browseJobs(filters: effectiveFilters, page: page);
+      final result = state.showSavedOnly
+          ? await _loadSavedJobs(effectiveFilters)
+          : await _repository.browseJobs(
+              filters: effectiveFilters,
+              page: page,
+            );
       state = state.copyWith(
         jobs: append ? [...state.jobs, ...result.jobs] : result.jobs,
         total: result.total,
@@ -313,6 +345,26 @@ class BrowseJobsNotifier extends StateNotifier<BrowseJobsState> {
       state = state.copyWith(
           isLoading: false, isLoadingMore: false, error: e.toString());
     }
+  }
+
+  Future<JobBrowseResult> _loadSavedJobs(JobBrowseFilters filters) async {
+    final allSaved = await _repository.listSavedJobs();
+    final query = filters.search?.trim().toLowerCase() ?? '';
+    final location = filters.location?.trim().toLowerCase() ?? '';
+    final filtered = allSaved.where((job) {
+      return (query.isEmpty ||
+              job.title.toLowerCase().contains(query) ||
+              job.companyName.toLowerCase().contains(query)) &&
+          (location.isEmpty || job.location.toLowerCase().contains(location)) &&
+          (filters.employmentType == null ||
+              job.employmentType == filters.employmentType);
+    }).toList(growable: false);
+    return JobBrowseResult(
+      jobs: filtered,
+      total: filtered.length,
+      page: 1,
+      totalPages: 1,
+    );
   }
 }
 
