@@ -141,12 +141,14 @@ class ApplicationsRepository {
     required String templateName,
     required String subject,
     required String body,
+    String? offerLink,
   }) async {
     await _request<bool>(
       () => _dio.post('/applications/$applicationId/send-email', data: {
         'templateName': templateName,
         'subject': subject,
         'body': body,
+        if (offerLink != null) 'offerLink': offerLink,
       }),
       (data) {
         if (data is Map && data['sent'] == true) return true;
