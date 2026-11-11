@@ -35,6 +35,21 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   String _country = 'NG';
   String? _errorText;
 
+  String? get _sharedJobDestination =>
+      safeSharedJobDestination(widget.returnTo);
+
+  bool get _isApplyingToSharedJob => _sharedJobDestination != null;
+
+  @override
+  void initState() {
+    super.initState();
+    // A shared application link can open signup in a fresh browser session,
+    // where the in-memory role picker has not been populated.
+    if (_isApplyingToSharedJob) {
+      ref.read(selectedRoleProvider.notifier).state = UserRole.candidate;
+    }
+  }
+
   @override
   void dispose() {
     _firstNameController.dispose();
@@ -48,7 +63,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final role = ref.read(selectedRoleProvider);
+    final role = _isApplyingToSharedJob
+        ? UserRole.candidate
+        : ref.read(selectedRoleProvider);
     if (role == null) {
       // Shouldn't happen if navigation always goes through /welcome first,
       // but guard rather than send a null role to the backend.
@@ -102,15 +119,19 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   }
 
   Future<void> _continueWithGoogle() async {
-    final role = ref.read(selectedRoleProvider);
+    final role = _isApplyingToSharedJob
+        ? UserRole.candidate
+        : ref.read(selectedRoleProvider);
     if (role == null) {
       setState(() =>
           _errorText = 'Please choose a role before continuing with Google.');
       return;
     }
-    final uri = ref
-        .read(authRepositoryProvider)
-        .googleOAuthUrl(role: role, country: _country);
+    final uri = ref.read(authRepositoryProvider).googleOAuthUrl(
+          role: role,
+          country: _country,
+          returnTo: _sharedJobDestination,
+        );
     if (!await launchUrl(uri, mode: LaunchMode.platformDefault) && mounted) {
       AppToast.error(context, 'Could not open Google sign-in.');
     }
@@ -138,9 +159,13 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const BrandHeader(
-                        title: 'Sign Up',
-                        subtitle: 'Create your account to get started',
+                      BrandHeader(
+                        title: _isApplyingToSharedJob
+                            ? 'Create your candidate account'
+                            : 'Sign Up',
+                        subtitle: _isApplyingToSharedJob
+                            ? 'Create an account to continue your job application.'
+                            : 'Create your account to get started',
                       ),
                       const SizedBox(height: 24),
                       Row(
