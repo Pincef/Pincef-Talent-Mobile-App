@@ -200,6 +200,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/auth/callback',
         builder: (context, state) => OAuthCallbackScreen(
           code: state.uri.queryParameters['code'],
+          returnTo: state.uri.queryParameters['returnTo'],
           error: state.uri.queryParameters['status'] == 'error'
               ? state.uri.queryParameters['reason'] ?? 'authentication_failed'
               : null,
