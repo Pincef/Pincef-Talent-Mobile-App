@@ -75,6 +75,9 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
   final List<String> _requirements = [];
   final List<String> _customBenefits = [];
 
+  bool get _deadlineLocked =>
+      widget.initialJob != null && widget.initialJob!.aiStatus != 'idle';
+
   static const _employmentTypeValues = {
     'Full-time': 'full_time',
     'Part-time': 'part_time',
@@ -328,6 +331,35 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
                         saving,
                         canPublish: true,
                       ),
+                      if (_deadlineLocked) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF5E8),
+                            border: Border.all(color: const Color(0xFFF2D2A5)),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(Icons.lock_outline,
+                                  size: 18, color: Color(0xFF9A5B00)),
+                              SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'AI processing has started for this job. The deadline, pipeline, and AI settings are locked so completed ranking results stay consistent.',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      height: 1.4,
+                                      color: Color(0xFF704500)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 16),
                       LayoutBuilder(builder: (context, box) {
                         final wide = box.maxWidth >= 850;
@@ -1148,11 +1180,15 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
         TextFormField(
             controller: _deadlineController,
             readOnly: true,
-            onTap: _pickDeadline,
+            enabled: !_deadlineLocked,
+            onTap: _deadlineLocked ? null : _pickDeadline,
             validator: _required('Select an application deadline'),
             decoration: _input('mm/dd/yyyy, --:--').copyWith(
                 suffixIcon: const Icon(Icons.calendar_today_outlined,
-                    size: 16, color: BrandColors.muted))),
+                    size: 16, color: BrandColors.muted),
+                helperText: _deadlineLocked
+                    ? 'Locked after AI processing begins.'
+                    : null)),
         const SizedBox(height: 8),
         const Text(
             'This job posting will automatically close and stop accepting applications once this timeline elapses.',
