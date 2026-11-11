@@ -9,10 +9,11 @@ class AuthRepository {
   final Dio _dio;
   final SecureStorageService _storage;
 
-  Uri googleOAuthUrl({UserRole? role, String? country}) {
+  Uri googleOAuthUrl({UserRole? role, String? country, String? returnTo}) {
     final query = <String, String>{};
     if (role != null) query['role'] = role.name;
     if (country != null) query['country'] = country;
+    if (returnTo != null) query['returnTo'] = returnTo;
     return Uri.parse('${_dio.options.baseUrl}/v1/oauth/google')
         .replace(queryParameters: query.isEmpty ? null : query);
   }
