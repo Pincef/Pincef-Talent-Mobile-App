@@ -69,6 +69,7 @@ class JobDraft {
     this.applicationDeadline,
     this.aiRanking = false,
     this.aiSummary = false,
+    this.aiStatus = 'idle',
     this.pipelineTier = 'Standard',
     this.pipelineId,
     this.rankingPlanTier = 'Premium',
@@ -109,6 +110,7 @@ class JobDraft {
   final DateTime? applicationDeadline;
   final bool aiRanking;
   final bool aiSummary;
+  final String aiStatus;
   final String pipelineTier;
   final String? pipelineId;
   final String rankingPlanTier;
@@ -708,6 +710,7 @@ class JobDetail {
     this.applicationDeadline,
     this.aiRanking = false,
     this.aiSummary = false,
+    this.aiStatus = 'idle',
     this.pipelineTier = 'Standard',
     this.pipelineId,
     this.rankingPlanTier = 'Premium',
@@ -741,6 +744,7 @@ class JobDetail {
   final DateTime? applicationDeadline;
   final bool aiRanking;
   final bool aiSummary;
+  final String aiStatus;
   final String pipelineTier;
   final String? pipelineId;
   final String rankingPlanTier;
@@ -853,6 +857,7 @@ class JobDetail {
       ),
       aiRanking: builtInAiFlow || configuredRanking,
       aiSummary: builtInAiFlow || configuredSummary,
+      aiStatus: (json['aiStatus'] ?? 'idle').toString(),
       pipelineTier: pipelineTier,
       pipelineId: json['pipelineId']?.toString(),
       rankingPlanTier: json['rankingPlanTier'] as String? ?? 'Premium',
