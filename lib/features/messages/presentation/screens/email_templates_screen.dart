@@ -100,7 +100,6 @@ class _EmailTemplatesScreenState extends State<EmailTemplatesScreen> {
       subject: 'Interview Invitation: {jobTitle} at {companyName}',
       body: 'Dear {candidateName},\n\n'
           'We were very impressed by your background and assessment performance for the {jobTitle} role at {companyName}!\n\n'
-          'We would love to invite you for a 45-minute technical discussion with {interviewerName}.\n\n'
           'To choose a time slot that works best for your schedule, please select an available time via the link below:\n'
           '{meetingLink}\n\n'
           'We look forward to speaking with you!\n\n'
