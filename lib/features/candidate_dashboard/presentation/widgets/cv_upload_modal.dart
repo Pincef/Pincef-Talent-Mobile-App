@@ -14,7 +14,7 @@ void showCandidateCvUploadModal(
   BuildContext context,
   WidgetRef ref, {
   String? jobTitle,
-  VoidCallback? onUploaded,
+  Future<void> Function()? onUploaded,
 }) {
   showDialog<void>(
     context: context,
@@ -84,8 +84,8 @@ class _CvUploadModalState extends ConsumerState<_CvUploadModal> {
       // supports storing it with the application.
       await ref.read(dashboardProvider.notifier).uploadCv(file);
       if (mounted) {
-        widget.onUploaded?.call();
         Navigator.of(context).pop();
+        await widget.onUploaded?.call();
       }
     } catch (_) {
       if (mounted) {
