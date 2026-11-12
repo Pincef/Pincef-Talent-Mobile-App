@@ -190,7 +190,7 @@ class _CandidateProfileSetupScreenState
   Future<void> _pickCv() async {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['pdf'],
+      allowedExtensions: ['pdf', 'doc', 'docx'],
       withData: true,
     );
     if (result == null || result.files.isEmpty) return;
@@ -718,7 +718,7 @@ class _CvUploadCard extends StatelessWidget {
           Expanded(
             child: Text(
               filename ??
-                  'Add a PDF CV to apply for roles (optional during setup)',
+                  'Add a PDF, DOC, or DOCX CV to apply for roles (optional during setup)',
               style: const TextStyle(color: BrandColors.navy, fontSize: 13),
               overflow: TextOverflow.ellipsis,
             ),
