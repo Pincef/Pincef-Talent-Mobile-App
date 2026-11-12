@@ -723,10 +723,11 @@ class _CandidateActions extends ConsumerWidget {
         context,
         ref,
         jobTitle: job.title,
-        onUploaded: () {
+        onUploaded: () async {
           ref.invalidate(myCvFilesProvider);
-          AppToast.success(
-              context, 'CV uploaded. Click Apply Now to continue.');
+          // Resume the original apply action after upload. This re-runs the
+          // profile requirement and application checks before submitting.
+          await _handleApply(context, ref);
         },
       );
       return;
