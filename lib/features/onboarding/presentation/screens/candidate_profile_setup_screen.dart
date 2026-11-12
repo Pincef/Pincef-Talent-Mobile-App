@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/theme/brand_color.dart';
+import '../../../../core/router/return_destination.dart';
 import '../../../../core/theme/auth_form_style.dart';
 import '../../../../core/widgets/brand_footer.dart';
 import '../../../../core/widgets/brand_header.dart';
@@ -58,6 +59,8 @@ class _CandidateProfileSetupScreenState
   String? _city;
   bool _isRemote = false;
 
+  String? get _safeReturnTo => safeSharedJobDestination(widget.returnTo);
+
   @override
   void initState() {
     super.initState();
@@ -87,7 +90,7 @@ class _CandidateProfileSetupScreenState
     super.dispose();
   }
 
-  void _exitToDashboard() => context.go(widget.returnTo ?? '/dashboard');
+  void _exitToDashboard() => context.go(_safeReturnTo ?? '/dashboard');
 
   Future<void> _skipProfileDetails() async {
     final notifier = ref.read(profileSetupProvider.notifier);
@@ -226,7 +229,7 @@ class _CandidateProfileSetupScreenState
           saved.bio.trim().isNotEmpty &&
           saved.locationDisplay.isNotEmpty &&
           saved.cvBytes != null;
-      context.go(widget.returnTo ??
+      context.go(_safeReturnTo ??
           (complete ? '/profile-setup-complete' : '/dashboard'));
     } else {
       final error = ref.read(profileSetupProvider).saveError;
@@ -239,6 +242,7 @@ class _CandidateProfileSetupScreenState
   Widget build(BuildContext context) {
     final state = ref.watch(profileSetupProvider);
     final notifier = ref.read(profileSetupProvider.notifier);
+    final compact = MediaQuery.sizeOf(context).width < 420;
 
     Widget stepContent;
     if (state.step == 0) {
@@ -288,7 +292,8 @@ class _CandidateProfileSetupScreenState
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
+            padding: EdgeInsets.symmetric(
+                horizontal: compact ? 12 : 20, vertical: compact ? 18 : 32),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 720),
               child: Column(

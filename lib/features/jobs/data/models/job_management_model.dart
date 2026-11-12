@@ -717,6 +717,7 @@ class JobDetail {
     this.rankingLimit = 20,
     this.assessmentEmailCount = 15,
     this.interviewEmailCount = 10,
+    this.requireCompleteCandidateProfile = false,
   });
 
   final String id;
@@ -751,6 +752,7 @@ class JobDetail {
   final int rankingLimit;
   final int assessmentEmailCount;
   final int interviewEmailCount;
+  final bool requireCompleteCandidateProfile;
 
   static const _employmentTypeLabels = {
     'full_time': 'Full-time',
@@ -866,6 +868,11 @@ class JobDetail {
           (automation?['assessmentEmails'] as num?)?.toInt() ?? 15,
       interviewEmailCount:
           (automation?['interviewInvites'] as num?)?.toInt() ?? 10,
+      requireCompleteCandidateProfile: company is Map<String, dynamic>
+          ? company['requireCompleteCandidateProfileForApplications']
+                  as bool? ??
+              false
+          : false,
     );
   }
 }

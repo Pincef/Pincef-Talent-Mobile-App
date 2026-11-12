@@ -170,18 +170,26 @@ class _CandidateEmailDialogState extends ConsumerState<CandidateEmailDialog> {
   @override
   Widget build(BuildContext context) {
     final candidate = widget.applicant.candidate;
+    final viewport = MediaQuery.sizeOf(context);
+    final compact = viewport.width < 600;
+    final narrow = viewport.width < 380;
+    final viewInsets = MediaQuery.viewInsetsOf(context);
     return Dialog(
-      insetPadding: const EdgeInsets.all(16),
+      insetPadding: EdgeInsets.all(compact ? 8 : 24),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 620, maxHeight: 760),
+        constraints: BoxConstraints(
+          maxWidth: 620,
+          maxHeight: viewport.height - viewInsets.bottom - (compact ? 16 : 48),
+        ),
         child: Padding(
-          padding: const EdgeInsets.all(22),
+          padding: EdgeInsets.all(compact ? 14 : 22),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
                       width: 42,
@@ -282,7 +290,7 @@ class _CandidateEmailDialogState extends ConsumerState<CandidateEmailDialog> {
                             counterText: '',
                           ),
                           inputFormatters: [
-                            _ProtectMergeFieldsFormatter(),
+                            const _ProtectMergeFieldsFormatter(),
                             LengthLimitingTextInputFormatter(200),
                           ],
                           validator: (value) {
@@ -334,7 +342,7 @@ class _CandidateEmailDialogState extends ConsumerState<CandidateEmailDialog> {
                                 'Dynamic fields are filled from the candidate, job, and company profile.',
                           ),
                           inputFormatters: [
-                            _ProtectMergeFieldsFormatter(),
+                            const _ProtectMergeFieldsFormatter(),
                             LengthLimitingTextInputFormatter(12000),
                           ],
                           validator: (value) {
@@ -361,13 +369,17 @@ class _CandidateEmailDialogState extends ConsumerState<CandidateEmailDialog> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                Row(
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     const Icon(Icons.lock_outline,
                         size: 15, color: BrandColors.muted),
-                    const SizedBox(width: 6),
-                    const Expanded(
-                      child: Text(
+                    SizedBox(
+                      width: narrow ? 150 : 200,
+                      child: const Text(
                         '{{candidateName}} and other merge fields are locked.',
                         style:
                             TextStyle(color: BrandColors.muted, fontSize: 11),

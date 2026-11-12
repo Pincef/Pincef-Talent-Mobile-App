@@ -91,6 +91,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
             password: _passwordController.text,
             role: role,
             country: _country,
+            returnTo: _sharedJobDestination,
           );
 
       if (!mounted) return;

@@ -719,26 +719,70 @@ class _CandidateActions extends ConsumerWidget {
     if (!context.mounted) return;
 
     if (cvFiles.isEmpty) {
-      final shouldUpload = await showDialog<bool>(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('Upload a CV first'),
-          content: const Text(
-              'You need at least one CV on your profile before applying.'),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel')),
-            ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Upload CV')),
-          ],
-        ),
+      showCandidateCvUploadModal(
+        context,
+        ref,
+        jobTitle: job.title,
+        onUploaded: () {
+          ref.invalidate(myCvFilesProvider);
+          AppToast.success(
+              context, 'CV uploaded. Click Apply Now to continue.');
+        },
       );
-      if (shouldUpload == true && context.mounted) {
-        showCandidateCvUploadModal(context, ref);
-      }
       return;
+    }
+
+    if (job.requireCompleteCandidateProfile) {
+      try {
+        final profile = await ref
+            .read(applicationsRepositoryProvider)
+            .getMyCandidateProfile();
+        if (!context.mounted) return;
+        final location = profile['location'] as Map<String, dynamic>?;
+        final hasLocation = [
+          location?['city'],
+          location?['countryName'],
+          location?['countryCode'],
+        ].any((value) => value is String && value.trim().isNotEmpty);
+        final isComplete =
+            (profile['fullName'] as String?)?.trim().isNotEmpty == true &&
+                (profile['professionalTitle'] as String?)?.trim().isNotEmpty ==
+                    true &&
+                (profile['bio'] as String?)?.trim().isNotEmpty == true &&
+                hasLocation;
+        if (!isComplete) {
+          final shouldComplete = await showDialog<bool>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              title: const Text('Complete your candidate profile'),
+              content: const Text(
+                'This company requires a complete profile before you can apply. Add your name, professional title, bio, location, and CV first.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Not now'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('Complete profile'),
+                ),
+              ],
+            ),
+          );
+          if (shouldComplete == true && context.mounted) {
+            context.push(Uri(
+              path: '/candidate-profile-setup',
+              queryParameters: {'returnTo': '/shared/jobs/$jobId'},
+            ).toString());
+          }
+          return;
+        }
+      } catch (error) {
+        if (!context.mounted) return;
+        AppToast.error(context, 'Could not verify your profile: $error');
+        return;
+      }
     }
 
     String? cvPublicId;

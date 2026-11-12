@@ -39,12 +39,17 @@ class WizardStepHeader extends StatelessWidget {
                 letterSpacing: 0.4,
               ),
             ),
-            Text(
-              kProfileSetupSectionLabels[step],
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: BrandColors.navy,
+            Flexible(
+              child: Text(
+                kProfileSetupSectionLabels[step],
+                textAlign: TextAlign.end,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: BrandColors.navy,
+                ),
               ),
             ),
           ],
@@ -82,7 +87,10 @@ class WizardCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: padding ?? const EdgeInsets.all(32),
+      padding: padding ??
+          EdgeInsets.all(
+            MediaQuery.sizeOf(context).width < 400 ? 18 : 32,
+          ),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -119,6 +127,62 @@ class WizardFooterRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final narrow = MediaQuery.sizeOf(context).width < 420;
+    final primaryButton = ElevatedButton(
+      onPressed: onPrimary,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: BrandColors.orange,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(primaryLabel,
+              style: const TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(width: 6),
+          Icon(primaryIcon, size: 16),
+        ],
+      ),
+    );
+
+    if (narrow) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (onBack != null)
+                TextButton.icon(
+                  onPressed: onBack,
+                  icon: const Icon(Icons.arrow_back,
+                      size: 15, color: BrandColors.muted),
+                  label: const Text('Back',
+                      style: TextStyle(fontSize: 13, color: BrandColors.muted)),
+                ),
+              if (onSkip != null)
+                TextButton(
+                  onPressed: onSkip,
+                  child: Text(skipLabel,
+                      style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: skipColor)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SizedBox(width: double.infinity, child: primaryButton),
+        ],
+      );
+    }
+
     return Row(
       children: [
         if (onBack != null)
@@ -155,26 +219,7 @@ class WizardFooterRow extends StatelessWidget {
           ),
           const SizedBox(width: 20),
         ],
-        ElevatedButton(
-          onPressed: onPrimary,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: BrandColors.orange,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-            elevation: 0,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(primaryLabel,
-                  style: const TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(width: 6),
-              Icon(primaryIcon, size: 16),
-            ],
-          ),
-        ),
+        primaryButton,
       ],
     );
   }

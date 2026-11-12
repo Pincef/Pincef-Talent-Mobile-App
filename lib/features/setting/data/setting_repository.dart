@@ -8,6 +8,26 @@ class SettingsRepository {
 
   final Dio _dio;
 
+  Future<CompanyApplicationPolicy> getCompanyApplicationPolicy() async {
+    final response = await _dio.get('/companies/me');
+    final data = response.data['data'] as Map<String, dynamic>;
+    return CompanyApplicationPolicy(
+      companyId: (data['_id'] ?? data['id']).toString(),
+      requireCompleteProfile:
+          data['requireCompleteCandidateProfileForApplications'] as bool? ??
+              false,
+    );
+  }
+
+  Future<void> setCompanyApplicationProfileRequirement({
+    required String companyId,
+    required bool required,
+  }) async {
+    await _dio.patch('/companies/$companyId', data: {
+      'requireCompleteCandidateProfileForApplications': required,
+    });
+  }
+
   /// Same endpoint the profile screen's data ultimately comes from —
   /// firstName/lastName/bio/location/competencies/certifications all flow
   /// through updateMyAccountSchema on the backend.
@@ -106,4 +126,14 @@ class SettingsRepository {
         as Map<String, dynamic>?)?['nextCursor'] as String?;
     return SecurityLogPage(items: items, nextCursor: nextCursor);
   }
+}
+
+class CompanyApplicationPolicy {
+  const CompanyApplicationPolicy({
+    required this.companyId,
+    required this.requireCompleteProfile,
+  });
+
+  final String companyId;
+  final bool requireCompleteProfile;
 }

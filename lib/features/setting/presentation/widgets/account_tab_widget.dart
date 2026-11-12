@@ -383,28 +383,112 @@ class _AccountTabState extends ConsumerState<AccountTab> {
             Flexible(
               fit: FlexFit.loose,
               flex: isWide ? 2 : 0,
-              child: _Card(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Personal Information',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                            color: AppColors.orange)),
-                    SizedBox(height: 8),
-                    Text(
-                      'Update your profile details and contact email used for candidate communication.',
-                      style: TextStyle(color: BrandColors.muted, fontSize: 12),
+              child: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _Card(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Personal Information',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                                color: AppColors.orange)),
+                        SizedBox(height: 8),
+                        Text(
+                          'Update your profile details and contact email used for candidate communication.',
+                          style:
+                              TextStyle(color: BrandColors.muted, fontSize: 12),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                  SizedBox(height: 16),
+                  _ApplicationProfileRequirementCard(),
+                ],
               ),
             ),
           ],
         ),
       );
     });
+  }
+}
+
+class _ApplicationProfileRequirementCard extends ConsumerWidget {
+  const _ApplicationProfileRequirementCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final policy = ref.watch(companyApplicationPolicyProvider);
+    return _Card(
+      child: policy.when(
+        loading: () => const LinearProgressIndicator(),
+        error: (error, _) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Application requirements',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+            const SizedBox(height: 8),
+            const Text('Could not load company application settings.',
+                style: TextStyle(color: BrandColors.muted, fontSize: 12)),
+            TextButton(
+              onPressed: () => ref.invalidate(companyApplicationPolicyProvider),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+        data: (current) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Application requirements',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+            const SizedBox(height: 6),
+            const Text(
+              'Choose whether applicants must complete their candidate profile before applying to your company’s jobs.',
+              style: TextStyle(
+                  color: BrandColors.muted, fontSize: 12, height: 1.4),
+            ),
+            const SizedBox(height: 8),
+            SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Require a complete candidate profile',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              subtitle: const Text(
+                'Requires name, professional title, bio, location, and CV.',
+                style: TextStyle(fontSize: 11, color: BrandColors.muted),
+              ),
+              value: current.requireCompleteProfile,
+              onChanged: (value) async {
+                try {
+                  await ref
+                      .read(settingsRepositoryProvider)
+                      .setCompanyApplicationProfileRequirement(
+                        companyId: current.companyId,
+                        required: value,
+                      );
+                  ref.invalidate(companyApplicationPolicyProvider);
+                  if (context.mounted) {
+                    AppToast.success(
+                        context,
+                        value
+                            ? 'Complete profiles are now required to apply.'
+                            : 'Candidates can apply with incomplete profiles.');
+                  }
+                } catch (error) {
+                  if (context.mounted) {
+                    AppToast.error(
+                        context, 'Could not update this setting: $error');
+                  }
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

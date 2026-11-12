@@ -93,7 +93,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       required String email,
       required String password,
       required UserRole role,
-      String country = 'NG'}) async {
+      String country = 'NG',
+      String? returnTo}) async {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
@@ -103,7 +104,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
           email: email,
           password: password,
           role: role,
-          country: country);
+          country: country,
+          returnTo: returnTo);
       state = AuthState(user: registeredUser);
     } catch (e) {
       state = AuthState(isLoading: false, error: e.toString());

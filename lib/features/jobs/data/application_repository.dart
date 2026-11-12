@@ -74,18 +74,34 @@ class ApplicationsRepository {
   /// Maps to: GET /candidate-profile/me -> candidateProfileService.getMyProfile.
   /// Only pulls cvFiles out of the full profile response — see the class
   /// doc comment above about a possible dedicated repository for this.
-  Future<List<CvFileOption>> getMyCvFiles() {
-    return _request(
-      () => _dio.get('/candidate-profile/me'),
-      (data) {
-        final profile = data as Map<String, dynamic>;
-        final cvFiles =
-            (profile['cvFiles'] as List?)?.cast<Map<String, dynamic>>() ??
-                const [];
-        return cvFiles.map(CvFileOption.fromApiJson).toList();
-      },
-    );
+  Future<Map<String, dynamic>> _getMyCandidateProfileData() {
+    return _dio.get('/candidate-profile/me').then((response) {
+      final body = response.data;
+      final data = body is Map<String, dynamic> ? body['data'] : body;
+      return Map<String, dynamic>.from(data as Map);
+    }).catchError((error) {
+      if (error is DioException && error.response?.statusCode == 404) {
+        return <String, dynamic>{};
+      }
+      if (error is DioException) {
+        final body = error.response?.data;
+        final message =
+            body is Map<String, dynamic> ? body['message'] as String? : null;
+        throw Exception(message ?? error.message ?? 'Request failed');
+      }
+      throw error;
+    });
   }
+
+  Future<List<CvFileOption>> getMyCvFiles() async {
+    final profile = await _getMyCandidateProfileData();
+    final cvFiles =
+        (profile['cvFiles'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
+    return cvFiles.map(CvFileOption.fromApiJson).toList();
+  }
+
+  Future<Map<String, dynamic>> getMyCandidateProfile() =>
+      _getMyCandidateProfileData();
 
   /// Recruiter-facing: paginated applicants for one job.
   ///

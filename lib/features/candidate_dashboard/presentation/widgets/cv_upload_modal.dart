@@ -9,27 +9,27 @@ import '../../application/candidate_dashboard_provider.dart';
 const _maxCvBytes = 5 * 1024 * 1024;
 const _maxCoverLetterChars = 2000;
 
-/// Below this width the footer buttons stack instead of sitting side by side.
-/// This is a dialog-local threshold, independent of [kMobileBreakpoint]
-/// (which governs app-wide sidebar vs. bottom-nav layout).
-const double _stackedButtonsBreakpoint = 360;
-
 /// Shared candidate uploader for dashboard controls and the shell action.
 void showCandidateCvUploadModal(
   BuildContext context,
   WidgetRef ref, {
   String? jobTitle,
+  VoidCallback? onUploaded,
 }) {
   showDialog<void>(
     context: context,
-    builder: (_) => _CvUploadModal(jobTitle: jobTitle),
+    builder: (_) => _CvUploadModal(
+      jobTitle: jobTitle,
+      onUploaded: onUploaded,
+    ),
   );
 }
 
 class _CvUploadModal extends ConsumerStatefulWidget {
-  const _CvUploadModal({this.jobTitle});
+  const _CvUploadModal({this.jobTitle, this.onUploaded});
 
   final String? jobTitle;
+  final VoidCallback? onUploaded;
 
   @override
   ConsumerState<_CvUploadModal> createState() => _CvUploadModalState();
@@ -83,7 +83,10 @@ class _CvUploadModalState extends ConsumerState<_CvUploadModal> {
       // TODO: pass _coverLetterController.text along once the provider
       // supports storing it with the application.
       await ref.read(dashboardProvider.notifier).uploadCv(file);
-      if (mounted) Navigator.of(context).pop();
+      if (mounted) {
+        widget.onUploaded?.call();
+        Navigator.of(context).pop();
+      }
     } catch (_) {
       if (mounted) {
         setState(
@@ -99,15 +102,23 @@ class _CvUploadModalState extends ConsumerState<_CvUploadModal> {
 
     final desktop = isDesktop(context);
     final screenWidth = MediaQuery.sizeOf(context).width;
-    final stackButtons = screenWidth < _stackedButtonsBreakpoint;
+    final stackButtons = screenWidth < 440;
     final viewInsetBottom = MediaQuery.viewInsetsOf(context).bottom;
     final charCount = _coverLetterController.text.length;
 
-    final horizontalPadding = desktop ? 28.0 : 20.0;
-    final verticalPadding = desktop ? 28.0 : 20.0;
+    final horizontalPadding = desktop
+        ? 28.0
+        : screenWidth < 380
+            ? 14.0
+            : 20.0;
+    final verticalPadding = desktop ? 28.0 : 16.0;
 
     return Dialog(
-      insetPadding: EdgeInsets.all(desktop ? 40 : 20),
+      insetPadding: EdgeInsets.all(desktop
+          ? 40
+          : screenWidth < 380
+              ? 8
+              : 14),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
         constraints: BoxConstraints(
@@ -138,10 +149,12 @@ class _CvUploadModalState extends ConsumerState<_CvUploadModal> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          const Text(
-                            'Upload Documents',
+                          Text(
+                            widget.jobTitle == null
+                                ? 'Upload Documents'
+                                : 'Upload your CV to apply',
                             textAlign: TextAlign.center,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.w800,
                               color: BrandColors.navy,
@@ -383,7 +396,7 @@ class _FooterActions extends StatelessWidget {
                   strokeWidth: 2, color: Colors.white),
             )
           : const Icon(Icons.arrow_forward, size: 16),
-      label: Text(isUploading ? 'Uploading...' : 'Continue to Review'),
+      label: Text(isUploading ? 'Uploading...' : 'Submit'),
     );
 
     if (stacked) {

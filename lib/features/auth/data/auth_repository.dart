@@ -61,6 +61,7 @@ class AuthRepository {
     required String password,
     required UserRole role,
     String country = 'NG',
+    String? returnTo,
   }) async {
     try {
       // POST /auth/register returns only { userId } — no tokens, so
@@ -72,6 +73,7 @@ class AuthRepository {
         'password': password,
         'role': role.name,
         'country': country,
+        if (returnTo != null) 'returnTo': returnTo,
       });
 
       return await login(email: email, password: password);

@@ -10,6 +10,11 @@ final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
   return SettingsRepository(ref.watch(dioProvider));
 });
 
+final companyApplicationPolicyProvider =
+    FutureProvider.autoDispose<CompanyApplicationPolicy>((ref) {
+  return ref.watch(settingsRepositoryProvider).getCompanyApplicationPolicy();
+});
+
 class SecurityLogState {
   final List<SecurityLogItem> items;
   final String? nextCursor;
