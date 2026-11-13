@@ -707,14 +707,20 @@ class _CandidateActions extends ConsumerWidget {
     );
   }
 
-  Future<void> _handleApply(BuildContext context, WidgetRef ref) async {
-    List<CvFileOption> cvFiles;
-    try {
-      cvFiles = await ref.read(myCvFilesProvider.future);
-    } catch (e) {
-      if (!context.mounted) return;
-      AppToast.error(context, 'Could not load your CVs: $e');
-      return;
+  Future<void> _handleApply(
+    BuildContext context,
+    WidgetRef ref, {
+    List<CvFileOption>? refreshedCvFiles,
+  }) async {
+    var cvFiles = refreshedCvFiles;
+    if (cvFiles == null) {
+      try {
+        cvFiles = await ref.read(myCvFilesProvider.future);
+      } catch (e) {
+        if (!context.mounted) return;
+        AppToast.error(context, 'Could not load your CVs: $e');
+        return;
+      }
     }
     if (!context.mounted) return;
 
@@ -724,10 +730,22 @@ class _CandidateActions extends ConsumerWidget {
         ref,
         jobTitle: job.title,
         onUploaded: () async {
-          ref.invalidate(myCvFilesProvider);
-          // Resume the original apply action after upload. This re-runs the
-          // profile requirement and application checks before submitting.
-          await _handleApply(context, ref);
+          try {
+            final uploadedCvFiles = await ref.refresh(myCvFilesProvider.future);
+            if (!context.mounted) return;
+            // Continue this exact Apply action with the CV list fetched after
+            // upload, rechecking any company profile requirements first.
+            await _handleApply(
+              context,
+              ref,
+              refreshedCvFiles: uploadedCvFiles,
+            );
+          } catch (error) {
+            if (context.mounted) {
+              AppToast.error(
+                  context, 'Could not load your uploaded CV: $error');
+            }
+          }
         },
       );
       return;
