@@ -712,15 +712,13 @@ class _CandidateActions extends ConsumerWidget {
     WidgetRef ref, {
     List<CvFileOption>? refreshedCvFiles,
   }) async {
-    var cvFiles = refreshedCvFiles;
-    if (cvFiles == null) {
-      try {
-        cvFiles = await ref.read(myCvFilesProvider.future);
-      } catch (e) {
-        if (!context.mounted) return;
-        AppToast.error(context, 'Could not load your CVs: $e');
-        return;
-      }
+    late final List<CvFileOption> cvFiles;
+    try {
+      cvFiles = refreshedCvFiles ?? await ref.read(myCvFilesProvider.future);
+    } catch (e) {
+      if (!context.mounted) return;
+      AppToast.error(context, 'Could not load your CVs: $e');
+      return;
     }
     if (!context.mounted) return;
 
