@@ -29,7 +29,7 @@ class _CvUploadModal extends ConsumerStatefulWidget {
   const _CvUploadModal({this.jobTitle, this.onUploaded});
 
   final String? jobTitle;
-  final VoidCallback? onUploaded;
+  final Future<void> Function()? onUploaded;
 
   @override
   ConsumerState<_CvUploadModal> createState() => _CvUploadModalState();
@@ -83,15 +83,18 @@ class _CvUploadModalState extends ConsumerState<_CvUploadModal> {
       // TODO: pass _coverLetterController.text along once the provider
       // supports storing it with the application.
       await ref.read(dashboardProvider.notifier).uploadCv(file);
-      if (mounted) {
-        Navigator.of(context).pop();
-        await widget.onUploaded?.call();
-      }
     } catch (_) {
       if (mounted) {
         setState(
             () => _error = 'Upload failed. Check the endpoint and try again.');
       }
+      return;
+    }
+
+    if (mounted) {
+      final onUploaded = widget.onUploaded;
+      Navigator.of(context).pop();
+      await onUploaded?.call();
     }
   }
 
