@@ -5,6 +5,7 @@ import '../data/models/admin_models.dart';
 
 typedef AdminJobsQuery = ({int page, String search});
 typedef AdminTicketsQuery = ({int page, String status});
+typedef AdminUsersQuery = ({int page, String search});
 
 final adminRepositoryProvider =
     Provider((ref) => AdminRepository(ref.watch(dioProvider)));
@@ -23,8 +24,12 @@ final adminAiUsageProvider =
   (ref, days) => ref.watch(adminRepositoryProvider).getAiUsage(days: days),
 );
 
-final adminUsersProvider = FutureProvider.autoDispose<List<AdminUserRecord>>(
-  (ref) => ref.watch(adminRepositoryProvider).listUsers(),
+final adminUsersProvider = FutureProvider.autoDispose
+    .family<AdminPaginatedResult<AdminUserRecord>, AdminUsersQuery>(
+  (ref, query) => ref.watch(adminRepositoryProvider).listUsers(
+        page: query.page,
+        search: query.search,
+      ),
 );
 
 final adminSubscriptionsProvider =
