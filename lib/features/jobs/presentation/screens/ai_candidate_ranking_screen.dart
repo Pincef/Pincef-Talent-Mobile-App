@@ -193,7 +193,8 @@ class _AiCandidateRankingScreenState
                               )
                             : result.entries.isEmpty
                                 ? _NoRankingsFound(
-                                    onRetry: () => ref.invalidate(
+                                    onRetry: _retryFailed,
+                                    onRefresh: () => ref.invalidate(
                                         candidateRankingProvider(jobId)),
                                     onViewCandidates: () =>
                                         context.go('/jobs/$jobId/candidates'),
@@ -1888,10 +1889,12 @@ class _RankingError extends StatelessWidget {
 class _NoRankingsFound extends StatelessWidget {
   const _NoRankingsFound({
     required this.onRetry,
+    required this.onRefresh,
     required this.onViewCandidates,
   });
 
   final VoidCallback onRetry;
+  final VoidCallback onRefresh;
   final VoidCallback onViewCandidates;
 
   @override
@@ -1929,12 +1932,17 @@ class _NoRankingsFound extends StatelessWidget {
                   child: const Text('View candidates'),
                 ),
                 ElevatedButton(
-                  onPressed: onRetry,
+                  onPressed: onRefresh,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: BrandColors.navy,
                     foregroundColor: Colors.white,
                   ),
                   child: const Text('Refresh rankings'),
+                ),
+                FilledButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry AI review'),
                 ),
               ],
             ),
