@@ -151,7 +151,9 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
     _autoRejectBelowScore = job.autoRejectBelowScore.toDouble();
     _aiRanking = job.aiRanking;
     _aiSummary = job.aiSummary;
-    _deadline = job.applicationDeadline;
+    // API timestamps are UTC instants. The recruiter edits a local wall-clock
+    // deadline, so convert before displaying or seeding the date/time pickers.
+    _deadline = job.applicationDeadline?.toLocal();
     _deadlineController.text =
         _deadline == null ? '' : _formatDeadline(_deadline!);
     _pipelineTier = job.pipelineTier;
@@ -1188,7 +1190,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
                     size: 16, color: BrandColors.muted),
                 helperText: _deadlineLocked
                     ? 'Locked after AI processing begins.'
-                    : null)),
+                    : 'Shown in your local timezone.')),
         const SizedBox(height: 8),
         const Text(
             'This job posting will automatically close and stop accepting applications once this timeline elapses.',
