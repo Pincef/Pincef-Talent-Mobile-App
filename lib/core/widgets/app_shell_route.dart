@@ -61,6 +61,8 @@ void _invalidateDataFor(WidgetRef ref, String route) {
     ref.invalidate(myApplicationsListProvider);
   } else if (path == '/admin/users') {
     ref.invalidate(adminUsersProvider);
+  } else if (path == '/admin/ai-usage') {
+    ref.invalidate(adminAiUsageProvider);
   } else if (path == '/admin/subscriptions') {
     ref.invalidate(adminSubscriptionsProvider);
   } else if (path == '/admin/jobs') {
@@ -282,6 +284,7 @@ class _AppShellRouteState extends ConsumerState<AppShellRoute> {
         path == '/messages' ||
         path == '/admin' ||
         path == '/admin/users' ||
+        path == '/admin/ai-usage' ||
         path == '/admin/jobs' ||
         path == '/admin/tickets' ||
         path == '/admin/subscriptions' ||
@@ -336,10 +339,15 @@ class _AppShellRouteState extends ConsumerState<AppShellRoute> {
     if (path == '/admin') {
       ref.invalidate(adminUsersProvider);
       ref.invalidate(adminSubscriptionsProvider);
+      ref.invalidate(adminOverviewProvider);
       return;
     }
     if (path == '/admin/users') {
       ref.invalidate(adminUsersProvider);
+      return;
+    }
+    if (path == '/admin/ai-usage') {
+      ref.invalidate(adminAiUsageProvider);
       return;
     }
     if (path == '/admin/subscriptions') {
