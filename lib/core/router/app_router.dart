@@ -250,12 +250,12 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const AdminUsersScreen(),
           ),
           GoRoute(
-            path: '/admin/jobs',
-            builder: (context, state) => const AdminJobsScreen(),
+            path: '/admin/ai-usage',
+            builder: (context, state) => const AdminAiUsageScreen(),
           ),
           GoRoute(
-            path: '/admin/tickets',
-            builder: (context, state) => const AdminTicketsScreen(),
+            path: '/admin/jobs',
+            builder: (context, state) => const AdminJobsScreen(),
           ),
           GoRoute(
             path: '/admin/subscriptions',
