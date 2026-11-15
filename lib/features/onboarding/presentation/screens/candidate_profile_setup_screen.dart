@@ -578,58 +578,66 @@ class _ExperienceVerificationStep extends StatelessWidget {
       children: [
         const _MiniLogoHeader(),
         const SizedBox(height: 20),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Build your career timeline',
-                      style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: BrandColors.navy)),
-                  SizedBox(height: 2),
-                  Text('Add your most relevant professional experience.',
-                      style:
-                          TextStyle(fontSize: 11.5, color: BrandColors.muted)),
-                ],
-              ),
+        LayoutBuilder(builder: (context, constraints) {
+          final compact = constraints.maxWidth < 390;
+          const heading = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Build your career timeline',
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: BrandColors.navy)),
+              SizedBox(height: 2),
+              Text('Add your most relevant professional experience.',
+                  style: TextStyle(fontSize: 11.5, color: BrandColors.muted)),
+            ],
+          );
+          final addButton = ElevatedButton.icon(
+            onPressed: onAddExperience,
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('Add Experience'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: BrandColors.orange,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
-            ElevatedButton.icon(
-              onPressed: onAddExperience,
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text('Add Experience'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: BrandColors.orange,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-              ),
-            ),
-          ],
-        ),
+          );
+          return compact
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [heading, const SizedBox(height: 10), addButton],
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [Expanded(child: heading), addButton],
+                );
+        }),
         const SizedBox(height: 14),
         if (workExperiences.isEmpty)
           const Text('No experience added yet.',
               style: TextStyle(fontSize: 12, color: BrandColors.muted))
         else
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              for (var i = 0; i < workExperiences.length; i++)
-                SizedBox(
-                  width: 280,
-                  child: _ExperienceCard(
-                    entry: workExperiences[i],
-                    onRemove: () => onRemoveExperience(i),
+          LayoutBuilder(builder: (context, constraints) {
+            final cardWidth =
+                constraints.maxWidth < 304 ? constraints.maxWidth : 280.0;
+            return Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                for (var i = 0; i < workExperiences.length; i++)
+                  SizedBox(
+                    width: cardWidth,
+                    child: _ExperienceCard(
+                      entry: workExperiences[i],
+                      onRemove: () => onRemoveExperience(i),
+                    ),
                   ),
-                ),
-            ],
-          ),
+              ],
+            );
+          }),
         const SizedBox(height: 20),
         const Divider(color: BrandColors.border),
         const SizedBox(height: 16),
