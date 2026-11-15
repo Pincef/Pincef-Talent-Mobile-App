@@ -63,6 +63,7 @@ class _AssessmentCreateScreenState
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) {
+          final dialogHeight = MediaQuery.sizeOf(context).height;
           final query = search.text.trim().toLowerCase();
           final matches = jobs
               .where(
@@ -72,7 +73,7 @@ class _AssessmentCreateScreenState
             title: const Text('Choose a job'),
             content: SizedBox(
               width: 480,
-              height: 420,
+              height: (dialogHeight * .58).clamp(220.0, 420.0).toDouble(),
               child: Column(children: [
                 TextField(
                   controller: search,
