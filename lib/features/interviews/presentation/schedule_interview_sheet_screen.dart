@@ -162,6 +162,7 @@ class _PanelState extends ConsumerState<ScheduleInterviewPanel> {
     final selected = await showDialog<SchedulableApplication>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(builder: (context, refresh) {
+        final dialogHeight = MediaQuery.sizeOf(context).height;
         final jobs = <String, SchedulableApplication>{};
         for (final application in applications) {
           jobs.putIfAbsent(application.jobId, () => application);
@@ -174,7 +175,7 @@ class _PanelState extends ConsumerState<ScheduleInterviewPanel> {
           title: const Text('Select a job'),
           content: SizedBox(
               width: 420,
-              height: 400,
+              height: (dialogHeight * .58).clamp(220.0, 400.0).toDouble(),
               child: Column(children: [
                 TextField(
                     controller: search,
