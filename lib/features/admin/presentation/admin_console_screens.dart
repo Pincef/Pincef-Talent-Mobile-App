@@ -8,51 +8,331 @@ import '../application/admin_provider.dart';
 import '../data/admin_repository.dart';
 import '../data/models/admin_models.dart';
 
-class AdminOverviewScreen extends StatelessWidget {
+class AdminOverviewScreen extends ConsumerWidget {
   const AdminOverviewScreen({super.key});
 
   @override
-  Widget build(BuildContext context) => _AdminPage(
-        title: 'Admin overview',
-        subtitle: 'Manage platform users and subscription accounts.',
-        child: LayoutBuilder(builder: (context, constraints) {
-          final wide = constraints.maxWidth >= 760;
-          final cardWidth =
-              wide ? (constraints.maxWidth - 16) / 2 : constraints.maxWidth;
-          final cards = [
-            _AdminActionCard(
-              icon: Icons.people_outline,
-              title: 'Users',
-              description: 'Review accounts and suspend or reactivate users.',
-              onTap: () => context.go('/admin/users'),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final overview = ref.watch(adminOverviewProvider);
+    return _AdminPage(
+      title: 'Admin overview',
+      subtitle: 'Platform activity, account access, and billing health.',
+      child: LayoutBuilder(builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 760;
+        final cardWidth =
+            wide ? (constraints.maxWidth - 16) / 2 : constraints.maxWidth;
+        final cards = [
+          _AdminActionCard(
+            icon: Icons.people_outline,
+            title: 'Users',
+            description: 'Review accounts and suspend or reactivate users.',
+            onTap: () => context.go('/admin/users'),
+          ),
+          _AdminActionCard(
+            icon: Icons.work_outline,
+            title: 'Jobs',
+            description: 'Browse all platform job postings by page.',
+            onTap: () => context.go('/admin/jobs'),
+          ),
+          _AdminActionCard(
+            icon: Icons.payments_outlined,
+            title: 'Subscriptions',
+            description: 'Check plans, account status, and renewal dates.',
+            onTap: () => context.go('/admin/subscriptions'),
+          ),
+        ];
+        return Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          children: [
+            if (overview.hasValue) ...[
+              _AdminMetricCard(
+                  label: 'Users',
+                  value: '${overview.value!.users}',
+                  detail:
+                      '${overview.value!.recruiters} recruiters · ${overview.value!.candidates} candidates',
+                  width: cardWidth),
+              _AdminMetricCard(
+                  label: 'Jobs',
+                  value: '${overview.value!.jobs}',
+                  detail: '${overview.value!.activeJobs} currently published',
+                  width: cardWidth),
+              _AdminMetricCard(
+                  label: 'Applications',
+                  value: '${overview.value!.applications}',
+                  detail: '${overview.value!.companies} companies',
+                  width: cardWidth),
+              _AdminMetricCard(
+                  label: 'Active subscriptions',
+                  value: '${overview.value!.activeSubscriptions}',
+                  detail:
+                      '${overview.value!.upcomingRenewals} renewals in 30 days',
+                  width: cardWidth),
+              _AdminMetricCard(
+                  label: 'Past due',
+                  value: '${overview.value!.pastDueSubscriptions}',
+                  detail:
+                      '${overview.value!.plans} active plans · ${overview.value!.webhookEvents} webhook events processed',
+                  width: cardWidth),
+            ] else if (overview.hasError)
+              SizedBox(
+                  width: constraints.maxWidth,
+                  child: _ErrorState(
+                      message: _friendlyError(overview.error!),
+                      onRetry: () => ref.invalidate(adminOverviewProvider))),
+            for (final card in cards) SizedBox(width: cardWidth, child: card),
+          ],
+        );
+      }),
+    );
+  }
+}
+
+class _AdminMetricCard extends StatelessWidget {
+  const _AdminMetricCard(
+      {required this.label,
+      required this.value,
+      required this.detail,
+      required this.width});
+  final String label, value, detail;
+  final double width;
+  @override
+  Widget build(BuildContext context) => Container(
+        width: width,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(color: const Color(0xFFE4E9F0))),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label,
+              style: const TextStyle(
+                  color: BrandColors.muted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          Text(value,
+              style: const TextStyle(
+                  color: BrandColors.navy,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w800)),
+          const SizedBox(height: 4),
+          Text(detail,
+              style: const TextStyle(color: BrandColors.muted, fontSize: 11)),
+        ]),
+      );
+}
+
+class AdminAiUsageScreen extends ConsumerStatefulWidget {
+  const AdminAiUsageScreen({super.key});
+  @override
+  ConsumerState<AdminAiUsageScreen> createState() => _AdminAiUsageScreenState();
+}
+
+class _AdminAiUsageScreenState extends ConsumerState<AdminAiUsageScreen> {
+  int _days = 30;
+
+  @override
+  Widget build(BuildContext context) {
+    final usage = ref.watch(adminAiUsageProvider(_days));
+    return _AdminPage(
+      title: 'AI usage',
+      subtitle: 'See which AI workflows and models are consuming tokens.',
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: DropdownButton<int>(
+            value: _days,
+            onChanged: (value) =>
+                value == null ? null : setState(() => _days = value),
+            items: const [7, 30, 90]
+                .map((days) => DropdownMenuItem(
+                    value: days, child: Text('Last $days days')))
+                .toList(),
+          ),
+        ),
+        usage.when(
+          loading: () => const _LoadingState(),
+          error: (error, _) => _ErrorState(
+            message: _friendlyError(error),
+            onRetry: () => ref.invalidate(adminAiUsageProvider(_days)),
+          ),
+          data: (summary) => _AiUsageContent(summary: summary),
+        ),
+      ]),
+    );
+  }
+}
+
+class _AiUsageContent extends StatelessWidget {
+  const _AiUsageContent({required this.summary});
+  final AdminAiUsageSummary summary;
+
+  int _int(Object? value) =>
+      value is num ? value.toInt() : int.tryParse('$value') ?? 0;
+  String _count(Object? value) => _int(value)
+      .toString()
+      .replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',');
+
+  @override
+  Widget build(BuildContext context) =>
+      LayoutBuilder(builder: (context, constraints) {
+        const gap = 10.0;
+        final columns = constraints.maxWidth >= 900
+            ? 4
+            : constraints.maxWidth >= 540
+                ? 2
+                : 1;
+        final tileWidth =
+            (constraints.maxWidth - gap * (columns - 1)) / columns;
+        final totals = summary.totals;
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Wrap(spacing: gap, runSpacing: gap, children: [
+            _AiUsageMetric(
+                label: 'Total tokens',
+                value: _count(totals['totalTokens']),
+                detail: 'prompt + completion',
+                width: tileWidth),
+            _AiUsageMetric(
+                label: 'Prompt tokens',
+                value: _count(totals['promptTokens']),
+                detail: 'input to Groq',
+                width: tileWidth),
+            _AiUsageMetric(
+                label: 'Completion tokens',
+                value: _count(totals['completionTokens']),
+                detail: 'generated output',
+                width: tileWidth),
+            _AiUsageMetric(
+                label: 'Requests / quota errors',
+                value:
+                    '${_count(totals['requests'])} / ${_count(totals['quotaErrors'])}',
+                detail: '${_count(totals['errors'])} failed attempts total',
+                width: tileWidth),
+          ]),
+          const SizedBox(height: 22),
+          _usageSection(
+              'Usage by workflow',
+              summary.byOperation,
+              (row) => '${row['operation'] ?? 'Unknown'}',
+              (row) =>
+                  '${_count(row['totalTokens'])} tokens · ${_count(row['requests'])} attempts · ${_count(row['errors'])} errors'),
+          _usageSection(
+              'Usage by model',
+              summary.byModel,
+              (row) => '${row['model'] ?? 'Unknown'}',
+              (row) =>
+                  '${_count(row['totalTokens'])} tokens · ${_count(row['requests'])} requests'),
+          _usageSection(
+              'Key rotation',
+              summary.byKeySlot,
+              (row) => (row['keySlot'] as num?)?.toInt() == 0
+                  ? 'No configured key'
+                  : 'Key slot ${row['keySlot']}',
+              (row) =>
+                  '${_count(row['totalTokens'])} tokens · ${_count(row['requests'])} attempts · ${_count(row['quotaErrors'])} quota errors'),
+          _usageSection(
+              'Daily usage (UTC)',
+              summary.byDay.reversed.take(14).toList(),
+              (row) => '${row['date'] ?? 'Unknown date'}',
+              (row) =>
+                  '${_count(row['totalTokens'])} tokens · ${_count(row['requests'])} attempts · ${_count(row['errors'])} errors'),
+          _usageSection(
+              'Recent requests',
+              summary.recent,
+              (row) =>
+                  '${row['operation'] ?? 'AI request'} · ${row['model'] ?? ''}',
+              (row) =>
+                  '${row['status']} · ${_count(row['totalTokens'])} tokens · key slot ${row['keySlot']} · ${row['errorType'] ?? 'no error'}'),
+          if (summary.totals['requests'] == 0)
+            const Padding(
+                padding: EdgeInsets.symmetric(vertical: 14),
+                child: Text(
+                    'No Groq usage has been recorded for this period yet. Records start appearing as AI requests run.',
+                    style: TextStyle(color: BrandColors.muted))),
+        ]);
+      });
+
+  Widget _usageSection(
+          String title,
+          List<Map<String, dynamic>> rows,
+          String Function(Map<String, dynamic>) titleFor,
+          String Function(Map<String, dynamic>) detailFor) =>
+      Padding(
+        padding: const EdgeInsets.only(top: 18),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title,
+              style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                  color: BrandColors.navy)),
+          const SizedBox(height: 8),
+          if (rows.isEmpty)
+            const Text('No data yet.',
+                style: TextStyle(fontSize: 12, color: BrandColors.muted)),
+          for (final row in rows)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 7),
+              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+              decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE4E9F0))),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(titleFor(row),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                            color: BrandColors.navy)),
+                    const SizedBox(height: 4),
+                    Text(detailFor(row),
+                        style: const TextStyle(
+                            fontSize: 11, color: BrandColors.muted)),
+                  ]),
             ),
-            _AdminActionCard(
-              icon: Icons.work_outline,
-              title: 'Jobs',
-              description: 'Browse all platform job postings by page.',
-              onTap: () => context.go('/admin/jobs'),
-            ),
-            _AdminActionCard(
-              icon: Icons.support_agent_outlined,
-              title: 'Tickets',
-              description: 'Review user complaints, reply, and update status.',
-              onTap: () => context.go('/admin/tickets'),
-            ),
-            _AdminActionCard(
-              icon: Icons.payments_outlined,
-              title: 'Subscriptions',
-              description: 'Check plans, account status, and renewal dates.',
-              onTap: () => context.go('/admin/subscriptions'),
-            ),
-          ];
-          return Wrap(
-            spacing: 16,
-            runSpacing: 16,
-            children: [
-              for (final card in cards) SizedBox(width: cardWidth, child: card),
-            ],
-          );
-        }),
+        ]),
+      );
+}
+
+class _AiUsageMetric extends StatelessWidget {
+  const _AiUsageMetric(
+      {required this.label,
+      required this.value,
+      required this.detail,
+      required this.width});
+  final String label, value, detail;
+  final double width;
+  @override
+  Widget build(BuildContext context) => Container(
+        width: width,
+        padding: const EdgeInsets.all(15),
+        decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE4E9F0))),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: BrandColors.muted)),
+          const SizedBox(height: 6),
+          Text(value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: BrandColors.navy)),
+          const SizedBox(height: 3),
+          Text(detail,
+              style: const TextStyle(fontSize: 10, color: BrandColors.muted)),
+        ]),
       );
 }
 
@@ -186,6 +466,7 @@ class AdminSubscriptionsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final subscriptions = ref.watch(adminSubscriptionsProvider);
+    final billingHealth = ref.watch(adminBillingHealthProvider);
     return _AdminPage(
       title: 'Subscriptions',
       subtitle: 'View account plans and subscription status.',
@@ -195,19 +476,74 @@ class AdminSubscriptionsScreen extends ConsumerWidget {
           message: _friendlyError(error),
           onRetry: () => ref.invalidate(adminSubscriptionsProvider),
         ),
-        data: (records) => records.isEmpty
-            ? const _EmptyState(
-                title: 'No subscriptions found',
-                message:
-                    'Subscription records will appear here when the admin API is connected.',
-              )
-            : Column(children: [
-                for (final record in records)
-                  _SubscriptionCard(subscription: record),
-              ]),
+        data: (records) => Column(children: [
+          if (billingHealth.hasValue)
+            _BillingHealthStrip(summary: billingHealth.value!),
+          if (records.isEmpty)
+            const _EmptyState(
+              title: 'No subscriptions found',
+              message:
+                  'Subscription records will appear here when a company or recruiter subscribes.',
+            )
+          else
+            for (final record in records)
+              _SubscriptionCard(subscription: record),
+        ]),
       ),
     );
   }
+}
+
+class _BillingHealthStrip extends StatelessWidget {
+  const _BillingHealthStrip({required this.summary});
+  final AdminBillingHealth summary;
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: LayoutBuilder(builder: (context, constraints) {
+          final width = constraints.maxWidth >= 760
+              ? (constraints.maxWidth - 24) / 4
+              : (constraints.maxWidth - 12) / 2;
+          final cards = <(String, int, String)>[
+            ('Active', summary.active, 'subscriptions'),
+            ('Past due', summary.pastDue, 'need attention'),
+            ('Upcoming', summary.renewalsNext30Days, 'renewals in 30 days'),
+            (
+              'Payment setup',
+              summary.planCount,
+              '${summary.processedWebhooks} webhook events processed'
+            ),
+          ];
+          return Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final (label, value, detail) in cards)
+              Container(
+                  width: width,
+                  padding: const EdgeInsets.all(13),
+                  decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border.all(color: const Color(0xFFE4E9F0)),
+                      borderRadius: BorderRadius.circular(12)),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(label,
+                            style: const TextStyle(
+                                fontSize: 11, color: BrandColors.muted)),
+                        const SizedBox(height: 5),
+                        Text('$value',
+                            style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                color: BrandColors.navy)),
+                        Text(detail,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 10, color: BrandColors.muted)),
+                      ])),
+          ]);
+        }),
+      );
 }
 
 class AdminJobsScreen extends ConsumerStatefulWidget {
@@ -622,30 +958,7 @@ class _AdminPage extends StatelessWidget {
                     Text(subtitle,
                         style: const TextStyle(
                             fontSize: 14, color: BrandColors.muted)),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFF3E8),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.science_outlined,
-                              size: 14, color: BrandColors.orange),
-                          SizedBox(width: 6),
-                          Text(
-                              'DEMO DATA · changes reset when the app restarts',
-                              style: TextStyle(
-                                  color: BrandColors.orange,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700)),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 16),
                     child,
                   ],
                 ),
@@ -774,8 +1087,11 @@ class _SubscriptionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _RecordCard(
         title: subscription.accountName,
-        subtitle:
-            subscription.email.isEmpty ? subscription.plan : subscription.email,
+        subtitle: [
+          subscription.email,
+          subscription.subscriberType,
+          subscription.provider
+        ].where((value) => value != null && value.isNotEmpty).join(' · '),
         leading: Icons.credit_card_outlined,
         trailing: _StatusPill(text: subscription.status),
         footer: Row(children: [
@@ -787,8 +1103,13 @@ class _SubscriptionCard extends StatelessWidget {
                     color: BrandColors.navy)),
           ),
           if (subscription.renewsAt != null)
-            Text('Renews: ${_formatDate(subscription.renewsAt!)}',
-                style: const TextStyle(fontSize: 12, color: BrandColors.muted)),
+            Flexible(
+              child: Text(
+                '${subscription.cancelAtPeriodEnd ? 'Ends' : 'Next billing'}: ${_formatDate(subscription.renewsAt!)}',
+                textAlign: TextAlign.end,
+                style: const TextStyle(fontSize: 12, color: BrandColors.muted),
+              ),
+            ),
         ]),
       );
 }
@@ -864,7 +1185,7 @@ class _StatusPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withOpacity(.09),
+        color: color.withValues(alpha: .09),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
