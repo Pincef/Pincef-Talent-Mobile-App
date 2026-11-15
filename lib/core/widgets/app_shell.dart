@@ -117,12 +117,11 @@ const List<NavItem> kRecruiterNavItems = [
 const List<NavItem> kAdminNavItems = [
   NavItem(label: 'Dashboard', icon: Icons.grid_view_rounded, route: '/admin'),
   NavItem(label: 'Users', icon: Icons.people_outline, route: '/admin/users'),
-  NavItem(label: 'Jobs', icon: Icons.work_outline, route: '/admin/jobs'),
   NavItem(
-    label: 'Tickets',
-    icon: Icons.support_agent_outlined,
-    route: '/admin/tickets',
-  ),
+      label: 'AI usage',
+      icon: Icons.data_usage_outlined,
+      route: '/admin/ai-usage'),
+  NavItem(label: 'Jobs', icon: Icons.work_outline, route: '/admin/jobs'),
   NavItem(
     label: 'Subscriptions',
     icon: Icons.payments_outlined,
@@ -1198,7 +1197,7 @@ class _MobileActionLayerState extends State<_MobileActionLayer> {
                               maxLines: 1,
                               overflow: TextOverflow.fade,
                               softWrap: false,
-                              style: TextStyle(
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w600,
                               ),
