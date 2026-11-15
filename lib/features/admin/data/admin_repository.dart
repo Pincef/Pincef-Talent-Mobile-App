@@ -43,6 +43,7 @@ class AdminUserRecord {
               (json['isSuspended'] == true ? 'suspended' : 'active'))
           .toString(),
       company: (json['companyName'] ??
+              (json['companyId'] is Map ? json['companyId']['name'] : null) ??
               (json['company'] is Map ? json['company']['name'] : null))
           ?.toString(),
     );
@@ -57,6 +58,9 @@ class AdminSubscriptionRecord {
     required this.plan,
     required this.status,
     this.renewsAt,
+    this.provider,
+    this.subscriberType,
+    this.cancelAtPeriodEnd = false,
   });
 
   final String id;
@@ -65,30 +69,133 @@ class AdminSubscriptionRecord {
   final String plan;
   final String status;
   final String? renewsAt;
+  final String? provider;
+  final String? subscriberType;
+  final bool cancelAtPeriodEnd;
 
   factory AdminSubscriptionRecord.fromJson(Map<String, dynamic> json) {
-    final account =
-        json['user'] ?? json['company'] ?? const <String, dynamic>{};
-    final accountMap = account is Map
-        ? Map<String, dynamic>.from(account)
-        : <String, dynamic>{};
-    final first = (accountMap['firstName'] ?? '').toString();
-    final last = (accountMap['lastName'] ?? '').toString();
     return AdminSubscriptionRecord(
       id: (json['_id'] ?? json['id'] ?? '').toString(),
-      accountName:
-          (accountMap['name'] ?? '$first $last').toString().trim().isEmpty
-              ? 'Account'
-              : (accountMap['name'] ?? '$first $last').toString().trim(),
-      email: (accountMap['email'] ?? json['email'] ?? '').toString(),
+      accountName: (json['accountName'] ?? 'Account').toString(),
+      email: (json['email'] ?? '').toString(),
       plan: (json['planName'] ??
               (json['plan'] is Map ? json['plan']['name'] : json['plan']) ??
               'Unknown plan')
           .toString(),
       status: (json['status'] ?? 'unknown').toString(),
-      renewsAt:
-          (json['currentPeriodEnd'] ?? json['renewsAt'] ?? json['renewalDate'])
-              ?.toString(),
+      renewsAt: (json['nextBillingAt'] ??
+              json['currentPeriodEnd'] ??
+              json['renewsAt'] ??
+              json['renewalDate'])
+          ?.toString(),
+      provider: json['provider']?.toString(),
+      subscriberType: json['subscriberType']?.toString(),
+      cancelAtPeriodEnd: json['cancelAtPeriodEnd'] == true,
+    );
+  }
+}
+
+class AdminOverviewMetrics {
+  const AdminOverviewMetrics({
+    required this.users,
+    required this.recruiters,
+    required this.candidates,
+    required this.companies,
+    required this.jobs,
+    required this.activeJobs,
+    required this.applications,
+    required this.activeSubscriptions,
+    required this.pastDueSubscriptions,
+    required this.upcomingRenewals,
+    required this.plans,
+    required this.webhookEvents,
+  });
+  final int users, recruiters, candidates, companies, jobs, activeJobs;
+  final int applications, activeSubscriptions, pastDueSubscriptions;
+  final int upcomingRenewals, plans, webhookEvents;
+
+  factory AdminOverviewMetrics.fromJson(Map<String, dynamic> json) =>
+      AdminOverviewMetrics(
+        users: _number(json['users']),
+        recruiters: _number(json['recruiters']),
+        candidates: _number(json['candidates']),
+        companies: _number(json['companies']),
+        jobs: _number(json['jobs']),
+        activeJobs: _number(json['activeJobs']),
+        applications: _number(json['applications']),
+        activeSubscriptions: _number(json['activeSubscriptions']),
+        pastDueSubscriptions: _number(json['pastDueSubscriptions']),
+        upcomingRenewals: _number(json['upcomingRenewals']),
+        plans: _number(json['plans']),
+        webhookEvents: _number(json['webhookEvents']),
+      );
+}
+
+int _number(dynamic value) =>
+    value is num ? value.toInt() : int.tryParse('$value') ?? 0;
+
+class AdminAiUsageSummary {
+  const AdminAiUsageSummary({
+    required this.days,
+    required this.totals,
+    required this.byDay,
+    required this.byOperation,
+    required this.byModel,
+    required this.byKeySlot,
+    required this.recent,
+  });
+  final int days;
+  final Map<String, dynamic> totals;
+  final List<Map<String, dynamic>> byDay,
+      byOperation,
+      byModel,
+      byKeySlot,
+      recent;
+
+  factory AdminAiUsageSummary.fromJson(Map<String, dynamic> json) {
+    List<Map<String, dynamic>> rows(String key) =>
+        (json[key] as List? ?? const [])
+            .whereType<Map>()
+            .map((row) => Map<String, dynamic>.from(row))
+            .toList(growable: false);
+    return AdminAiUsageSummary(
+      days: _number(json['days']),
+      totals: Map<String, dynamic>.from(json['totals'] as Map? ?? const {}),
+      byDay: rows('byDay'),
+      byOperation: rows('byOperation'),
+      byModel: rows('byModel'),
+      byKeySlot: rows('byKeySlot'),
+      recent: rows('recent'),
+    );
+  }
+}
+
+class AdminBillingHealth {
+  const AdminBillingHealth(
+      {required this.active,
+      required this.pastDue,
+      required this.cancelled,
+      required this.renewalsNext30Days,
+      required this.processedWebhooks,
+      required this.planCount});
+  final int active,
+      pastDue,
+      cancelled,
+      renewalsNext30Days,
+      processedWebhooks,
+      planCount;
+  factory AdminBillingHealth.fromJson(Map<String, dynamic> json) {
+    final subscriptions =
+        Map<String, dynamic>.from(json['subscriptions'] as Map? ?? const {});
+    final webhooks =
+        Map<String, dynamic>.from(json['webhooks'] as Map? ?? const {});
+    return AdminBillingHealth(
+      active: _number(subscriptions['active']),
+      pastDue: _number(subscriptions['pastDue']),
+      cancelled: _number(subscriptions['cancelled']),
+      renewalsNext30Days: _number(subscriptions['renewalsNext30Days']),
+      processedWebhooks: _number(webhooks['processed']),
+      planCount: (json['plans'] as List? ?? const []).length,
     );
   }
 }
@@ -96,7 +203,7 @@ class AdminSubscriptionRecord {
 /// Admin endpoints are isolated here so their paths and response mappings
 /// can be aligned quickly once the backend contract is available.
 class AdminRepository {
-  AdminRepository(this._dio, {this.useDemoData = true});
+  AdminRepository(this._dio, {this.useDemoData = false});
 
   final Dio _dio;
   final bool useDemoData;
@@ -108,7 +215,8 @@ class AdminRepository {
 
   Future<List<AdminUserRecord>> listUsers() async {
     if (useDemoData) return List.unmodifiable(_demoUsers);
-    final data = await _request(() => _dio.get('/admin/users'));
+    final data = await _request(() =>
+        _dio.get('/admin/users', queryParameters: {'page': 1, 'limit': 100}));
     final rows = _listFrom(data, const ['users', 'items']);
     return rows.map(AdminUserRecord.fromJson).toList(growable: false);
   }
@@ -130,9 +238,42 @@ class AdminRepository {
 
   Future<List<AdminSubscriptionRecord>> listSubscriptions() async {
     if (useDemoData) return List.unmodifiable(_demoSubscriptions);
-    final data = await _request(() => _dio.get('/admin/subscriptions'));
+    final data = await _request(() => _dio.get('/admin/subscriptions',
+        queryParameters: {'page': 1, 'limit': 100}));
     final rows = _listFrom(data, const ['subscriptions', 'items']);
     return rows.map(AdminSubscriptionRecord.fromJson).toList(growable: false);
+  }
+
+  Future<AdminOverviewMetrics> getOverview() async {
+    if (useDemoData) {
+      return AdminOverviewMetrics(
+          users: _demoUsers.length,
+          recruiters: 4,
+          candidates: 4,
+          companies: 5,
+          jobs: _demoJobs.length,
+          activeJobs: 10,
+          applications: 75,
+          activeSubscriptions: 3,
+          pastDueSubscriptions: 1,
+          upcomingRenewals: 2,
+          plans: 4,
+          webhookEvents: 16);
+    }
+    final data = await _request(() => _dio.get('/admin/overview'));
+    return AdminOverviewMetrics.fromJson(
+        Map<String, dynamic>.from(data as Map));
+  }
+
+  Future<AdminBillingHealth> getBillingHealth() async {
+    final data = await _request(() => _dio.get('/admin/billing-health'));
+    return AdminBillingHealth.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
+  Future<AdminAiUsageSummary> getAiUsage({int days = 30}) async {
+    final data = await _request(
+        () => _dio.get('/admin/ai-usage', queryParameters: {'days': days}));
+    return AdminAiUsageSummary.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
   /// Paginated platform job listing. Demo data is enabled until the admin
@@ -494,8 +635,9 @@ class AdminRepository {
   }
 
   List<Map<String, dynamic>> _listFrom(dynamic data, List<String> keys) {
-    if (data is List)
+    if (data is List) {
       return data.whereType<Map>().map(Map<String, dynamic>.from).toList();
+    }
     if (data is Map) {
       for (final key in keys) {
         final value = data[key];
