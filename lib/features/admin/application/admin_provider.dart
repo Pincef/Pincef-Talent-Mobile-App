@@ -9,6 +9,20 @@ typedef AdminTicketsQuery = ({int page, String status});
 final adminRepositoryProvider =
     Provider((ref) => AdminRepository(ref.watch(dioProvider)));
 
+final adminOverviewProvider = FutureProvider.autoDispose<AdminOverviewMetrics>(
+  (ref) => ref.watch(adminRepositoryProvider).getOverview(),
+);
+
+final adminBillingHealthProvider =
+    FutureProvider.autoDispose<AdminBillingHealth>(
+  (ref) => ref.watch(adminRepositoryProvider).getBillingHealth(),
+);
+
+final adminAiUsageProvider =
+    FutureProvider.autoDispose.family<AdminAiUsageSummary, int>(
+  (ref, days) => ref.watch(adminRepositoryProvider).getAiUsage(days: days),
+);
+
 final adminUsersProvider = FutureProvider.autoDispose<List<AdminUserRecord>>(
   (ref) => ref.watch(adminRepositoryProvider).listUsers(),
 );
