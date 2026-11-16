@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:talentbridge/core/theme/brand_color.dart';
 import 'package:talentbridge/core/widgets/app_toast.dart';
 import 'package:talentbridge/features/auth/application/auth_provider.dart';
@@ -345,6 +346,7 @@ class AdminUsersScreen extends ConsumerStatefulWidget {
 
 class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
   final _search = TextEditingController();
+  int _page = 1;
 
   @override
   void dispose() {
@@ -354,7 +356,8 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final users = ref.watch(adminUsersProvider);
+    final query = (page: _page, search: _search.text.trim());
+    final users = ref.watch(adminUsersProvider(query));
     final currentUser = ref.watch(authProvider).user;
     return _AdminPage(
       title: 'Users',
@@ -362,7 +365,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         TextField(
           controller: _search,
-          onChanged: (_) => setState(() {}),
+          onChanged: (_) => setState(() => _page = 1),
           decoration: InputDecoration(
             hintText: 'Search name, email, or role',
             prefixIcon: const Icon(Icons.search),
@@ -385,15 +388,9 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
             message: _friendlyError(error),
             onRetry: () => ref.invalidate(adminUsersProvider),
           ),
-          data: (records) {
+          data: (result) {
             final query = _search.text.trim().toLowerCase();
-            final filtered = records.where((user) {
-              return query.isEmpty ||
-                  user.name.toLowerCase().contains(query) ||
-                  user.email.toLowerCase().contains(query) ||
-                  user.role.toLowerCase().contains(query);
-            }).toList();
-            if (filtered.isEmpty) {
+            if (result.items.isEmpty) {
               return _EmptyState(
                 title: query.isEmpty ? 'No users found' : 'No matching users',
                 message: query.isEmpty
@@ -402,7 +399,16 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
               );
             }
             return Column(children: [
-              for (final user in filtered)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Showing ${(result.page - 1) * result.limit + 1}–${(result.page * result.limit).clamp(0, result.total)} of ${result.total} users',
+                  style:
+                      const TextStyle(color: BrandColors.muted, fontSize: 12),
+                ),
+              ),
+              const SizedBox(height: 9),
+              for (final user in result.items)
                 _UserCard(
                   user: user,
                   isCurrentUser: user.id == currentUser?.id ||
@@ -410,6 +416,15 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                           currentUser?.email.toLowerCase(),
                   onStatusChanged: () => _changeStatus(user),
                 ),
+              _PageControls(
+                page: result.page,
+                totalPages: result.totalPages,
+                onPrevious:
+                    result.page > 1 ? () => setState(() => _page--) : null,
+                onNext: result.page < result.totalPages
+                    ? () => setState(() => _page++)
+                    : null,
+              ),
             ]);
           },
         ),
@@ -447,7 +462,8 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
       await ref
           .read(adminRepositoryProvider)
           .setUserSuspended(user.id, suspend);
-      ref.invalidate(adminUsersProvider);
+      ref.invalidate(
+          adminUsersProvider((page: _page, search: _search.text.trim())));
       if (mounted) {
         AppToast.success(
           context,
@@ -555,6 +571,7 @@ class AdminJobsScreen extends ConsumerStatefulWidget {
 
 class _AdminJobsScreenState extends ConsumerState<AdminJobsScreen> {
   final _search = TextEditingController();
+  final Set<String> _publishingJobIds = {};
   int _page = 1;
 
   @override
@@ -567,10 +584,17 @@ class _AdminJobsScreenState extends ConsumerState<AdminJobsScreen> {
   Widget build(BuildContext context) {
     final query = (page: _page, search: _search.text.trim());
     final jobs = ref.watch(adminJobsProvider(query));
+    final linkedIn = ref.watch(adminCompanyLinkedInStatusProvider);
     return _AdminPage(
       title: 'All jobs',
       subtitle: 'Review job postings across the platform.',
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _LinkedInConnectionCard(
+          status: linkedIn,
+          onConnect: _connectCompanyLinkedIn,
+          onRefresh: () => ref.invalidate(adminCompanyLinkedInStatusProvider),
+        ),
+        const SizedBox(height: 14),
         TextField(
           controller: _search,
           onChanged: (_) => setState(() => _page = 1),
@@ -597,7 +621,14 @@ class _AdminJobsScreenState extends ConsumerState<AdminJobsScreen> {
                             color: BrandColors.muted, fontSize: 12)),
                   ),
                   const SizedBox(height: 9),
-                  for (final job in result.items) _AdminJobCard(job: job),
+                  for (final job in result.items)
+                    _AdminJobCard(
+                      job: job,
+                      linkedInConnected:
+                          linkedIn.valueOrNull?.connected == true,
+                      isPublishing: _publishingJobIds.contains(job.id),
+                      onPromote: () => _promoteJob(job),
+                    ),
                   _PageControls(
                     page: result.page,
                     totalPages: result.totalPages,
@@ -611,6 +642,62 @@ class _AdminJobsScreenState extends ConsumerState<AdminJobsScreen> {
         ),
       ]),
     );
+  }
+
+  Future<void> _connectCompanyLinkedIn() async {
+    try {
+      final uri = await ref
+          .read(adminRepositoryProvider)
+          .getCompanyLinkedInAuthorizationUrl();
+      final opened = await launchUrl(uri, mode: LaunchMode.platformDefault);
+      if (!opened && mounted) {
+        AppToast.error(context, 'Could not open LinkedIn authorization.');
+      }
+    } catch (error) {
+      if (mounted) AppToast.error(context, _friendlyError(error));
+    }
+  }
+
+  Future<void> _promoteJob(AdminJobRecord job) async {
+    if (_publishingJobIds.contains(job.id)) return;
+    var confirmRetry = false;
+    if (job.linkedInPromotionStatus == 'needs_review') {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Check LinkedIn before retrying'),
+          content: const Text(
+              'LinkedIn did not confirm whether the first post was created. Check the company Page feed. Retrying without checking could publish a duplicate.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('I checked — retry'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+      confirmRetry = true;
+    }
+    setState(() => _publishingJobIds.add(job.id));
+    try {
+      await ref
+          .read(adminRepositoryProvider)
+          .publishJobToCompanyLinkedIn(job.id, confirmRetry: confirmRetry);
+      ref.invalidate(
+          adminJobsProvider((page: _page, search: _search.text.trim())));
+      if (mounted) AppToast.success(context, 'Job published to LinkedIn.');
+    } catch (error) {
+      ref.invalidate(
+          adminJobsProvider((page: _page, search: _search.text.trim())));
+      if (mounted) AppToast.error(context, _friendlyError(error));
+    } finally {
+      if (mounted) setState(() => _publishingJobIds.remove(job.id));
+    }
   }
 }
 
@@ -782,10 +869,126 @@ class _AdminTicketsScreenState extends ConsumerState<AdminTicketsScreen> {
   }
 }
 
+class _LinkedInConnectionCard extends StatelessWidget {
+  const _LinkedInConnectionCard({
+    required this.status,
+    required this.onConnect,
+    required this.onRefresh,
+  });
+
+  final AsyncValue<AdminLinkedInStatus> status;
+  final VoidCallback onConnect;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE4E9F0)),
+        ),
+        child: status.when(
+          loading: () => const LinearProgressIndicator(minHeight: 2),
+          error: (error, _) => Row(children: [
+            const Icon(Icons.error_outline, color: Color(0xFFB42318)),
+            const SizedBox(width: 8),
+            Expanded(child: Text(_friendlyError(error))),
+            IconButton(onPressed: onRefresh, icon: const Icon(Icons.refresh)),
+          ]),
+          data: (value) {
+            final configured = value.readyToConnect;
+            final connectionText = value.connected
+                ? 'Connected to the Pincef company Page'
+                : value.expired
+                    ? 'LinkedIn access expired. Reconnect the company Page.'
+                    : configured
+                        ? 'Connect the company Page to publish approved job promotions.'
+                        : 'Company Page publishing needs backend configuration.';
+            final missing = <String>[
+              if (!value.appConfigured) 'LinkedIn OAuth app and callback URL',
+              if (!value.organizationConfigured)
+                'company Page organization URN',
+              if (!value.encryptionConfigured) 'token encryption key',
+            ];
+            return Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 12,
+              runSpacing: 10,
+              children: [
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 560),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.business_outlined,
+                          color: BrandColors.navy),
+                      const SizedBox(width: 10),
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('LinkedIn company Page',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: BrandColors.navy)),
+                            const SizedBox(height: 3),
+                            Text(connectionText,
+                                style: const TextStyle(
+                                    color: BrandColors.muted, fontSize: 12)),
+                            if (missing.isNotEmpty) ...[
+                              const SizedBox(height: 3),
+                              Text('Configure: ${missing.join(', ')}',
+                                  style: const TextStyle(
+                                      color: BrandColors.muted, fontSize: 11)),
+                            ],
+                            if (value.connected && value.expiresAt != null) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                  'Authorization expires ${_formatDate(value.expiresAt!.toLocal().toIso8601String())}',
+                                  style: const TextStyle(
+                                      color: BrandColors.muted, fontSize: 11)),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Wrap(spacing: 8, children: [
+                  IconButton(
+                    tooltip: 'Refresh LinkedIn status',
+                    onPressed: onRefresh,
+                    icon: const Icon(Icons.refresh),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: configured ? onConnect : null,
+                    icon: const Icon(Icons.link, size: 17),
+                    label: Text(
+                        value.connected ? 'Reconnect Page' : 'Connect Page'),
+                  ),
+                ]),
+              ],
+            );
+          },
+        ),
+      );
+}
+
 class _AdminJobCard extends StatelessWidget {
-  const _AdminJobCard({required this.job});
+  const _AdminJobCard({
+    required this.job,
+    required this.linkedInConnected,
+    required this.isPublishing,
+    required this.onPromote,
+  });
 
   final AdminJobRecord job;
+  final bool linkedInConnected;
+  final bool isPublishing;
+  final VoidCallback onPromote;
 
   @override
   Widget build(BuildContext context) => _RecordCard(
@@ -793,20 +996,68 @@ class _AdminJobCard extends StatelessWidget {
         subtitle: '${job.companyName} · ${job.location}',
         leading: Icons.work_outline,
         trailing: _StatusPill(text: job.status),
-        footer: Row(children: [
-          Expanded(
-            child: Text(
-              job.createdAt == null
-                  ? 'Posted date unavailable'
-                  : 'Posted ${_formatDate(job.createdAt!.toIso8601String())}',
-              style: const TextStyle(fontSize: 12, color: BrandColors.muted),
+        footer: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(
+              child: Text(
+                job.createdAt == null
+                    ? 'Posted date unavailable'
+                    : 'Posted ${_formatDate(job.createdAt!.toIso8601String())}',
+                style: const TextStyle(fontSize: 12, color: BrandColors.muted),
+              ),
             ),
-          ),
-          Text('${job.applicantCount} applicants',
-              style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: BrandColors.navy)),
+            Text('${job.applicantCount} applicants',
+                style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: BrandColors.navy)),
+          ]),
+          if (job.promoteOnLinkedIn) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                _StatusPill(
+                    text: job.linkedInPromotionStatus == 'published'
+                        ? 'LinkedIn published'
+                        : job.linkedInPromotionStatus == 'publishing'
+                            ? 'Publishing to LinkedIn'
+                            : job.linkedInPromotionStatus == 'failed'
+                                ? 'LinkedIn failed'
+                                : job.linkedInPromotionStatus == 'needs_review'
+                                    ? 'Check Page before retry'
+                                    : 'LinkedIn requested'),
+                if (job.status.toLowerCase() == 'published' &&
+                    job.linkedInPromotionStatus != 'published')
+                  OutlinedButton.icon(
+                    onPressed:
+                        linkedInConnected && !isPublishing ? onPromote : null,
+                    icon: isPublishing
+                        ? const SizedBox(
+                            width: 15,
+                            height: 15,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.campaign_outlined, size: 16),
+                    label: Text(isPublishing
+                        ? 'Publishing…'
+                        : job.linkedInPromotionStatus == 'needs_review'
+                            ? 'Retry after checking'
+                            : job.linkedInPromotionStatus == 'failed'
+                                ? 'Retry LinkedIn post'
+                                : 'Publish on LinkedIn'),
+                  ),
+              ],
+            ),
+            if (job.linkedInPromotionError?.isNotEmpty == true)
+              Padding(
+                padding: const EdgeInsets.only(top: 5),
+                child: Text(job.linkedInPromotionError!,
+                    style: const TextStyle(
+                        color: Color(0xFFB42318), fontSize: 11)),
+              ),
+          ],
         ]),
       );
 }
