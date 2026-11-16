@@ -66,6 +66,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
   bool _learning = false;
   bool _wellness = false;
   bool _autoReject = false;
+  bool _promoteOnLinkedIn = false;
   double _autoRejectBelowScore = 65;
   bool _aiRanking = false;
   bool _aiSummary = false;
@@ -111,6 +112,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
     _fieldOfStudy.text = job.fieldOfStudy ?? '';
     _assessmentEmailCount.text = job.assessmentEmailCount.toString();
     _interviewEmailCount.text = job.interviewEmailCount.toString();
+    _promoteOnLinkedIn = job.promoteOnLinkedIn;
     _employment = switch (job.employmentType) {
       'part_time' => 'Part-time',
       'contract' => 'Contract',
@@ -1213,7 +1215,18 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
         const SizedBox(height: 14),
         const Divider(color: Color(0xFF202A50), height: 1),
         const SizedBox(height: 8),
-        _setting('Promote on LinkedIn', true),
+        _setting(
+          'Request LinkedIn company Page promotion',
+          _promoteOnLinkedIn,
+          changed: (value) => setState(() => _promoteOnLinkedIn = value),
+        ),
+        const Padding(
+          padding: EdgeInsets.only(bottom: 8),
+          child: Text(
+            'An admin reviews and publishes requested jobs from the company Page.',
+            style: TextStyle(color: Colors.white70, fontSize: 10.5),
+          ),
+        ),
         _setting('Auto-reject non-matches', _autoReject,
             enabled: ref
                     .read(authProvider)
@@ -1910,6 +1923,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
       requiresManagementExperience: _requiresManagement,
       autoRejectNonMatches: _autoReject,
       autoRejectBelowScore: _autoRejectBelowScore.round(),
+      promoteOnLinkedIn: _promoteOnLinkedIn,
       applicationDeadline: _deadline,
       aiRanking: _aiRanking,
       aiSummary: _aiSummary,
