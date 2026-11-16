@@ -43,6 +43,9 @@ class AdminJobRecord {
     required this.companyName,
     required this.location,
     required this.status,
+    this.promoteOnLinkedIn = false,
+    this.linkedInPromotionStatus,
+    this.linkedInPromotionError,
     required this.createdAt,
     this.applicantCount = 0,
   });
@@ -52,6 +55,9 @@ class AdminJobRecord {
   final String companyName;
   final String location;
   final String status;
+  final bool promoteOnLinkedIn;
+  final String? linkedInPromotionStatus;
+  final String? linkedInPromotionError;
   final DateTime? createdAt;
   final int applicantCount;
 
@@ -66,12 +72,51 @@ class AdminJobRecord {
       companyName: companyName,
       location: (json['location'] ?? 'Not specified').toString(),
       status: (json['status'] ?? 'unknown').toString(),
+      promoteOnLinkedIn: json['promoteOnLinkedIn'] == true,
+      linkedInPromotionStatus:
+          (json['linkedInPromotion'] as Map?)?['status']?.toString(),
+      linkedInPromotionError:
+          (json['linkedInPromotion'] as Map?)?['lastError']?.toString(),
       createdAt: DateTime.tryParse(
         (json['createdAt'] ?? json['publishedAt'] ?? '').toString(),
       ),
       applicantCount: (json['applicantCount'] as num?)?.toInt() ?? 0,
     );
   }
+}
+
+class AdminLinkedInStatus {
+  const AdminLinkedInStatus({
+    required this.appConfigured,
+    required this.organizationConfigured,
+    required this.encryptionConfigured,
+    required this.connected,
+    required this.expired,
+    this.organizationUrn,
+    this.expiresAt,
+  });
+
+  final bool appConfigured;
+  final bool organizationConfigured;
+  final bool encryptionConfigured;
+  final bool connected;
+  final bool expired;
+  final String? organizationUrn;
+  final DateTime? expiresAt;
+
+  bool get readyToConnect =>
+      appConfigured && organizationConfigured && encryptionConfigured;
+
+  factory AdminLinkedInStatus.fromJson(Map<String, dynamic> json) =>
+      AdminLinkedInStatus(
+        appConfigured: json['appConfigured'] == true,
+        organizationConfigured: json['organizationConfigured'] == true,
+        encryptionConfigured: json['encryptionConfigured'] == true,
+        connected: json['connected'] == true,
+        expired: json['expired'] == true,
+        organizationUrn: json['organizationUrn']?.toString(),
+        expiresAt: DateTime.tryParse(json['expiresAt']?.toString() ?? ''),
+      );
 }
 
 class AdminTicketReply {
