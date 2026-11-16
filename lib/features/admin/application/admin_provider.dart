@@ -32,6 +32,11 @@ final adminUsersProvider = FutureProvider.autoDispose
       ),
 );
 
+final adminCompanyLinkedInStatusProvider =
+    FutureProvider.autoDispose<AdminLinkedInStatus>(
+  (ref) => ref.watch(adminRepositoryProvider).getCompanyLinkedInStatus(),
+);
+
 final adminSubscriptionsProvider =
     FutureProvider.autoDispose<List<AdminSubscriptionRecord>>(
   (ref) => ref.watch(adminRepositoryProvider).listSubscriptions(),
