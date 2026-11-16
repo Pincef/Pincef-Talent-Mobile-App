@@ -82,6 +82,7 @@ class JobDraft {
     this.benefits = const [],
     this.autoRejectNonMatches = false,
     this.autoRejectBelowScore = 65,
+    this.promoteOnLinkedIn = false,
   });
 
   final String? id;
@@ -121,6 +122,7 @@ class JobDraft {
   final List<String> benefits;
   final bool autoRejectNonMatches;
   final int autoRejectBelowScore;
+  final bool promoteOnLinkedIn;
 
   /// Fields job.service.ts requires before it will allow publishing.
   /// Mirrors REQUIRED_FOR_PUBLISH on the backend — keep in sync.
@@ -168,6 +170,7 @@ class JobDraft {
     List<String>? benefits,
     bool? autoRejectNonMatches,
     int? autoRejectBelowScore,
+    bool? promoteOnLinkedIn,
     String? pipelineTier,
     String? pipelineId,
     String? rankingPlanTier,
@@ -200,6 +203,7 @@ class JobDraft {
         benefits: benefits ?? this.benefits,
         autoRejectNonMatches: autoRejectNonMatches ?? this.autoRejectNonMatches,
         autoRejectBelowScore: autoRejectBelowScore ?? this.autoRejectBelowScore,
+        promoteOnLinkedIn: promoteOnLinkedIn ?? this.promoteOnLinkedIn,
         pipelineTier: pipelineTier ?? this.pipelineTier,
         pipelineId: pipelineId ?? this.pipelineId,
         rankingPlanTier: rankingPlanTier ?? this.rankingPlanTier,
@@ -230,6 +234,7 @@ class JobDraft {
         'benefits': benefits,
         'autoRejectNonMatches': autoRejectNonMatches,
         'autoRejectBelowScore': autoRejectBelowScore,
+        'promoteOnLinkedIn': promoteOnLinkedIn,
         'pipelineTier': pipelineTier.toLowerCase(),
         'pipelineId':
             pipelineTier.toLowerCase() == 'custom' ? pipelineId : null,
@@ -718,6 +723,7 @@ class JobDetail {
     this.assessmentEmailCount = 15,
     this.interviewEmailCount = 10,
     this.requireCompleteCandidateProfile = false,
+    this.promoteOnLinkedIn = false,
   });
 
   final String id;
@@ -753,6 +759,7 @@ class JobDetail {
   final int assessmentEmailCount;
   final int interviewEmailCount;
   final bool requireCompleteCandidateProfile;
+  final bool promoteOnLinkedIn;
 
   static const _employmentTypeLabels = {
     'full_time': 'Full-time',
@@ -873,6 +880,7 @@ class JobDetail {
                   as bool? ??
               false
           : false,
+      promoteOnLinkedIn: json['promoteOnLinkedIn'] as bool? ?? false,
     );
   }
 }
