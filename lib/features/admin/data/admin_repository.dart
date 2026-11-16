@@ -213,12 +213,32 @@ class AdminRepository {
   final List<AdminJobRecord> _demoJobs = _seedJobs();
   final List<AdminTicketRecord> _demoTickets = _seedTickets();
 
-  Future<List<AdminUserRecord>> listUsers() async {
-    if (useDemoData) return List.unmodifiable(_demoUsers);
-    final data = await _request(() =>
-        _dio.get('/admin/users', queryParameters: {'page': 1, 'limit': 100}));
-    final rows = _listFrom(data, const ['users', 'items']);
-    return rows.map(AdminUserRecord.fromJson).toList(growable: false);
+  Future<AdminPaginatedResult<AdminUserRecord>> listUsers({
+    int page = 1,
+    int limit = 10,
+    String search = '',
+  }) async {
+    if (useDemoData) {
+      final query = search.trim().toLowerCase();
+      final filtered = _demoUsers.where((user) {
+        return query.isEmpty ||
+            user.name.toLowerCase().contains(query) ||
+            user.email.toLowerCase().contains(query) ||
+            user.role.toLowerCase().contains(query);
+      }).toList();
+      return _paginate(filtered, page, limit);
+    }
+    final data =
+        await _request(() => _dio.get('/admin/users', queryParameters: {
+              'page': page,
+              'limit': limit,
+              if (search.trim().isNotEmpty) 'search': search.trim(),
+            }));
+    return AdminPaginatedResult.fromJson(
+      Map<String, dynamic>.from(data as Map),
+      AdminUserRecord.fromJson,
+      'users',
+    );
   }
 
   Future<void> setUserSuspended(String userId, bool suspended) async {
@@ -234,6 +254,29 @@ class AdminRepository {
     await _request(() => _dio.patch('/admin/users/$userId/status', data: {
           'status': suspended ? 'suspended' : 'active',
         }));
+  }
+
+  Future<AdminLinkedInStatus> getCompanyLinkedInStatus() async {
+    final data = await _request(() => _dio.get('/admin/linkedin/status'));
+    return AdminLinkedInStatus.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
+  Future<Uri> getCompanyLinkedInAuthorizationUrl() async {
+    final data = await _request(() => _dio.post('/admin/linkedin/connect-url'));
+    final url =
+        Uri.tryParse((data as Map)['authorizationUrl']?.toString() ?? '');
+    if (url == null ||
+        url.scheme != 'https' ||
+        url.host != 'www.linkedin.com') {
+      throw Exception('LinkedIn returned an invalid authorization URL.');
+    }
+    return url;
+  }
+
+  Future<void> publishJobToCompanyLinkedIn(String jobId,
+      {bool confirmRetry = false}) async {
+    await _request(() => _dio.post('/admin/linkedin/jobs/$jobId/publish',
+        data: {'confirmRetry': confirmRetry}));
   }
 
   Future<List<AdminSubscriptionRecord>> listSubscriptions() async {
