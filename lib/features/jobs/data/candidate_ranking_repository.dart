@@ -118,6 +118,7 @@ class CandidateRankingRepository {
         'aiStatus': overview['aiStatus'],
         'analyzed': overview['analyzed'],
         'failed': overview['failed'],
+        'totalApplicants': overview['totalApplicants'],
         'entries': rawRankings,
       });
     } on DioException catch (e) {
