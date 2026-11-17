@@ -580,7 +580,7 @@ class _PanelState extends ConsumerState<ScheduleInterviewPanel> {
                     ]),
               ),
               if (cand.score != null)
-                ivTag('${cand.score}% AI Match', const Color(0xFFDA672E)),
+                ivTag('${cand.score}% Match', const Color(0xFFDA672E)),
             ]),
             if (cand.meta.isNotEmpty) ...[
               const SizedBox(height: 8),
