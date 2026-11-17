@@ -18,8 +18,8 @@ import '../../application/job_management_provider.dart';
 import '../../application/candidate_ranking_provider.dart';
 import '../../data/models/candidate_ranking_model.dart';
 
-/// AI Candidate Ranking — reached from the "AI Candidate Ranking" chip on
-/// JobCandidatesScreen's AI tools bar. Always ranks every current
+/// Automated Candidate Ranking — reached from the ranking chip on
+/// JobCandidatesScreen's tools bar. Always ranks every current
 /// applicant for the job; there's no candidate-selection step here (see
 /// job_candidates_screen.dart's _runBulkAction — it deliberately ignores
 /// the card-selection state for this one action).
@@ -73,7 +73,7 @@ class _AiCandidateRankingScreenState
               'Fit',
               'Experience',
               'Strengths',
-              'AI insight'
+              'Automation insight'
             ],
             data: result.entries
                 .map((entry) => [
@@ -115,10 +115,10 @@ class _AiCandidateRankingScreenState
       ref.invalidate(candidateRankingProvider(widget.jobId));
       if (mounted) {
         AppToast.success(
-            context, 'Retrying AI review for $count candidate(s).');
+            context, 'Retry queued for $count candidate(s).');
       }
     } catch (error) {
-      if (mounted) AppToast.error(context, 'Could not retry AI review: $error');
+      if (mounted) AppToast.error(context, 'Could not retry analysis: $error');
     } finally {
       if (mounted) setState(() => _retrying = false);
     }
@@ -181,19 +181,19 @@ class _AiCandidateRankingScreenState
                             onRefresh: () =>
                                 ref.invalidate(candidateRankingProvider(jobId)),
                           )
-                        : (result.aiStatus == 'failed' ||
-                                    result.failedCount > 0) &&
+                    : result.retryableCount > 0 &&
                                 result.entries.isEmpty
                             ? _RankingFailed(
-                                failed: result.failedCount,
-                                retrying: _retrying,
+                                failed: result.retryableCount,
+                                retrying: _retrying ||
+                                    result.aiStatus == 'queued' ||
+                                    result.aiStatus == 'running',
                                 onRetry: _retryFailed,
                                 onRefresh: () => ref.invalidate(
                                     candidateRankingProvider(jobId)),
                               )
                             : result.entries.isEmpty
                                 ? _NoRankingsFound(
-                                    onRetry: _retryFailed,
                                     onRefresh: () => ref.invalidate(
                                         candidateRankingProvider(jobId)),
                                     onViewCandidates: () =>
@@ -239,7 +239,7 @@ class _RankingProcessing extends StatelessWidget {
         child: Column(children: [
           const CircularProgressIndicator(),
           const SizedBox(height: 14),
-          const Text('AI review is processing candidates',
+          const Text('Automated review is processing candidates',
               style: TextStyle(
                   color: BrandColors.navy,
                   fontSize: 14,
@@ -287,14 +287,14 @@ class _RankingFailed extends StatelessWidget {
           const Icon(Icons.warning_amber_rounded,
               color: BrandColors.orange, size: 30),
           const SizedBox(height: 10),
-          const Text('AI review could not finish',
+          const Text('Automated review could not finish',
               style: TextStyle(
                   color: BrandColors.navy, fontWeight: FontWeight.w800)),
           const SizedBox(height: 5),
           Text(
             failed > 0
-                ? '$failed candidate analysis(es) failed. You can retry them; completed results will be kept.'
-                : 'The AI review stopped before producing results. You can retry the review.',
+                ? '$failed candidate analysis(es) are incomplete. You can retry them; completed results will be kept.'
+                : 'The automated review stopped before producing results. You can retry the review.',
             textAlign: TextAlign.center,
             style: const TextStyle(
                 color: BrandColors.muted, fontSize: 11, height: 1.5),
@@ -310,7 +310,9 @@ class _RankingFailed extends StatelessWidget {
                       child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.refresh, size: 15),
               label:
-                  Text(retrying ? 'Queueing retry…' : 'Retry failed analyses'),
+                  Text(retrying
+                      ? 'Retry in progress…'
+                      : 'Retry incomplete analyses'),
             ),
             TextButton(
                 onPressed: onRefresh, child: const Text('Refresh status')),
@@ -368,7 +370,7 @@ class _Breadcrumb extends StatelessWidget {
             child: Text('/',
                 style: TextStyle(fontSize: 11.5, color: BrandColors.muted)),
           ),
-          const Text('AI Candidate Ranking',
+          const Text('Automated Candidate Ranking',
               style: TextStyle(
                   fontSize: 11.5,
                   color: BrandColors.navy,
@@ -486,10 +488,12 @@ class _RankingBodyState extends ConsumerState<_RankingBody> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (result.failedCount > 0) ...[
+        if (result.retryableCount > 0) ...[
           _RankingFailed(
-            failed: result.failedCount,
-            retrying: widget.retrying,
+            failed: result.retryableCount,
+            retrying: widget.retrying ||
+                result.aiStatus == 'queued' ||
+                result.aiStatus == 'running',
             onRetry: widget.onRetryFailed,
             onRefresh: () =>
                 ref.invalidate(candidateRankingProvider(widget.jobId)),
@@ -518,7 +522,7 @@ class _RankingBodyState extends ConsumerState<_RankingBody> {
           ),
           const SizedBox(height: 16),
         ] else ...[
-          const Text('AI Candidate Summaries',
+          const Text('Automated Candidate Summaries',
               style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
@@ -574,9 +578,9 @@ class _CandidateSummaryListState extends State<_CandidateSummaryList> {
   Widget build(BuildContext context) {
     if (!widget.enabled) {
       return const _SummaryEmptyState(
-        title: 'AI summaries are not enabled for this job',
+        title: 'Automated summaries are not enabled for this job',
         message:
-            'Edit the job and enable AI resume summaries in its AI configuration. Summaries are generated after the application deadline.',
+            'Edit the job and enable resume summaries in its automation settings. Summaries are generated after the application deadline.',
       );
     }
 
@@ -587,7 +591,7 @@ class _CandidateSummaryListState extends State<_CandidateSummaryList> {
       return const _SummaryEmptyState(
         title: 'Candidate summaries are not ready yet',
         message:
-            'AI summaries appear here after the post-deadline analysis has completed.',
+            'Automated summaries appear here after the post-deadline review has completed.',
       );
     }
 
@@ -611,7 +615,7 @@ class _CandidateSummaryListState extends State<_CandidateSummaryList> {
             _summaryMetric('Summaries generated', '${summarized.length}'),
             if (widget.commonSkill != '—')
               _summaryMetric(
-                'Most common AI-identified skill',
+                'Most common matching skill',
                 '${widget.commonSkill} · ${widget.commonSkillPercent}% of summaries',
               ),
           ],
@@ -716,8 +720,8 @@ class _CandidateSummaryCard extends StatelessWidget {
                       fontWeight: FontWeight.w800, color: BrandColors.navy)),
               Text(
                   entry.rank > 0
-                      ? 'AI match ${entry.score}% · ${entry.fitLabel}'
-                      : 'AI-generated resume summary',
+                      ? 'Automated match ${entry.score}% · ${entry.fitLabel}'
+                      : 'Generated resume summary',
                   style:
                       const TextStyle(fontSize: 11, color: BrandColors.muted)),
             ]),
@@ -1241,7 +1245,7 @@ class _RankingListState extends ConsumerState<_RankingList> {
             Expanded(flex: 1, child: Text('SCORE', style: _headerStyle)),
             Expanded(
                 flex: 4,
-                child: Text('AI TO CV JOB MATCH', style: _headerStyle)),
+                child: Text('CV TO JOB MATCH', style: _headerStyle)),
             Expanded(flex: 2, child: Text('EXPERIENCE', style: _headerStyle)),
             SizedBox(width: 100, child: Text('ACTION', style: _headerStyle)),
           ],
@@ -1328,7 +1332,7 @@ class _RankingListState extends ConsumerState<_RankingList> {
                 padding: const EdgeInsets.only(right: 10),
                 child: Semantics(
                   button: true,
-                  label: 'Open ${entry.name} AI CV-to-job match results',
+                  label: 'Open ${entry.name} CV-to-job match results',
                   child: InkWell(
                     onTap: () => _openAiMatch(entry),
                     borderRadius: BorderRadius.circular(6),
@@ -1449,7 +1453,7 @@ class _RankingListState extends ConsumerState<_RankingList> {
             const SizedBox(height: 10),
             Semantics(
               button: true,
-              label: 'Open ${entry.name} AI CV-to-job match results',
+              label: 'Open ${entry.name} CV-to-job match results',
               child: InkWell(
                 onTap: () => _openAiMatch(entry),
                 borderRadius: BorderRadius.circular(6),
@@ -1731,7 +1735,7 @@ class _AutomateWorkflowCard extends ConsumerWidget {
           ),
           const SizedBox(height: 14),
           const _WorkflowStep(
-              label: 'AI candidate ranking completed', completed: true),
+              label: 'Automated candidate ranking completed', completed: true),
           _WorkflowStep(
             label: workflow == null
                 ? 'Next pipeline stage'
@@ -1870,7 +1874,7 @@ class _RankingError extends StatelessWidget {
                     fontWeight: FontWeight.w700, color: BrandColors.navy)),
             const SizedBox(height: 4),
             const Text(
-                'We couldn’t load AI rankings. Please try again in a moment.',
+                'We couldn’t load automated rankings. Please try again in a moment.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: BrandColors.muted)),
             const SizedBox(height: 14),
@@ -1888,12 +1892,10 @@ class _RankingError extends StatelessWidget {
 
 class _NoRankingsFound extends StatelessWidget {
   const _NoRankingsFound({
-    required this.onRetry,
     required this.onRefresh,
     required this.onViewCandidates,
   });
 
-  final VoidCallback onRetry;
   final VoidCallback onRefresh;
   final VoidCallback onViewCandidates;
 
@@ -1939,11 +1941,6 @@ class _NoRankingsFound extends StatelessWidget {
                   ),
                   child: const Text('Refresh rankings'),
                 ),
-                FilledButton.icon(
-                  onPressed: onRetry,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Retry AI review'),
-                ),
               ],
             ),
           ],
@@ -1964,7 +1961,7 @@ class _AiResultsUnavailable extends StatelessWidget {
               Icon(Icons.hourglass_empty_outlined,
                   size: 34, color: BrandColors.orange),
               SizedBox(height: 10),
-              Text('AI results are not available for this job yet',
+              Text('Automated results are not available for this job yet',
                   style: TextStyle(
                       fontWeight: FontWeight.w700, color: BrandColors.navy)),
               SizedBox(height: 4),
