@@ -169,7 +169,7 @@ class _MatchView extends ConsumerWidget {
       jobId: jobId,
       candidateId: candidateId,
       currentLabel: 'Job Match Results',
-      eyebrow: 'AI TO CV JOB MATCH',
+      eyebrow: 'AUTOMATED CV TO JOB MATCH',
       title: 'Job Match Results',
       subtitle: 'How ${data.user.fullName} aligns with this role',
       candidateName: data.user.fullName,
@@ -237,7 +237,7 @@ class _MatchView extends ConsumerWidget {
                       Icon(Icons.auto_awesome,
                           color: BrandColors.orange, size: 20),
                       SizedBox(width: 9),
-                      Text('AI Talent Insight',
+                      Text('Automation Insight',
                           style: TextStyle(
                               color: Colors.white,
                               fontSize: 17,
@@ -249,7 +249,7 @@ class _MatchView extends ConsumerWidget {
                           ? rankingEntry!.insight
                           : analysis?.summary?.trim().isNotEmpty == true
                               ? analysis!.summary!
-                              : 'The AI match score is available, but a written explanation has not been generated.',
+                              : 'The match score is available, but a written explanation has not been generated.',
                       style:
                           const TextStyle(color: Colors.white70, height: 1.6),
                     ),
@@ -303,7 +303,7 @@ class _MatchView extends ConsumerWidget {
             ),
           if (rankingEntry?.strengths.isNotEmpty == true)
             _Panel(
-              title: 'AI match highlights',
+              title: 'Match highlights',
               child: Column(
                 children: rankingEntry!.strengths
                     .map((highlight) => Padding(
@@ -758,14 +758,14 @@ class _ParsingView extends StatelessWidget {
       jobId: jobId,
       candidateId: candidateId,
       currentLabel:
-          rankingEntry == null ? 'Candidate Profile' : 'AI CV Parsing',
+          rankingEntry == null ? 'Candidate Profile' : 'CV Parsing',
       eyebrow: rankingEntry == null ? 'CANDIDATE PROFILE' : 'CV EXTRACTION',
       title: rankingEntry == null
           ? 'Candidate Profile Details'
-          : 'AI CV Parsing Results',
+          : 'CV Parsing Results',
       subtitle: rankingEntry == null
           ? 'Details entered manually by the candidate.'
-          : 'Extracted from the exact CV used for this application’s AI review',
+          : 'Extracted from the exact CV used for this application’s automated review',
       candidateName: data.user.fullName,
       candidateImageUrl: data.user.profileImage?.url,
       actions: [
@@ -787,7 +787,7 @@ class _ParsingView extends StatelessWidget {
                   rankingEntry?.parsedResume?['originalName']?.toString() ??
                       'CV used for this application'),
               subtitle:
-                  const Text('The exact CV used for this job’s AI review'),
+                  const Text('The exact CV used for this job’s automated review'),
               trailing: IconButton(
                 tooltip: 'Open application CV',
                 icon: const Icon(Icons.open_in_new),
@@ -985,11 +985,11 @@ class _SummaryView extends ConsumerWidget {
       jobId: jobId,
       candidateId: candidateId,
       currentLabel: 'Summary',
-      eyebrow: 'AI GENERATED',
-      title: 'AI Resume Summary',
+      eyebrow: 'AUTOMATION GENERATED',
+      title: 'Resume Summary',
       subtitle: data == null
           ? (entry?.name ?? 'Candidate summary')
-          : '${data.profile.professionalTitle ?? 'Candidate'} · ${entry?.fitLabel ?? 'AI summary'}',
+          : '${data.profile.professionalTitle ?? 'Candidate'} · ${entry?.fitLabel ?? 'Automated summary'}',
       candidateName: data?.user.fullName ?? entry?.name,
       candidateImageUrl: data?.user.profileImage?.url ?? entry?.avatarUrl,
       actions: [
@@ -1012,7 +1012,7 @@ class _SummaryView extends ConsumerWidget {
           const _NoticeCard(
               icon: Icons.hourglass_empty,
               message:
-                  'An AI resume summary has not been generated for this candidate yet.')
+                  'An automated resume summary has not been generated for this candidate yet.')
         else ...[
           if (entry != null)
             _Panel(
@@ -1241,7 +1241,7 @@ class _ReviewBreadcrumb extends StatelessWidget {
     final items = <(String, String?, bool)>[
       ('Jobs', '/jobs', false),
       (jobTitle, '/jobs/$jobId', false),
-      ('AI Candidate Ranking', '/jobs/$jobId/candidate-ranking', false),
+      ('Automated Candidate Ranking', '/jobs/$jobId/candidate-ranking', false),
       (candidateName, '/jobs/$jobId/candidates/$candidateId', false),
       (currentLabel, null, true),
     ];
@@ -1363,7 +1363,7 @@ class _LoadError extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Text('Could not load candidate AI details.'),
+            const Text('Could not load candidate review details.'),
             const SizedBox(height: 8),
             Text(message, textAlign: TextAlign.center),
             const SizedBox(height: 12),
