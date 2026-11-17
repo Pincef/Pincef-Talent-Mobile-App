@@ -137,8 +137,8 @@ class _AdminAiUsageScreenState extends ConsumerState<AdminAiUsageScreen> {
   Widget build(BuildContext context) {
     final usage = ref.watch(adminAiUsageProvider(_days));
     return _AdminPage(
-      title: 'AI usage',
-      subtitle: 'See which AI workflows and models are consuming tokens.',
+      title: 'Automation usage',
+      subtitle: 'See which automated workflows and models are consuming tokens.',
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Align(
           alignment: Alignment.centerRight,
@@ -242,14 +242,14 @@ class _AiUsageContent extends StatelessWidget {
               'Recent requests',
               summary.recent,
               (row) =>
-                  '${row['operation'] ?? 'AI request'} · ${row['model'] ?? ''}',
+                  '${row['operation'] ?? 'Automation request'} · ${row['model'] ?? ''}',
               (row) =>
                   '${row['status']} · ${_count(row['totalTokens'])} tokens · key slot ${row['keySlot']} · ${row['errorType'] ?? 'no error'}'),
           if (summary.totals['requests'] == 0)
             const Padding(
                 padding: EdgeInsets.symmetric(vertical: 14),
                 child: Text(
-                    'No Groq usage has been recorded for this period yet. Records start appearing as AI requests run.',
+                    'No Groq usage has been recorded for this period yet. Records start appearing as automated requests run.',
                     style: TextStyle(color: BrandColors.muted))),
         ]);
       });
