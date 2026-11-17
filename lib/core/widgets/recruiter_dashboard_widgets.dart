@@ -323,7 +323,7 @@ class PipelineSnapshotCard extends StatelessWidget {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Text('Hiring Pipeline', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: BrandColors.navy)),
           const SizedBox(height: 6),
-          Text('$total applications${averageAiScore == null ? '' : ' • ${averageAiScore!.toStringAsFixed(1)}% average AI score'}', style: const TextStyle(fontSize: 11.5, color: BrandColors.muted)),
+          Text('$total applications${averageAiScore == null ? '' : ' • ${averageAiScore!.toStringAsFixed(1)}% average match score'}', style: const TextStyle(fontSize: 11.5, color: BrandColors.muted)),
           const SizedBox(height: 14),
           for (final stage in const ['submitted', 'shortlisted', 'interviewing', 'offered', 'hired', 'rejected'])
             if ((counts[stage] ?? 0) > 0) Padding(
