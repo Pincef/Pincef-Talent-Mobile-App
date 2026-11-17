@@ -200,7 +200,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                     child: Column(
                       children: [
                         Text(
-                          'More than a job board.\nAn AI-powered recruitment workspace.',
+                          'More than a job board.\nAn automated recruitment workspace.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: wide ? 29 : 22,

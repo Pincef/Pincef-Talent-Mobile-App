@@ -438,7 +438,7 @@ class _JobCandidatesScreenState extends ConsumerState<JobCandidatesScreen> {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'AI plans to invite $count top-ranked candidates to $stage at $dueText. If you take no action, it will proceed automatically.',
+                'Automation plans to invite $count top-ranked candidates to $stage at $dueText. If you take no action, it will proceed automatically.',
                 style: const TextStyle(
                     fontSize: 12, color: BrandColors.navy, height: 1.4),
               ),
@@ -778,7 +778,7 @@ class _SmartMatchCard extends StatelessWidget {
         ? ' in ${job.location}'
         : '';
     final copy = highPriorityCount > 0
-        ? 'Our AI-driven matching engine has identified $highPriorityCount '
+        ? 'Our automated matching has identified $highPriorityCount '
             'high-priority candidate${highPriorityCount == 1 ? '' : 's'} for '
             'the $jobTitle role$locationPhrase based on recent profile '
             'updates.'

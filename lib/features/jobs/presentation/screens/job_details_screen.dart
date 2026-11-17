@@ -363,7 +363,7 @@ class _HiringPipelineOverview extends StatelessWidget {
         ),
         const SizedBox(height: 9),
         const Text(
-          'Review AI results after the job closes before moving candidates into later stages.',
+          'Review automated results after the job closes before moving candidates into later stages.',
           style: TextStyle(fontSize: 10.5, color: BrandColors.muted),
         ),
       ]),
@@ -650,7 +650,7 @@ class _RecruiterActions extends StatelessWidget {
               backgroundColor: BrandColors.orange,
               foregroundColor: Colors.white,
               elevation: 0),
-          child: Text(showAiReview ? 'Review AI Results' : 'View Candidates'),
+          child: Text(showAiReview ? 'Review Automated Results' : 'View Candidates'),
         ),
       ],
     );

@@ -280,7 +280,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
         }
       });
       _showToast(
-        'AI filled the role details. Review the generated text and benefit selections before publishing.',
+        'Automation filled the role details. Review the generated text and benefit selections before publishing.',
         isError: false,
       );
     } catch (error) {
@@ -353,7 +353,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
                               SizedBox(width: 10),
                               Expanded(
                                 child: Text(
-                                  'AI processing has started for this job. The deadline, pipeline, and AI settings are locked so completed ranking results stay consistent.',
+                                  'Automated processing has started for this job. The deadline, pipeline, and automation settings are locked so completed ranking results stay consistent.',
                                   style: TextStyle(
                                       fontSize: 12,
                                       height: 1.4,
@@ -610,7 +610,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
           Tooltip(
             message: _aiJobDescriptionAvailable
                 ? 'Draft the job details from the role idea. Salary, deadline, company overview, and location stay unchanged.'
-                : 'AI job description generation is unavailable right now.',
+                : 'Automated job description generation is unavailable right now.',
             child: Opacity(
               opacity: _aiJobDescriptionAvailable ? 1 : .45,
               child: TextButton.icon(
@@ -624,7 +624,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
                         child: CircularProgressIndicator(strokeWidth: 1.5))
                     : const Icon(Icons.auto_awesome, size: 12),
                 label: Text(
-                    _generatingJobDetails ? 'Generating…' : 'Generate with AI'),
+                    _generatingJobDetails ? 'Generating…' : 'Generate with Automation'),
                 style: TextButton.styleFrom(
                   foregroundColor: BrandColors.orange,
                   disabledForegroundColor: BrandColors.muted,
@@ -885,10 +885,10 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
         Text(
           switch (_pipelineTier) {
             'Premium' =>
-              'Assessment and comparison begin after AI review when the job closes.',
+              'Assessment and comparison begin after automated review when the job closes.',
             'Custom' =>
-              'Configured stages follow AI review after the job closes.',
-            _ => 'AI ranking and summaries are reviewed after the job closes.',
+              'Configured stages follow automated review after the job closes.',
+            _ => 'Automated ranking and summaries are reviewed after the job closes.',
           },
           style: const TextStyle(fontSize: 9.5, color: BrandColors.muted),
         ),
@@ -1148,7 +1148,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
               const SizedBox(height: 10),
               _quotaRow(
                 'Interview Invitation Emails',
-                'Maximum candidates invited after AI ranking when the selected pipeline uses automatic interviews',
+                'Maximum candidates invited after automated ranking when the selected pipeline uses automatic interviews',
                 _interviewEmailCount,
               ),
               const SizedBox(height: 12),
@@ -1191,7 +1191,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
                 suffixIcon: const Icon(Icons.calendar_today_outlined,
                     size: 16, color: BrandColors.muted),
                 helperText: _deadlineLocked
-                    ? 'Locked after AI processing begins.'
+                    ? 'Locked after automated processing begins.'
                     : 'Shown in your local timezone.')),
         const SizedBox(height: 8),
         const Text(
@@ -1252,7 +1252,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
           ),
         ],
         _setting(
-          'Enable AI screening',
+          'Enable automated screening',
           _aiRanking,
           changed: (v) => setState(() {
             _aiRanking = v;
@@ -2083,7 +2083,7 @@ class _HiringPipelinePickerDialogState
                       level: 'BUILT-IN',
                       title: 'STANDARD PIPELINE',
                       description:
-                          'A streamlined AI-powered hiring process for quickly identifying the strongest candidates.',
+                          'A streamlined automated hiring process for quickly identifying the strongest candidates.',
                       steps: const [
                         'Post Job',
                         'Parse',

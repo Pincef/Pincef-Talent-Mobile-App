@@ -88,7 +88,7 @@ class _WelcomeContent extends StatelessWidget {
         const SizedBox(height: 14),
         const Text(
           'The intelligent ecosystem designed for global recruiters. Seamlessly '
-          'manage your funnel, parse CVs with AI, and bridge the gap between '
+          'manage your funnel, automate CV review, and bridge the gap between '
           "world-class talent and your open roles.",
           style: TextStyle(fontSize: 13.5, color: BrandColors.muted, height: 1.5),
         ),
@@ -211,7 +211,7 @@ class _WelcomeImagePanel extends StatelessWidget {
                 const SizedBox(height: 10),
                 const Text(
                   '"Pincef revolutionized how we source talent across three '
-                  'continents. The AI matching is a game-changer."',
+                  'continents. The automated matching is a game-changer."',
                   style: TextStyle(fontSize: 12.5, fontStyle: FontStyle.italic, color: BrandColors.navy, height: 1.4),
                 ),
                 const SizedBox(height: 12),

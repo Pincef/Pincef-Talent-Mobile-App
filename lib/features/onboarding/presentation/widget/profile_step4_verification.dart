@@ -531,7 +531,7 @@ class _InstantCredentialCheckCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Upload your PDF certificates. Our AI engine parses the data and authenticates with '
+                      'Upload your PDF certificates. Our automated review parses the data and authenticates with '
                       'issuer databases in real-time.',
                       style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.65),

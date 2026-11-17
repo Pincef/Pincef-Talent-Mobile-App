@@ -199,11 +199,11 @@ class _CandidateCard extends ConsumerWidget {
     return _RoleCard(
       icon: Icons.person_outline,
       title: 'Join as a Candidate',
-      description: 'Find your dream role with AI-powered matching and career tools.',
+      description: 'Find your dream role with automated matching and career tools.',
       features: const [
         'Personalized job recommendations',
         'Direct communication with hiring managers',
-        'AI resume optimization tools',
+        'Automated resume optimization tools',
       ],
       cta: OutlinedButton(
         onPressed: () {

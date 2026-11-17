@@ -1103,7 +1103,7 @@ class _DiagnosticCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           const Text(
-            'Critical leakage points & AI root-cause analysis',
+            'Critical leakage points & automated root-cause analysis',
             style: TextStyle(color: Colors.white70, fontSize: 11),
           ),
         ],
@@ -1293,7 +1293,7 @@ class _FunnelStages extends StatelessWidget {
     _DropStage('1', 'Applied', '100% volume', '1,000'),
     _DropStage(
       '2',
-      'AI Match /\nScreened',
+      'Automated Match /\nScreened',
       '-90%\nDROP',
       '100\n(10%)',
       kind: _StageKind.bottleneck,

@@ -86,7 +86,7 @@ class ProfileSetupCompleteScreen extends ConsumerWidget {
                         const SizedBox(height: 16),
                         const Text(
                           "Everything's in place. We've indexed your profile, education, and certifications, "
-                          'and activated AI-powered matching so recruiters searching for your skills can find you.',
+                          'and activated automated matching so recruiters searching for your skills can find you.',
                           style: TextStyle(fontSize: 12.5, color: BrandColors.muted, height: 1.5),
                         ),
                         const SizedBox(height: 20),

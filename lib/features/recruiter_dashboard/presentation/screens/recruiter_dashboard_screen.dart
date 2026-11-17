@@ -191,7 +191,7 @@ class _RecruiterDashboardBody extends ConsumerWidget {
                             const SizedBox(width: 16),
                             Expanded(
                               child: StatCard(
-                                label: 'Average AI Match',
+                                label: 'Average Match',
                                 value: summary.averageAiScore == null
                                     ? '—'
                                     : '${summary.averageAiScore!.toStringAsFixed(1)}%',
@@ -219,7 +219,7 @@ class _RecruiterDashboardBody extends ConsumerWidget {
                             ),
                             const SizedBox(height: 12),
                             StatCard(
-                              label: 'Average AI Match',
+                              label: 'Average Match',
                               value: summary.averageAiScore == null
                                   ? '—'
                                   : '${summary.averageAiScore!.toStringAsFixed(1)}%',

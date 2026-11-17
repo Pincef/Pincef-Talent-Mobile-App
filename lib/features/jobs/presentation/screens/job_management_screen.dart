@@ -28,9 +28,9 @@ class _JobManagementScreenState extends ConsumerState<JobManagementScreen> {
     setState(() => _creatingDemo = true);
     String? jobId;
     String? assessmentId;
-    const jobTitle = 'TalentBridge Demo: AI Operations Analyst';
+    const jobTitle = 'TalentBridge Demo: Automation Operations Analyst';
     const purpose =
-        'Assess workflow automation, data handling, and practical AI operations skills. Use objective questions with clear correct answers for automatic scoring.';
+        'Assess workflow automation, data handling, and practical automation operations skills. Use objective questions with clear correct answers for automatic scoring.';
     final deadline = DateTime.now().add(const Duration(days: 14));
     final assessmentClose = deadline.add(const Duration(days: 7));
 
@@ -38,7 +38,7 @@ class _JobManagementScreenState extends ConsumerState<JobManagementScreen> {
       final job = JobDraft(
         title: jobTitle,
         description:
-            'This demonstration role is designed to exercise TalentBridge’s automated hiring workflow. The analyst will evaluate AI-assisted business processes, build reliable workflow automations, and measure quality using clear operational metrics.',
+            'This demonstration role is designed to exercise TalentBridge’s automated hiring workflow. The analyst will evaluate automated business processes, build reliable workflow automations, and measure quality using clear operational metrics.',
         employmentType: 'full_time',
         workplaceType: 'remote',
         industry: 'Technology',
@@ -50,7 +50,7 @@ class _JobManagementScreenState extends ConsumerState<JobManagementScreen> {
           'Workflow automation',
           'Data analysis',
           'Python',
-          'AI operations',
+          'Automation operations',
         ],
         minYearsOfExperience: '3',
         educationLevel: 'bachelors',
@@ -65,7 +65,7 @@ class _JobManagementScreenState extends ConsumerState<JobManagementScreen> {
         responsibilities: const [
           'Design and maintain reliable workflow automations.',
           'Analyze operational data and communicate measurable improvements.',
-          'Evaluate AI-assisted processes for accuracy and quality.',
+          'Evaluate automated processes for accuracy and quality.',
         ],
         benefits: const ['Remote work', 'Professional development'],
       );
@@ -100,7 +100,7 @@ class _JobManagementScreenState extends ConsumerState<JobManagementScreen> {
           .map(_serializeGeneratedQuestion)
           .toList();
       if (questions.isEmpty) {
-        throw StateError('AI generation returned no assessment questions.');
+        throw StateError('Automated question generation returned no assessment questions.');
       }
 
       await assessmentRepository.update(assessmentId, {
@@ -129,7 +129,7 @@ class _JobManagementScreenState extends ConsumerState<JobManagementScreen> {
       final message = jobId == null
           ? 'Could not create the demo job: $error'
           : assessmentId == null
-              ? 'The demo job was created, but its AI assessment could not be generated: $error'
+              ? 'The demo job was created, but its automated assessment could not be generated: $error'
               : 'The demo job and assessment were created, but scheduling could not be saved: $error';
       AppToast.error(context, message);
       if (assessmentId != null) {
@@ -413,7 +413,7 @@ class _AutomationDemoCard extends StatelessWidget {
                       fontWeight: FontWeight.w800)),
               SizedBox(height: 4),
               Text(
-                  'Creates a draft Premium job with AI ranking and a generated assessment. After you publish, shortlisted candidates are invited automatically at the deadline and their objective answers are scored automatically. Nothing is published or sent yet.',
+                  'Creates a draft Premium job with automated ranking and a generated assessment. After you publish, shortlisted candidates are invited automatically at the deadline and their objective answers are scored automatically. Nothing is published or sent yet.',
                   style: TextStyle(color: Color(0xFF6B7280), fontSize: 11.5)),
             ],
           );

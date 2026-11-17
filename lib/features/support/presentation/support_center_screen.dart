@@ -147,7 +147,7 @@ class _SupportCenterScreenState extends State<SupportCenterScreen> {
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
-            children: ['All', 'General', 'Candidate AI', 'Billing & Plans', 'Interviews']
+            children: ['All', 'General', 'Candidate Tools', 'Billing & Plans', 'Interviews']
                 .map((category) => Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: ChoiceChip(
@@ -249,7 +249,7 @@ class _SupportCenterScreenState extends State<SupportCenterScreen> {
   Widget _helpContent(bool wide) {
     final sections = [
       ('Getting Started', 'Set up your workspace and invite your team.', Icons.rocket_launch_outlined),
-      ('Candidates & AI', 'Learn about matching, ranking, and candidate profiles.', Icons.people_outline),
+      ('Candidate Automation', 'Learn about matching, ranking, and candidate profiles.', Icons.people_outline),
       ('Jobs & Hiring', 'Create jobs and move candidates through your pipeline.', Icons.work_outline),
       ('Billing & Plans', 'Manage your plan, invoices, and subscription.', Icons.credit_card_outlined),
     ];
@@ -298,7 +298,7 @@ class _SupportCenterScreenState extends State<SupportCenterScreen> {
             DropdownButtonFormField<String>(
               value: 'Select a category',
               decoration: _inputDecoration('', null),
-              items: const ['Select a category', 'Jobs', 'Candidates', 'Candidate AI', 'Billing & Plans', 'Interviews', 'Other'].map((item) => DropdownMenuItem(value: item, child: Text(item))).toList(),
+              items: const ['Select a category', 'Jobs', 'Candidates', 'Candidate Tools', 'Billing & Plans', 'Interviews', 'Other'].map((item) => DropdownMenuItem(value: item, child: Text(item))).toList(),
               onChanged: (_) {},
             ),
             const SizedBox(height: 16),
@@ -352,7 +352,7 @@ class _FaqItem {
 }
 
 const _faqItems = [
-  _FaqItem('Candidate AI', 'How does AI candidate matching work?', 'Our AI evaluates resumes against your specific job criteria by analyzing proven technical skills, role trajectory, and experience level. It delivers an objective, ranked percentage score so you can identify and contact top-fit talent instantly.'),
+  _FaqItem('Candidate Tools', 'How does automated candidate matching work?', 'Automation compares resumes with your job criteria, including skills, role trajectory, and experience. It provides a ranked match score to help you identify and contact relevant candidates.'),
   _FaqItem('General', 'How do I invite teammates to review candidates?', 'Open your workspace settings and invite teammates by email. You can collaborate on candidate reviews and keep feedback in one place.'),
   _FaqItem('Interviews', 'Can I export interview scorecards and reports?', 'Yes. Open the relevant interview or report and use the export action to download a copy for your records.'),
   _FaqItem('Billing & Plans', 'How do plan quotas and renewals work?', 'Your plan includes monthly usage limits. Quotas refresh at the start of each billing cycle, and your current plan details are available under Payment & Subscription.'),

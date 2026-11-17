@@ -129,7 +129,7 @@ class _MessagesHeader extends StatelessWidget {
                   style: TextStyle(fontSize: 9, color: AppColors.textSecondary),
                 ),
                 Text(
-                  'deploy AI-assisted response templates.',
+                  'use automated response templates.',
                   style: TextStyle(fontSize: 9, color: AppColors.textSecondary),
                 ),
               ],

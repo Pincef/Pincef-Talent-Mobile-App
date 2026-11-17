@@ -400,7 +400,7 @@ class _JobSummaryPanelState extends ConsumerState<_JobSummaryPanel> {
           const Expanded(
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('AI candidate summary',
+              Text('Automated candidate summary',
                   style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
