@@ -110,7 +110,8 @@ class CandidateRankingResult {
         rankingEnabled = false,
         aiStatus = 'idle',
         analyzedCount = 0,
-        failedCount = 0;
+        failedCount = 0,
+        totalApplicants = 0;
 
   const CandidateRankingResult({
     required this.totalRanked,
@@ -127,6 +128,7 @@ class CandidateRankingResult {
     this.aiStatus = 'idle',
     this.analyzedCount = 0,
     this.failedCount = 0,
+    this.totalApplicants = 0,
   });
 
   final int totalRanked;
@@ -143,6 +145,12 @@ class CandidateRankingResult {
   final String aiStatus;
   final int analyzedCount;
   final int failedCount;
+  final int totalApplicants;
+
+  /// Includes explicit failures and applications the worker never reached.
+  int get retryableCount => failedCount > totalApplicants - analyzedCount
+      ? failedCount
+      : (totalApplicants - analyzedCount).clamp(0, totalApplicants).toInt();
 
   factory CandidateRankingResult.fromApiJson(Map<String, dynamic> json) {
     final rawEntries =
@@ -195,6 +203,9 @@ class CandidateRankingResult {
       aiStatus: (json['aiStatus'] ?? 'idle').toString(),
       analyzedCount: (json['analyzed'] as num?)?.toInt() ?? 0,
       failedCount: (json['failed'] as num?)?.toInt() ?? 0,
+      totalApplicants: (json['totalApplicants'] as num?)?.toInt() ??
+          (json['totalRanked'] as num?)?.toInt() ??
+          entries.length,
     );
   }
 }
