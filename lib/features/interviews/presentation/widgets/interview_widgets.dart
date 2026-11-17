@@ -321,7 +321,7 @@ class _DetailsSheetState extends ConsumerState<_DetailsSheet> {
               _row(Icons.groups_outlined, 'Panel',
                   _txt(i.interviewers.map((p) => p.name).join(', '))),
             if (i.aiScore != null)
-              _row(Icons.auto_awesome, 'AI match', _txt('${i.aiScore}%')),
+              _row(Icons.auto_awesome, 'Match score', _txt('${i.aiScore}%')),
             if (i.meetingUrl != null)
               _row(
                   Icons.link,
