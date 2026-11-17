@@ -1118,7 +1118,7 @@ class _StageConfigPanelState extends State<_StageConfigPanel> {
                       const SizedBox(height: 16),
                       const _FieldLabel('Assessment Creation Mode'),
                       const SizedBox(height: 8),
-                      _modeOption('ai', 'AI-Assisted Creation',
+                      _modeOption('ai', 'Automation-Assisted Creation',
                           'Generate tailored rubrics, scenario briefs and challenge prompts based on role level.',
                           pro: true),
                       _modeOption('manual', 'Manual Creation',
