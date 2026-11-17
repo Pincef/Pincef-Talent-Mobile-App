@@ -1059,7 +1059,7 @@ class _EmptyState extends StatelessWidget {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
         const SizedBox(height: 6),
         const Text(
-            'Create a manual assessment or generate a first draft with AI.'),
+            'Create a manual assessment or generate a first draft with automation.'),
         const SizedBox(height: 14),
         FilledButton(
             onPressed: onCreate,
