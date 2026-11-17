@@ -118,7 +118,7 @@ const List<NavItem> kAdminNavItems = [
   NavItem(label: 'Dashboard', icon: Icons.grid_view_rounded, route: '/admin'),
   NavItem(label: 'Users', icon: Icons.people_outline, route: '/admin/users'),
   NavItem(
-      label: 'AI usage',
+      label: 'Automation usage',
       icon: Icons.data_usage_outlined,
       route: '/admin/ai-usage'),
   NavItem(label: 'Jobs', icon: Icons.work_outline, route: '/admin/jobs'),
