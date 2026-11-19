@@ -1,7 +1,7 @@
 enum UserRole { candidate, recruiter, admin }
 
-/// Temporary global plan-gate bypass for product testing.
-const bool billingGuardsEnabled = false;
+/// Entitlements come from the backend; feature gates stay active in the UI.
+const bool billingGuardsEnabled = true;
 
 UserRole userRoleFromString(String value) {
   switch (value) {
