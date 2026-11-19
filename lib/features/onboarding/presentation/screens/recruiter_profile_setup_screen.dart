@@ -252,6 +252,23 @@ class _RecruiterProfileSetupScreenState
                             subtitle:
                                 'Tell us a bit about your organization to personalize your talent acquisition dashboard.',
                           ),
+                          const SizedBox(height: 14),
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF6F0),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: BrandColors.orange),
+                            ),
+                            child: const Text(
+                              'Creating your company profile starts a 14-day Starter trial automatically. No payment details are needed. When the trial ends, the company returns to Free unless you choose a paid plan.',
+                              style: TextStyle(
+                                color: BrandColors.navy,
+                                fontSize: 13,
+                                height: 1.45,
+                              ),
+                            ),
+                          ),
                           const SizedBox(height: 28),
                           const Text(
                             'PROFILE PICTURE (OPTIONAL)',
