@@ -64,6 +64,8 @@ List<String> hiringPipelineFlowFor(
 }) {
   const aiStages = ['Post Job', 'Parse', 'Match', 'Rank', 'Summarise'];
   switch (tier.toLowerCase()) {
+    case 'none':
+      return ['Applicants', 'Shortlist', 'Offer', 'Reject', 'Hire'];
     case 'premium':
       return [...aiStages, 'Assess', 'Compare', 'Hire'];
     case 'custom':
@@ -257,8 +259,8 @@ class PipelineCapabilities {
       allowedStageTypes: ((caps['allowedStageTypes'] as List?) ?? const [])
           .map((e) => e.toString())
           .toList(),
-      allowsCustomPipelines: caps['allowsCustomPipelines'] as bool? ?? true,
-      maxCustomPipelines: (caps['maxCustomPipelines'] as num?)?.toInt() ?? 999,
+      allowsCustomPipelines: caps['allowsCustomPipelines'] as bool? ?? false,
+      maxCustomPipelines: (caps['maxCustomPipelines'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -266,10 +268,9 @@ class PipelineCapabilities {
           Map<String, dynamic> capabilities) =>
       PipelineCapabilities.fromJson({'capabilities': capabilities});
 
-  /// If the server sent no list, don't block anything client-side — the
-  /// backend enforces the plan on save anyway.
+  /// Missing capabilities fail closed. The backend independently enforces
+  /// the same stage permissions on save.
   bool allows(String type) =>
-      allowedStageTypes.isEmpty ||
       allowedStageTypes.any((t) => t.toUpperCase() == type.toUpperCase());
 
   /// Returns the server's exact spelling for a stage type (case-safe).
