@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/entitlements/module_codes.dart';
 import '../../../core/theme/brand_color.dart';
+import '../../auth/application/auth_provider.dart';
 import '../../hiring_pipeline/application/hiring_pipeline_provider.dart';
 import '../../hiring_pipeline/data/models/hiring_pipeline_model.dart';
 import '../../jobs/application/application_provider.dart';
@@ -29,6 +31,12 @@ class AssessmentCreateScreen extends ConsumerStatefulWidget {
 class _AssessmentCreateScreenState
     extends ConsumerState<AssessmentCreateScreen> {
   final _formKey = GlobalKey<FormState>();
+  bool get _canCreateAssessment => ref.read(authProvider).user?.hasModule(
+        ModuleCodes.hiringStageAssessment,
+      ) ?? false;
+  bool get _canGenerateQuestions => ref.read(authProvider).user?.hasModule(
+        ModuleCodes.aiAssessmentGeneration,
+      ) ?? false;
   final _title = TextEditingController();
   final _purpose = TextEditingController();
   final _duration = TextEditingController(text: '60');
@@ -246,6 +254,7 @@ class _AssessmentCreateScreenState
       };
 
   Future<void> _generate({bool append = false}) async {
+    if (!_canGenerateQuestions) return;
     if (!_validateBasics()) return;
     setState(() => _busy = true);
     try {
@@ -387,6 +396,7 @@ class _AssessmentCreateScreenState
   }
 
   Future<void> _publish() async {
+    if (!_canCreateAssessment) return;
     if (!_validateBasics()) return;
     final scheduledAutomation =
         _mode == 'full_ai' && _autoGenerateAfterDeadline;
@@ -645,6 +655,22 @@ class _AssessmentCreateScreenState
             constraints: const BoxConstraints(maxWidth: 1120),
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              if (!_canCreateAssessment) ...[
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(children: [
+                      const Icon(Icons.lock_outline, color: BrandColors.orange),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text('Assessment creation requires Professional or higher. Existing assessment results remain viewable.', style: TextStyle(height: 1.35)),
+                      ),
+                      TextButton(onPressed: () => context.go('/payments'), child: const Text('View plans')),
+                    ]),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               TextButton.icon(
                   onPressed: () => context.go('/competency-assessments'),
                   icon: const Icon(Icons.arrow_back),
@@ -673,13 +699,13 @@ class _AssessmentCreateScreenState
                   runSpacing: 8,
                   children: [
                     OutlinedButton.icon(
-                      onPressed: _busy ? null : _saveDraft,
-                      icon: const Icon(Icons.bookmark_border),
+                      onPressed: _busy || !_canCreateAssessment ? null : _saveDraft,
+                      icon: Icon(_canCreateAssessment ? Icons.bookmark_border : Icons.lock_outline),
                       label: const Text('Save draft'),
                     ),
                     FilledButton.icon(
-                      onPressed: _busy ? null : _publish,
-                      icon: const Icon(Icons.rocket_launch_outlined),
+                      onPressed: _busy || !_canCreateAssessment ? null : _publish,
+                      icon: Icon(_canCreateAssessment ? Icons.rocket_launch_outlined : Icons.lock_outline),
                       label: Text(_busy
                           ? 'Saving…'
                           : isEditing
@@ -1060,7 +1086,7 @@ class _AssessmentCreateScreenState
         ),
         child: LayoutBuilder(builder: (context, constraints) {
           final action = FilledButton.icon(
-            onPressed: _busy
+            onPressed: _busy || !_canGenerateQuestions
                 ? null
                 : () {
                     if (_mode == 'manual') {
@@ -1068,7 +1094,7 @@ class _AssessmentCreateScreenState
                     }
                     _generate(append: _questions.isNotEmpty);
                   },
-            icon: const Icon(Icons.auto_awesome, size: 18),
+            icon: Icon(_canGenerateQuestions ? Icons.auto_awesome : Icons.lock_outline, size: 18),
             label: Text(_busy
                 ? 'Generating…'
                 : _questions.isEmpty
@@ -1110,6 +1136,15 @@ class _AssessmentCreateScreenState
                 'Draft role specific questions from your competency settings, then review and edit every question before candidates see them.',
                 style: TextStyle(color: Color(0xFFD3D5DF), height: 1.45),
               ),
+              if (!_canGenerateQuestions) ...[
+                const SizedBox(height: 6),
+                TextButton.icon(
+                  onPressed: () => context.go('/payments'),
+                  icon: const Icon(Icons.lock_outline, size: 16),
+                  label: const Text('Question generation requires Business'),
+                  style: TextButton.styleFrom(foregroundColor: Colors.white),
+                ),
+              ],
             ],
           );
           return constraints.maxWidth < 540
@@ -1148,11 +1183,11 @@ class _AssessmentCreateScreenState
                     Wrap(spacing: 8, runSpacing: 8, children: [
                       if (_mode != 'manual')
                         OutlinedButton.icon(
-                            onPressed: _busy
+                            onPressed: _busy || !_canGenerateQuestions
                                 ? null
                                 : () =>
                                     _generate(append: _questions.isNotEmpty),
-                            icon: const Icon(Icons.auto_awesome),
+                            icon: Icon(_canGenerateQuestions ? Icons.auto_awesome : Icons.lock_outline),
                             label: Text(_questions.isEmpty
                                 ? 'Generate questions'
                                 : 'Generate more')),
