@@ -311,7 +311,7 @@ class JobPosting {
     final backendStatus =
         JobBackendStatusJson.fromJson(json['status'] as String? ?? 'draft');
     final rawTier = json['pipelineTier']?.toString().toLowerCase();
-    final builtInAiFlow = rawTier != 'custom';
+    final builtInAiFlow = rawTier == null || rawTier == 'standard' || rawTier == 'premium';
     final aiConfig = json['aiConfig'] as Map?;
     final configuredRanking = aiConfig != null && aiConfig['ranking'] == true;
     final configuredSummary = aiConfig != null && aiConfig['summary'] == true;
@@ -817,9 +817,10 @@ class JobDetail {
             : switch (rawTier ?? 'standard') {
                 'premium' => 'Premium',
                 'custom' => 'Custom',
+                'none' => 'None',
                 _ => 'Standard',
               };
-    final builtInAiFlow = rawTier != 'custom';
+    final builtInAiFlow = rawTier == null || rawTier == 'standard' || rawTier == 'premium';
     final aiConfig = json['aiConfig'] as Map?;
     final configuredRanking = aiConfig != null && aiConfig['ranking'] == true;
     final configuredSummary = aiConfig != null && aiConfig['summary'] == true;
