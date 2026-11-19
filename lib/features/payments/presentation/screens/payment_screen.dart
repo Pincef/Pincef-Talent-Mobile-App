@@ -8,8 +8,23 @@ import '../../../auth/application/auth_provider.dart';
 import '../../application/payment_provider.dart';
 import '../../data/payment_repository.dart';
 
+String tierNameForCode(String code, String fallback) {
+  final normalized = code.toLowerCase();
+  if (normalized == 'free') return 'Free';
+  if (normalized.contains('starter')) return 'Starter';
+  if (normalized.contains('business') || normalized.contains('premium')) {
+    return 'Business';
+  }
+  if (normalized.contains('pro') || normalized.contains('professional')) {
+    return 'Pro';
+  }
+  return fallback;
+}
+
 class PaymentScreen extends ConsumerStatefulWidget {
-  const PaymentScreen({super.key});
+  const PaymentScreen({super.key, this.checkoutResult});
+
+  final String? checkoutResult;
 
   @override
   ConsumerState<PaymentScreen> createState() => _PaymentScreenState();
@@ -17,6 +32,35 @@ class PaymentScreen extends ConsumerStatefulWidget {
 
 class _PaymentScreenState extends ConsumerState<PaymentScreen> {
   String? _checkoutPlanId;
+
+  @override
+  void initState() {
+    super.initState();
+    _handleCheckoutReturn(widget.checkoutResult);
+  }
+
+  @override
+  void didUpdateWidget(covariant PaymentScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.checkoutResult != widget.checkoutResult) {
+      _handleCheckoutReturn(widget.checkoutResult);
+    }
+  }
+
+  void _handleCheckoutReturn(String? result) {
+    if (result == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.invalidate(currentSubscriptionProvider);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(result == 'complete'
+            ? 'Payment received. Refreshing your company plan…'
+            : 'Checkout was cancelled. Your current plan is unchanged.'),
+      ));
+    });
+  }
+
+  String _tierName(SubscriptionPlan plan) => tierNameForCode(plan.code, plan.name);
 
   String _loadErrorMessage(Object error, String resource) {
     if (error is DioException) {
@@ -62,7 +106,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Text('Subscribe to ${plan.name}?'),
+        title: Text('Choose ${_tierName(plan)}?'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -71,7 +115,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
               '${NumberFormat.simpleCurrency(
                 name: plan.currency,
                 decimalDigits: plan.currency == 'NGN' ? 0 : 2,
-              ).format(plan.amountMinor / 100)} per job · billed ${plan.interval == 'yearly' ? 'annually' : 'monthly'}',
+              ).format(plan.amountMinor / 100)} · billed ${plan.interval == 'yearly' ? 'annually' : 'monthly'}',
               style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w800,
@@ -80,7 +124,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              'You’ll continue to ${_providerLabel(plan.provider)}’s secure checkout to complete payment. You’ll return to TalentBridge when checkout is finished.',
+              'You’ll continue to Paystack’s secure checkout. Your company plan changes after Paystack confirms payment, then you’ll return to TalentBridge.',
               style: const TextStyle(
                 fontSize: 13,
                 height: 1.45,
@@ -128,12 +172,6 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
       if (mounted) setState(() => _checkoutPlanId = null);
     }
   }
-
-  String _providerLabel(String? provider) => switch (provider?.toLowerCase()) {
-        'paystack' => 'Paystack',
-        'stripe' => 'Stripe',
-        _ => 'our payment provider',
-      };
 
   int _planOrder(SubscriptionPlan plan) {
     final code = plan.code.toLowerCase();
@@ -211,7 +249,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          'Select the tier that aligns with your hiring velocity. Upgrade seamlessly as your team scales.',
+                          'Choose a plan based on the hiring tools your company needs. Every plan includes job posting and basic applicant management.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 14,
@@ -238,22 +276,47 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(
-                                  'Current plan: ${subscription.planName} · ${subscription.status}',
-                                  style: const TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.textPrimary),
+                                Flexible(
+                                  child: Text(
+                                    subscription.isTrial &&
+                                            subscription.trialEndsAt != null
+                                        ? 'Starter trial · ends ${DateFormat.yMMMd().format(subscription.trialEndsAt!.toLocal())}'
+                                        : 'Current plan: ${subscription.planName} · ${subscription.status}',
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.textPrimary),
+                                  ),
                                 ),
-                                TextButton(
-                                  onPressed: _manageSubscription,
-                                  child: const Text('Manage billing'),
-                                ),
+                                if (!subscription.isTrial)
+                                  TextButton(
+                                    onPressed: _manageSubscription,
+                                    child: const Text('Manage billing'),
+                                  ),
                                 IconButton(
                                   tooltip: 'Refresh subscription status',
                                   onPressed: _refreshSubscription,
                                   icon: const Icon(Icons.refresh, size: 17),
                                 ),
                               ],
+                            ),
+                          ),
+                        ],
+                        if (subscription == null) ...[
+                          const SizedBox(height: 14),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF6F0),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: AppColors.orange),
+                            ),
+                            child: const Text(
+                              'Eligible new companies receive a 14-day Starter trial without payment details. After the trial, the account moves to Free unless a paid plan is selected.',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  height: 1.45,
+                                  color: AppColors.textPrimary),
                             ),
                           ),
                         ],
@@ -273,7 +336,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                               crossAxisCount: wide ? 2 : 1,
                               crossAxisSpacing: 16,
                               mainAxisSpacing: 16,
-                              mainAxisExtent: wide ? 500 : 440,
+                              mainAxisExtent: 540,
                             ),
                             itemCount: items.length,
                             itemBuilder: (_, index) {
@@ -285,7 +348,8 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                                 plan: plan,
                                 annual: view.isAnnual,
                                 selected: isCurrent,
-                                hasActiveSubscription: subscription != null,
+                                hasActiveSubscription: subscription != null &&
+                                    !subscription.isTrial,
                                 isLoading: _checkoutPlanId == plan.id,
                                 onSelect: () => _confirmAndCheckout(plan),
                               );
@@ -356,6 +420,70 @@ class _PlanCard extends StatelessWidget {
   final bool hasActiveSubscription;
   final bool isLoading;
   final VoidCallback onSelect;
+
+  String get _tierLabel => tierNameForCode(plan.code, plan.name);
+
+  String get _tierDescription {
+    final code = plan.code.toLowerCase();
+    if (plan.isFree) {
+      return 'For recruiters who need the essentials for managing applicants.';
+    }
+    if (code.contains('starter')) {
+      return 'Add the Standard hiring pipeline and candidate processing.';
+    }
+    if (code.contains('business') || code.contains('premium')) {
+      return 'For companies that need full workflow and interview automation.';
+    }
+    if (code.contains('pro') || code.contains('professional')) {
+      return 'Add assessments, comparison, messaging, and reporting.';
+    }
+    return plan.description;
+  }
+
+  List<String> _keyFeatures() {
+    final code = plan.code.toLowerCase();
+    if (plan.isFree) {
+      return const [
+        'Unlimited job posts',
+        'View candidates and candidate details',
+        'Manually shortlist candidates',
+        'Download CVs',
+        'Send offer and rejection emails',
+      ];
+    }
+    if (code.contains('starter')) {
+      return const [
+        'Everything in Free',
+        'Standard hiring pipeline',
+        'Process up to 500 applicant CVs per job',
+        'Match and rank up to 10 candidates per job',
+        'Candidate summaries and automatic pipeline steps',
+      ];
+    }
+    if (code.contains('business') || code.contains('premium')) {
+      return const [
+        'Everything in Pro',
+        'Process up to 1,500 applicant CVs per job; rank up to 30',
+        'Custom pipelines: up to 10',
+        'Automated assessment generation and grading',
+        'Interview tools: 5 invitations per job; Google Calendar',
+        '30 assessment invitations per job; 5 team seats',
+        'Job description generation; 3 assessment stages per custom pipeline',
+      ];
+    }
+    if (code.contains('pro') || code.contains('professional')) {
+      return const [
+        'Everything in Starter',
+        'Process up to 1,000 applicant CVs; rank up to 20 per job',
+        'Premium pipeline and manual assessments',
+        'Compare up to 20 candidates',
+        'Messaging, reports, and auto-invite shortlisted candidates',
+        '20 assessment invitations per job',
+      ];
+    }
+    return plan.features;
+  }
+
   @override
   Widget build(BuildContext context) {
     final total = plan.amountMinor / 100;
@@ -364,8 +492,8 @@ class _PlanCard extends StatelessWidget {
       name: plan.currency,
       decimalDigits: plan.currency == 'NGN' ? 0 : 2,
     ).format(monthlyEquivalent);
-    final includedFeatures = plan.features;
-    final excludedFeatures = plan.excludedFeatures;
+    final includedFeatures = _keyFeatures();
+    final excludedFeatures = const <String>[];
     return Container(
       decoration: BoxDecoration(
           color: plan.featured ? const Color(0xFFF3F4F7) : Colors.white,
@@ -403,13 +531,13 @@ class _PlanCard extends StatelessWidget {
               ),
             ),
           ),
-        Text(plan.name.toUpperCase(),
+        Text(_tierLabel.toUpperCase(),
             style: const TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
                 color: AppColors.textPrimary)),
         const SizedBox(height: 8),
-        Text(plan.description,
+        Text(_tierDescription,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
@@ -432,15 +560,15 @@ class _PlanCard extends StatelessWidget {
               ),
               if (!plan.isFree) ...[
                 const SizedBox(width: 8),
-                const Text('/Job',
-                    style: TextStyle(
-                        fontSize: 14, color: AppColors.textSecondary)),
+                Text(annual ? '/month, billed yearly' : '/month',
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary)),
               ],
             ]),
         const SizedBox(height: 6),
         Text(
           plan.isFree
-              ? 'Forever free'
+              ? 'Free forever · no automation or advanced features'
               : annual
                   ? 'BILLED ANNUALLY · ${NumberFormat.simpleCurrency(name: plan.currency, decimalDigits: plan.currency == 'NGN' ? 0 : 2).format(total)}'
                   : 'BILLED MONTHLY',
@@ -496,7 +624,6 @@ class _PlanCard extends StatelessWidget {
                 onPressed: (selected ||
                         !plan.checkoutAvailable ||
                         plan.isFree ||
-                        (hasActiveSubscription && !selected) ||
                         isLoading)
                     ? null
                     : onSelect,
@@ -519,13 +646,11 @@ class _PlanCard extends StatelessWidget {
                             ? 'Current plan'
                             : plan.isFree
                                 ? 'Create Free Account'
-                                : hasActiveSubscription
-                                    ? 'Manage current plan first'
-                                    : !plan.checkoutAvailable
-                                        ? 'Payment setup pending'
-                                        : plan.featured
-                                            ? 'Subscribe ${plan.name}'
-                                            : 'Choose ${plan.name}',
+                                : !plan.checkoutAvailable
+                                    ? 'Payment setup pending'
+                                    : hasActiveSubscription
+                                        ? 'Switch to $_tierLabel'
+                                        : 'Choose $_tierLabel',
                     style: const TextStyle(
                         fontSize: 13, fontWeight: FontWeight.w700)))),
       ]),
