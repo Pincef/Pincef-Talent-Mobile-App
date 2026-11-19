@@ -429,7 +429,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/payments',
-            builder: (context, state) => const PaymentScreen(),
+            builder: (context, state) => PaymentScreen(
+              checkoutResult: state.uri.queryParameters['checkout'],
+            ),
           ),
           GoRoute(
             path: '/hiring-pipelines',
