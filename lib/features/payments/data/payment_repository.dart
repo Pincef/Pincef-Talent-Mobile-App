@@ -111,6 +111,7 @@ class CurrentSubscription {
     required this.currentPeriodEnd,
     required this.planCode,
     required this.planName,
+    required this.trialEndsAt,
   });
 
   final String status;
@@ -118,6 +119,10 @@ class CurrentSubscription {
   final DateTime? currentPeriodEnd;
   final String planCode;
   final String planName;
+  final DateTime? trialEndsAt;
+
+  bool get isTrial =>
+      status.toLowerCase() == 'trial' || trialEndsAt != null;
 
   factory CurrentSubscription.fromJson(Map<String, dynamic> json) {
     final plan = Map<String, dynamic>.from(json['plan'] as Map? ?? const {});
@@ -128,6 +133,7 @@ class CurrentSubscription {
           DateTime.tryParse((json['currentPeriodEnd'] ?? '').toString()),
       planCode: (plan['code'] ?? '').toString(),
       planName: (plan['name'] ?? 'Free').toString(),
+      trialEndsAt: DateTime.tryParse((json['trialEndsAt'] ?? '').toString()),
     );
   }
 }
