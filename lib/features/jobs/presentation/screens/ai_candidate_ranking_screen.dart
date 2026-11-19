@@ -6,6 +6,7 @@ import 'package:talentbridge/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:talentbridge/core/theme/brand_color.dart';
+import 'package:talentbridge/core/entitlements/module_codes.dart';
 import 'package:talentbridge/features/messages/application/messages_provider.dart'
     show
         messagesRepositoryProvider,
@@ -126,6 +127,17 @@ class _AiCandidateRankingScreenState
 
   @override
   Widget build(BuildContext context) {
+    final entitled = ref.watch(authProvider).user?.hasModule(
+          ModuleCodes.aiCandidateMatch,
+        ) ??
+        false;
+    if (!entitled) {
+      return _RankingPlanLocked(
+        jobTitle: widget.originLabel,
+        onJobDetails: () => context.go('/jobs/${widget.jobId}'),
+        onPlans: () => context.go('/payments'),
+      );
+    }
     final jobId = widget.jobId;
     final jobAsync = ref.watch(jobDetailProvider(jobId));
     final jobTitle =
@@ -217,6 +229,48 @@ class _AiCandidateRankingScreenState
   void _notImplemented(BuildContext context, String label) {
     AppToast.info(context, '$label is coming soon.');
   }
+}
+
+class _RankingPlanLocked extends StatelessWidget {
+  const _RankingPlanLocked({
+    required this.jobTitle,
+    required this.onJobDetails,
+    required this.onPlans,
+  });
+
+  final String jobTitle;
+  final VoidCallback onJobDetails;
+  final VoidCallback onPlans;
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Wrap(spacing: 8, children: [
+            TextButton(onPressed: onJobDetails, child: const Text('Jobs')),
+            const Text('›'),
+            Text(jobTitle, style: const TextStyle(color: BrandColors.navy)),
+            const Text('›'),
+            const Text('Automated ranking'),
+          ]),
+          const SizedBox(height: 20),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Icon(Icons.lock_outline, color: BrandColors.orange, size: 30),
+                const SizedBox(height: 12),
+                const Text('Automated ranking is locked',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 8),
+                const Text('Candidate details and manual shortlisting remain available on Free. Start a Starter trial or select a paid plan to use automated ranking.'),
+                const SizedBox(height: 16),
+                FilledButton(onPressed: onPlans, child: const Text('View plans')),
+              ]),
+            ),
+          ),
+        ]),
+      );
 }
 
 class _RankingProcessing extends StatelessWidget {
