@@ -14,11 +14,7 @@ class AssessmentListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authProvider).user;
-    if (user?.hasModule(ModuleCodes.hiringStageAssessment) != true) {
-      return _AssessmentUpgradeNotice(
-        onPlans: () => context.go('/payments'),
-      );
-    }
+    final canAssess = user?.hasModule(ModuleCodes.hiringStageAssessment) == true;
     final state = ref.watch(recruiterAssessmentsProvider);
     return Padding(
       padding: const EdgeInsets.all(24),
@@ -38,6 +34,12 @@ class AssessmentListScreen extends ConsumerWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (!canAssess) ...[
+                _AssessmentUpgradeNotice(
+                  onPlans: () => context.go('/payments'),
+                ),
+                const SizedBox(height: 14),
+              ],
               AssessmentHero(
                 eyebrow: 'Hiring toolkit',
                 title: 'Build a stronger shortlist.',
@@ -48,7 +50,9 @@ class AssessmentListScreen extends ConsumerWidget {
                   AssessmentHeroMetric('Submissions', '$submitted'),
                 ],
                 action: FilledButton.icon(
-                  onPressed: () => context.go('/competency-assessments/new'),
+                  onPressed: canAssess
+                      ? () => context.go('/competency-assessments/new')
+                      : null,
                   icon: const Icon(Icons.add),
                   label: const Text('Create assessment'),
                   style: FilledButton.styleFrom(
@@ -60,8 +64,9 @@ class AssessmentListScreen extends ConsumerWidget {
               Expanded(
                 child: items.isEmpty
                     ? _EmptyState(
-                        onCreate: () =>
-                            context.go('/competency-assessments/new'))
+                        onCreate: canAssess
+                            ? () => context.go('/competency-assessments/new')
+                            : null)
                     : PagedListView<Map<String, dynamic>>(
                         items: items,
                         pageSize: 8,
@@ -1020,35 +1025,40 @@ class _AssessmentUpgradeNotice extends StatelessWidget {
   const _AssessmentUpgradeNotice({required this.onPlans});
   final VoidCallback onPlans;
   @override
-  Widget build(BuildContext context) => Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
-          child: Card(
-              child: Padding(
-                  padding: const EdgeInsets.all(28),
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.lock_outline,
-                        size: 38, color: BrandColors.orange),
-                    const SizedBox(height: 12),
-                    const Text(
-                        'Competency assessments are available on Professional and Business.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            fontSize: 17, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 14),
-                    FilledButton(
-                        onPressed: onPlans,
-                        style: FilledButton.styleFrom(
-                            backgroundColor: BrandColors.orange),
-                        child: const Text('View plans')),
-                  ]))),
+  Widget build(BuildContext context) => Card(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: LayoutBuilder(builder: (context, constraints) {
+            final message = const Text(
+              'Assessments are locked on your current plan. Existing results stay available; upgrade to create or invite candidates.',
+              style: TextStyle(fontSize: 13, height: 1.35),
+            );
+            if (constraints.maxWidth < 560) {
+              return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Icon(Icons.lock_outline, color: BrandColors.orange),
+                const SizedBox(height: 8),
+                message,
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(onPressed: onPlans, child: const Text('View plans')),
+                ),
+              ]);
+            }
+            return Row(children: [
+              const Icon(Icons.lock_outline, color: BrandColors.orange),
+              const SizedBox(width: 12),
+              Expanded(child: message),
+              const SizedBox(width: 8),
+              TextButton(onPressed: onPlans, child: const Text('View plans')),
+            ]);
+          }),
         ),
       );
 }
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.onCreate});
-  final VoidCallback onCreate;
+  final VoidCallback? onCreate;
   @override
   Widget build(BuildContext context) => Center(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
