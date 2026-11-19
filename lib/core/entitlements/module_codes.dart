@@ -4,8 +4,8 @@
 /// intentionally match the backend strings exactly.
 abstract final class ModuleCodes {
   static const jobPipeline = 'job.pipeline';
-  static const jobPipelinePremium = 'job.pipeline.premium';
-  static const jobPipelineCustom = 'job.pipeline.custom';
+  static const jobPipelinePremium = 'hiring.pipeline.premium';
+  static const jobPipelineCustom = 'hiring.pipeline';
   static const jobsPlanAutomation = 'jobs.plan_automation';
   static const jobsUnlimitedPost = 'jobs.unlimited_post';
   static const jobsBoost = 'jobs.boost';
@@ -40,4 +40,9 @@ abstract final class ModuleCodes {
   static const aiJobDescriptionGeneration = 'ai.job_description_generation';
   static const hiringStageInterview = 'hiring.stage.interview';
   static const hiringStageAssessment = 'hiring.stage.assessment';
+  static const aiAssessmentGeneration = 'ai.assessment_generation';
+  static const aiAssessmentGrading = 'ai.assessment_grading';
+  static const hiringWorkflowAutomation = 'hiring.workflow_automation';
+  static const hiringAutoInvite = 'hiring.auto_invite';
+  static const hiringAutoReject = 'hiring.auto_reject';
 }
