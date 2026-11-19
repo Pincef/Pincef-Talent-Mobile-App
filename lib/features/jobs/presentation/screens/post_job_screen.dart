@@ -50,7 +50,7 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
   String _workplace = 'On-site';
   String _currency = 'USD';
   String _industry = 'Technology';
-  String _pipelineTier = 'Standard';
+  String _pipelineTier = 'None';
   String? _selectedPipelineId;
   String _planTier = 'Premium';
   String? _pendingAction;
@@ -94,6 +94,11 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialJob == null &&
+        ref.read(authProvider).user?.hasModule(ModuleCodes.jobPipeline) ==
+            true) {
+      _pipelineTier = 'Standard';
+    }
     _populateFromJob(widget.initialJob);
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => ref.read(locationsProvider.notifier).loadCountries(),
@@ -936,19 +941,28 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
     return user?.hasModule(ModuleCodes.aiJobDescriptionGeneration) ?? false;
   }
 
-  Widget _pipelineTierChoices() => Row(
-        children: [
-          _pipelineTierChoice('Standard', enabled: true),
-          const SizedBox(width: 7),
-          _pipelineTierChoice('Premium', enabled: true),
-          const SizedBox(width: 7),
-          _pipelineTierChoice(
-            'Custom',
-            enabled: true,
-            opensModal: true,
-          ),
-        ],
-      );
+  Widget _pipelineTierChoices() {
+    final user = ref.read(authProvider).user;
+    return Row(children: [
+      _pipelineTierChoice('Manual', enabled: true),
+      const SizedBox(width: 7),
+      _pipelineTierChoice(
+        'Standard',
+        enabled: user?.hasModule(ModuleCodes.jobPipeline) ?? false,
+      ),
+      const SizedBox(width: 7),
+      _pipelineTierChoice(
+        'Premium',
+        enabled: user?.hasModule(ModuleCodes.jobPipelinePremium) ?? false,
+      ),
+      const SizedBox(width: 7),
+      _pipelineTierChoice(
+        'Custom',
+        enabled: user?.hasModule(ModuleCodes.jobPipelineCustom) ?? false,
+        opensModal: true,
+      ),
+    ]);
+  }
 
   Widget _pipelineTierChoice(String tier,
           {required bool enabled, bool opensModal = false}) =>
@@ -958,13 +972,13 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
           child: Opacity(
             opacity: enabled ? 1 : .42,
             child: InkWell(
-              onTap: enabled || opensModal
+              onTap: enabled
                   ? () {
                       if (opensModal) {
                         _showPipelinePicker();
                       } else {
                         setState(() {
-                          _pipelineTier = tier;
+                          _pipelineTier = tier == 'Manual' ? 'None' : tier;
                           _selectedPipelineId = null;
                         });
                       }
@@ -976,15 +990,17 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
                 decoration: BoxDecoration(
-                  color: _pipelineTier == tier
+                  color: _pipelineTier == (tier == 'Manual' ? 'None' : tier)
                       ? const Color(0xFFFFF0DE)
                       : const Color(0xFFF3F6FA),
                   borderRadius: BorderRadius.circular(11),
                   border: Border.all(
-                    color: _pipelineTier == tier
+                    color: _pipelineTier == (tier == 'Manual' ? 'None' : tier)
                         ? const Color(0xFFFFC88F)
                         : const Color(0xFFE5EBF3),
-                    width: _pipelineTier == tier ? 1.5 : 1,
+                    width: _pipelineTier == (tier == 'Manual' ? 'None' : tier)
+                        ? 1.5
+                        : 1,
                   ),
                 ),
                 child: Row(
@@ -1001,7 +1017,9 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: _pipelineTier == tier && enabled
+                          color: _pipelineTier ==
+                                      (tier == 'Manual' ? 'None' : tier) &&
+                                  enabled
                               ? BrandColors.orange
                               : BrandColors.muted,
                           fontSize: 10,
@@ -1023,6 +1041,10 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
       barrierColor: const Color(0xD90B142A),
       builder: (dialogContext) => _HiringPipelinePickerDialog(
         initialSelection: _pipelineTier,
+        standardAvailable: ref.read(authProvider).user?.hasModule(ModuleCodes.jobPipeline) ?? false,
+        premiumAvailable: ref.read(authProvider).user?.hasModule(ModuleCodes.jobPipelinePremium) ?? false,
+        customAvailable: ref.read(authProvider).user?.hasModule(ModuleCodes.jobPipelineCustom) ?? false,
+        onPlans: () => context.go('/payments'),
       ),
     );
     if (selected != null && mounted) {
@@ -2033,9 +2055,17 @@ class _PostJobScreenState extends ConsumerState<PostJobScreen> {
 class _HiringPipelinePickerDialog extends StatefulWidget {
   const _HiringPipelinePickerDialog({
     required this.initialSelection,
+    required this.standardAvailable,
+    required this.premiumAvailable,
+    required this.customAvailable,
+    required this.onPlans,
   });
 
   final String initialSelection;
+  final bool standardAvailable;
+  final bool premiumAvailable;
+  final bool customAvailable;
+  final VoidCallback onPlans;
 
   @override
   State<_HiringPipelinePickerDialog> createState() =>
@@ -2056,7 +2086,11 @@ class _HiringPipelinePickerDialogState
     };
   }
 
-  bool _available(String _) => true;
+  bool _available(String tier) => switch (tier) {
+        'Premium' => widget.premiumAvailable,
+        'Custom' => widget.customAvailable,
+        _ => widget.standardAvailable,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -2205,7 +2239,7 @@ class _HiringPipelinePickerDialogState
     final available = _available(tier);
     final selected = _selected == tier;
     final locked = !available;
-    const lockedReason = 'This pipeline is currently unavailable.';
+    final lockedReason = 'Upgrade your plan to use the $tier pipeline.';
     return Tooltip(
       message: locked ? lockedReason : '',
       child: SizedBox(
@@ -2434,8 +2468,14 @@ class _HiringPipelinePickerDialogState
             OutlinedButton(
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Cancel')),
+            OutlinedButton(
+              onPressed: widget.onPlans,
+              child: const Text('View plans'),
+            ),
             FilledButton(
-              onPressed: () => Navigator.pop(context, _selected),
+              onPressed: _available(_selected)
+                  ? () => Navigator.pop(context, _selected)
+                  : null,
               style: FilledButton.styleFrom(
                 backgroundColor: BrandColors.navy,
                 foregroundColor: Colors.white,
@@ -2444,7 +2484,7 @@ class _HiringPipelinePickerDialogState
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(9)),
               ),
-              child: const Text('Confirm Pipeline Choice'),
+              child: const Text('Confirm pipeline choice'),
             ),
           ],
         );
