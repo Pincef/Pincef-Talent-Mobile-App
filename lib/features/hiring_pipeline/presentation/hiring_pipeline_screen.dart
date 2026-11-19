@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:talentbridge/core/widgets/app_toast.dart';
+import 'package:talentbridge/core/entitlements/module_codes.dart';
 
 import '../../auth/application/auth_provider.dart';
 import '../data/models/hiring_pipeline_model.dart';
@@ -187,10 +189,14 @@ class _HiringPipelineScreenState extends ConsumerState<HiringPipelineScreen> {
   }
 
   Widget _header(bool compact, List<HiringPipeline> all) {
+    final canCreate = ref.read(authProvider).user?.hasModule(
+          ModuleCodes.hiringPipeline,
+        ) ??
+        false;
     final exportBtn = _actionButton(
         'Export Workflows', Icons.download_outlined, false, () => _export(all));
     final createBtn = _actionButton('Create Pipeline', Icons.add, true, _create,
-        enabled: true);
+        enabled: canCreate);
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const Text.rich(
@@ -239,6 +245,10 @@ class _HiringPipelineScreenState extends ConsumerState<HiringPipelineScreen> {
   }
 
   List<Widget> _body(List<HiringPipeline> all, bool compact) {
+    final canManage = ref.read(authProvider).user?.hasModule(
+          ModuleCodes.hiringPipeline,
+        ) ??
+        false;
     final visible = _filtered(all);
     final pages = (visible.length / _pageSize).ceil();
     final page = pages == 0 ? 0 : _page.clamp(0, pages - 1);
@@ -259,6 +269,7 @@ class _HiringPipelineScreenState extends ConsumerState<HiringPipelineScreen> {
             padding: const EdgeInsets.only(bottom: 10),
             child: _PipelineCard(
               pipeline: p,
+              canManage: canManage,
               onView: () => _openEditor(pipeline: p, readOnly: true),
               onEdit: () => p.isLocked
                   ? showSnack(
@@ -266,8 +277,10 @@ class _HiringPipelineScreenState extends ConsumerState<HiringPipelineScreen> {
                       (p.isSystemStandard || p.isSystemPremium)
                           ? 'Built-in pipelines cannot be edited. Duplicate one to customise.'
                           : 'This workflow is locked while candidates are active in it.')
-                  : _openEditor(pipeline: p),
-              onDuplicate: () => _duplicate(p),
+                  : canManage
+                      ? _openEditor(pipeline: p)
+                      : context.go('/payments'),
+              onDuplicate: () => canManage ? _duplicate(p) : context.go('/payments'),
               onDelete: () => _delete(p),
             ),
           ),
@@ -580,6 +593,7 @@ class _Metric extends StatelessWidget {
 class _PipelineCard extends StatelessWidget {
   const _PipelineCard({
     required this.pipeline,
+    required this.canManage,
     required this.onView,
     required this.onEdit,
     required this.onDuplicate,
@@ -587,6 +601,7 @@ class _PipelineCard extends StatelessWidget {
   });
 
   final HiringPipeline pipeline;
+  final bool canManage;
   final VoidCallback onView, onEdit, onDuplicate, onDelete;
 
   static IconData _iconFor(HiringPipeline p) {
@@ -621,7 +636,11 @@ class _PipelineCard extends StatelessWidget {
         tooltip: 'More options',
         icon: const Icon(Icons.more_vert, size: 18, color: PT.muted),
         padding: EdgeInsets.zero,
-        onSelected: (v) => v == 'dup' ? onDuplicate() : onDelete(),
+        onSelected: (v) => !canManage
+            ? context.go('/payments')
+            : v == 'dup'
+                ? onDuplicate()
+                : onDelete(),
         itemBuilder: (_) => [
           const PopupMenuItem(value: 'dup', child: Text('Duplicate')),
           PopupMenuItem(
@@ -635,8 +654,11 @@ class _PipelineCard extends StatelessWidget {
       final view = _smallButton('View', Icons.visibility_outlined, onView,
           expand: !wide);
       final edit = _smallButton(
-          'Edit', p.isLocked ? Icons.lock_outline : Icons.edit_outlined, onEdit,
-          muted: p.isLocked, expand: !wide);
+          'Edit',
+          p.isLocked || !canManage ? Icons.lock_outline : Icons.edit_outlined,
+          onEdit,
+          muted: p.isLocked || !canManage,
+          expand: !wide);
 
       return Container(
         padding: const EdgeInsets.fromLTRB(13, 12, 8, 12),
