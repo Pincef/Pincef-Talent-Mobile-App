@@ -276,23 +276,14 @@ class _ReportContentState extends State<_ReportContent> {
             headers: const ['Metric', 'Value'],
             data: [
               ['Applicants', _withCommas(report.totalApplicants)],
+              ['Shortlisted', _withCommas(report.shortlisted)],
               ['Hires', _withCommas(report.totalHires)],
-              [
-                'Average days to fill',
-                report.avgDaysToFill == 0
-                    ? 'Not available'
-                    : '${report.avgDaysToFill} days'
-              ],
-              [
-                'Pipeline health',
-                report.pipelineHealth == 0
-                    ? 'Not available'
-                    : '${report.pipelineHealth}%'
-              ],
+              ['Rejected', _withCommas(report.rejected)],
+              ['Active jobs', _withCommas(report.activeJobs)],
             ],
           ),
           pw.SizedBox(height: 20),
-          pw.Text('Application pipeline',
+          pw.Text('Applications by current status',
               style:
                   pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 8),
@@ -358,27 +349,23 @@ class _ReportContentState extends State<_ReportContent> {
               dark: true,
             ),
             _MetricCard(
-              title: 'AVG. TIME TO FILL',
-              value: data.avgDaysToFill == 0
-                  ? 'Unavailable'
-                  : '${data.avgDaysToFill} Days',
-              icon: Icons.schedule,
+              title: 'SHORTLISTED',
+              value: _withCommas(data.shortlisted),
+              icon: Icons.fact_check_outlined,
               iconColor: const Color(0xFF5B6B9A),
               iconBg: const Color(0xFFEEF0FB),
-            ),
-            _MetricCard(
-              title: 'PIPELINE HEALTH',
-              value: data.pipelineHealth == 0
-                  ? 'Unavailable'
-                  : '${data.pipelineHealth}%',
-              icon: Icons.health_and_safety_outlined,
-              iconColor: _green,
-              iconBg: const Color(0xFFE3F8EC),
             ),
             _MetricCard(
               title: 'TOTAL HIRES',
               value: _withCommas(data.totalHires),
               icon: Icons.person_add_alt,
+              iconColor: _green,
+              iconBg: const Color(0xFFE3F8EC),
+            ),
+            _MetricCard(
+              title: 'REJECTED',
+              value: _withCommas(data.rejected),
+              icon: Icons.person_off_outlined,
               iconColor: _orange,
               iconBg: const Color(0xFFFFF1E8),
             ),
@@ -394,21 +381,19 @@ class _ReportContentState extends State<_ReportContent> {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth >= 760) {
-          return IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Expanded(child: _VolumeCard()),
-                const SizedBox(width: 26),
-                SizedBox(width: 292, child: _SourceCard(items: data.sources)),
-              ],
-            ),
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _VolumeCard(points: data.applicationTrend)),
+              const SizedBox(width: 26),
+              SizedBox(width: 292, child: _SourceCard(items: data.sources)),
+            ],
           );
         }
 
         return Column(
           children: [
-            const _VolumeCard(),
+            _VolumeCard(points: data.applicationTrend),
             const SizedBox(height: 14),
             _SourceCard(items: data.sources),
           ],
@@ -560,7 +545,9 @@ class _MetricCard extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _VolumeCard extends StatelessWidget {
-  const _VolumeCard();
+  const _VolumeCard({required this.points});
+
+  final List<ApplicationTrendPoint> points;
 
   @override
   Widget build(BuildContext context) {
@@ -577,26 +564,29 @@ class _VolumeCard extends StatelessWidget {
               const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Applicant Volume Trends', style: _panelTitleStyle),
+                  Text('Applications by month', style: _panelTitleStyle),
                   SizedBox(height: 2),
                   Text(
-                    'Comparing current quarter to previous projection',
+                    'Monthly application totals over the last six months',
                     style: _panelSubtitleStyle,
                   ),
                 ],
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _legend(_orange, 'Active'),
-                  const SizedBox(width: 18),
-                  _legend(_navy, 'Projection'),
-                ],
-              ),
+              _legend(_orange, 'Applications'),
             ],
           ),
           const SizedBox(height: 38),
-          const SizedBox(height: 270, child: _TrendChart()),
+          SizedBox(
+            height: 270,
+            child: points.every((point) => point.count == 0)
+                ? const Center(
+                    child: Text(
+                      'No applications recorded in this period.',
+                      style: _panelSubtitleStyle,
+                    ),
+                  )
+                : _TrendChart(points: points),
+          ),
         ],
       ),
     );
@@ -626,19 +616,23 @@ class _VolumeCard extends StatelessWidget {
 }
 
 class _TrendChart extends StatelessWidget {
-  const _TrendChart();
+  const _TrendChart({required this.points});
+
+  final List<ApplicationTrendPoint> points;
 
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      painter: _TrendPainter(),
+      painter: _TrendPainter(points),
       child: const SizedBox.expand(),
     );
   }
 }
 
 class _TrendPainter extends CustomPainter {
-  static const _months = ['OCT', 'NOV', 'DEC', 'JAN', 'FEB', 'MAR'];
+  _TrendPainter(this.points);
+
+  final List<ApplicationTrendPoint> points;
   static const _labelStyle = TextStyle(
     color: _muted,
     fontSize: 10,
@@ -648,6 +642,7 @@ class _TrendPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final gridHeight = size.height - 30;
+    if (points.isEmpty) return;
 
     // 5 horizontal grid lines
     final gridPaint = Paint()
@@ -660,22 +655,50 @@ class _TrendPainter extends CustomPainter {
     }
 
     // Month labels, centred in 6 equal bands
-    final band = size.width / _months.length;
+    final band = size.width / points.length;
     final tp = TextPainter(textDirection: TextDirection.ltr);
 
-    for (var i = 0; i < _months.length; i++) {
+    for (var i = 0; i < points.length; i++) {
       tp
-        ..text = TextSpan(text: _months[i], style: _labelStyle)
+        ..text = TextSpan(text: points[i].label, style: _labelStyle)
         ..layout();
       tp.paint(
         canvas,
         Offset(band * (i + .5) - tp.width / 2, gridHeight + 14),
       );
     }
+
+    final maxValue = points.fold<int>(0, (max, point) => point.count > max ? point.count : max);
+    if (maxValue == 0) return;
+
+    final path = Path();
+    final chartTop = 8.0;
+    final chartBottom = gridHeight - 8.0;
+    for (var i = 0; i < points.length; i++) {
+      final x = band * (i + .5);
+      final y = chartBottom - (points[i].count / maxValue) * (chartBottom - chartTop);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    canvas.drawPath(path, Paint()
+      ..color = _orange
+      ..strokeWidth = 3
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round);
+    for (var i = 0; i < points.length; i++) {
+      final x = band * (i + .5);
+      final y = chartBottom - (points[i].count / maxValue) * (chartBottom - chartTop);
+      canvas.drawCircle(Offset(x, y), 4, Paint()..color = _orange);
+      canvas.drawCircle(Offset(x, y), 2, Paint()..color = Colors.white);
+    }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _TrendPainter oldDelegate) => oldDelegate.points != points;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -693,12 +716,25 @@ class _SourceCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Source Effectiveness', style: _panelTitleStyle),
+          const Text('Candidate sources', style: _panelTitleStyle),
           const SizedBox(height: 22),
           if (items.isEmpty)
-            const Text(
-                'Source attribution is not available from the current analytics data.',
-                style: _panelSubtitleStyle)
+            const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline, color: _muted, size: 22),
+                SizedBox(height: 10),
+                Text(
+                  'Source tracking is not recorded for applications yet.',
+                  style: _panelSubtitleStyle,
+                ),
+                SizedBox(height: 6),
+                Text(
+                  'Add a source field to applications to see which channels bring candidates.',
+                  style: TextStyle(color: _subtle, fontSize: 12, height: 1.4),
+                ),
+              ],
+            )
           else
             ...items.map(_buildSourceRow),
           const SizedBox(height: 4),
@@ -768,7 +804,7 @@ class _SourceCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Funnel velocity table
+// Current application status breakdown
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _FunnelCard extends StatelessWidget {
@@ -776,205 +812,45 @@ class _FunnelCard extends StatelessWidget {
 
   final List<FunnelStage> stages;
 
-  // Column flex values (stage, duration, pass-through, volume, status, trend)
-  static const _cols = [198, 161, 183, 100, 112, 135];
-
-  static const _headerStyle = TextStyle(
-    fontSize: 12,
-    height: 1.35,
-    letterSpacing: .6,
-    color: Color(0xFF4A5062),
-    fontWeight: FontWeight.w600,
-  );
-
   @override
   Widget build(BuildContext context) {
     return _Panel(
-      padding: EdgeInsets.zero,
+      padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(32, 32, 14, 32),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Recruitment Funnel Velocity',
-                          style: _panelTitleStyle),
-                      SizedBox(height: 2),
-                      Text(
-                        'Tracking speed of movement through each stage',
-                        style: TextStyle(color: _muted, fontSize: 14),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(Icons.more_vert, size: 20, color: _ink),
-              ],
-            ),
+          const Text('Applications by current status', style: _panelTitleStyle),
+          const SizedBox(height: 4),
+          const Text(
+            'Each application is counted once, under its latest status.',
+            style: _panelSubtitleStyle,
           ),
-          const Divider(height: 1, thickness: 1, color: _headerRule),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final tableWidth =
-                  constraints.maxWidth < 760 ? 760.0 : constraints.maxWidth;
-
-              return SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: SizedBox(
-                  width: tableWidth,
-                  child: Column(
-                    children: [
-                      _buildHeaderRow(),
-                      for (var i = 0; i < stages.length; i++)
-                        _buildRow(stages[i], isLast: i == stages.length - 1),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
+          const SizedBox(height: 18),
+          for (var i = 0; i < stages.length; i++) _buildRow(stages[i], i == stages.length - 1),
         ],
       ),
     );
   }
 
-  Widget _cell(int index, Widget child,
-      {Alignment align = Alignment.centerLeft}) {
-    return Expanded(
-      flex: _cols[index],
-      child: Align(alignment: align, child: child),
-    );
-  }
-
-  Widget _buildHeaderRow() {
+  Widget _buildRow(FunnelStage stage, bool isLast) {
     return Container(
-      height: 66,
-      color: const Color(0xFFFAF9F8),
-      padding: const EdgeInsets.only(left: 32),
-      child: Row(
-        children: [
-          _cell(0, const Text('STAGE NAME', style: _headerStyle)),
-          _cell(1, const Text('AVERAGE\nDURATION', style: _headerStyle)),
-          _cell(2, const Text('PASS-THROUGH\nRATE', style: _headerStyle)),
-          _cell(3, const Text('VOLUME\n(ACTIVE)', style: _headerStyle)),
-          _cell(4, const Text('STATUS', style: _headerStyle),
-              align: Alignment.center),
-          _cell(5, const Text('TREND', style: _headerStyle),
-              align: Alignment.center),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRow(FunnelStage s, {required bool isLast}) {
-    final statusColor = s.congested ? _orange : _green;
-
-    return Container(
-      constraints: const BoxConstraints(minHeight: 72),
-      padding: const EdgeInsets.only(left: 32, top: 14, bottom: 14),
+      constraints: const BoxConstraints(minHeight: 54),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
-        border:
-            isLast ? null : const Border(bottom: BorderSide(color: _tableRule)),
+        border: isLast ? null : const Border(bottom: BorderSide(color: _tableRule)),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          _cell(
-            0,
-            SizedBox(
-              width: 140,
-              child: Text(
-                s.name,
-                style: const TextStyle(
-                  color: _navy,
-                  fontSize: 16,
-                  height: 1.3,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ),
-          _cell(
-            1,
-            Text(
-              s.days == 0 ? 'Unavailable' : '${s.days} Days',
-              style: const TextStyle(color: _ink, fontSize: 14),
-            ),
-          ),
-          _cell(
-            2,
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  width: 64,
-                  child: _ProgressBar(
-                    value: s.passThrough / 100,
-                    color: statusColor,
-                    height: 5,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  s.passThrough == 0 ? 'Unavailable' : '${s.passThrough}%',
-                  style: const TextStyle(
-                    color: _ink,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          _cell(
-            3,
-            Text(
-              _withCommas(s.volume),
-              style: const TextStyle(color: _ink, fontSize: 14),
-            ),
-          ),
-          _cell(
-            4,
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
-              decoration: BoxDecoration(
-                color: s.congested
-                    ? const Color(0xFFFFF2ED)
-                    : const Color(0xFFD8FBE5),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                s.days == 0
-                    ? 'NO DATA'
-                    : (s.congested ? 'CONGESTED' : 'OPTIMAL'),
-                style: TextStyle(
-                  fontSize: 10,
-                  color: statusColor,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            align: Alignment.center,
-          ),
-          _cell(
-            5,
-            Icon(_trendIcon(s.trend), size: 22, color: statusColor),
-            align: Alignment.center,
+          Expanded(child: Text(stage.name, style: const TextStyle(color: _ink, fontSize: 15, fontWeight: FontWeight.w500))),
+          Container(
+            constraints: const BoxConstraints(minWidth: 44),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(color: const Color(0xFFF3F5FA), borderRadius: BorderRadius.circular(18)),
+            child: Text(_withCommas(stage.volume), textAlign: TextAlign.center, style: const TextStyle(color: _navy, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
     );
-  }
-
-  IconData _trendIcon(num trend) {
-    if (trend > 0) return Icons.trending_up;
-    if (trend < 0) return Icons.trending_down;
-    return Icons.trending_flat;
   }
 }
 
