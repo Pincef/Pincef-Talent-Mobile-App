@@ -287,7 +287,10 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                                         color: AppColors.textPrimary),
                                   ),
                                 ),
-                                if (!subscription.isTrial)
+                                if (!subscription.isTrial &&
+                                    !subscription.planCode
+                                        .toLowerCase()
+                                        .startsWith('dev_'))
                                   TextButton(
                                     onPressed: _manageSubscription,
                                     child: const Text('Manage billing'),
