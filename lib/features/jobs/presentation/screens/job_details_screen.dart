@@ -107,7 +107,8 @@ class _Body extends StatelessWidget {
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 760;
         return SingleChildScrollView(
-          padding: EdgeInsets.all(isWide ? 24 : 16),
+          padding: EdgeInsets.fromLTRB(
+              isWide ? 24 : 20, isWide ? 24 : 22, isWide ? 24 : 20, 28),
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 1240),
@@ -242,7 +243,7 @@ class _Body extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _Breadcrumb(title: job.title, isRecruiter: isRecruiter),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 18),
                     _Header(
                         job: job,
                         isRecruiter: isRecruiter,
@@ -250,19 +251,19 @@ class _Body extends StatelessWidget {
                         isWide: isWide,
                         onEdit: onEdit),
                     if (isRecruiter) ...[
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 18),
                       _HiringPipelineOverview(job: job, pipelines: pipelines),
                     ],
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 18),
                     Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
+                      spacing: 14,
+                      runSpacing: 14,
                       children: factTiles
                           .map(
                               (tile) => SizedBox(width: factWidth, child: tile))
                           .toList(),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 18),
                     _SectionCard(
                       title: 'About the role',
                       child: Text(
@@ -276,10 +277,10 @@ class _Body extends StatelessWidget {
                       ),
                     ),
                     if (sections.isNotEmpty) ...[
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 18),
                       Wrap(
-                        spacing: 14,
-                        runSpacing: 14,
+                        spacing: 16,
+                        runSpacing: 16,
                         children: sections,
                       ),
                     ],
@@ -311,7 +312,7 @@ class _HiringPipelineOverview extends StatelessWidget {
     );
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: BrandColors.border),
@@ -334,10 +335,10 @@ class _HiringPipelineOverview extends StatelessWidget {
           Text('${stages.length} stages',
               style: const TextStyle(fontSize: 10, color: BrandColors.muted)),
         ]),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         Wrap(
-          spacing: 6,
-          runSpacing: 8,
+          spacing: 9,
+          runSpacing: 10,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             for (var i = 0; i < stages.length; i++) ...[
