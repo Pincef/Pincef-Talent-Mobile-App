@@ -54,7 +54,7 @@ class _NotificationCenterScreenState
         onRefresh: () => ref.read(notificationsProvider.notifier).refresh(),
         child: ListView(
             padding: EdgeInsets.fromLTRB(
-                compact ? 14 : 24, compact ? 16 : 24, compact ? 14 : 24, 32),
+                compact ? 20 : 24, compact ? 22 : 24, compact ? 20 : 24, 36),
             children: [
               if (compact) ...[
                 const Text('Notifications',
@@ -62,7 +62,7 @@ class _NotificationCenterScreenState
                         fontSize: 26,
                         fontWeight: FontWeight.w800,
                         color: AppColors.textPrimary)),
-                const SizedBox(height: 4),
+                const SizedBox(height: 8),
                 Row(children: [
                   Expanded(
                       child: Text(
@@ -113,10 +113,10 @@ class _NotificationCenterScreenState
                       icon: const Icon(Icons.done_all),
                       label: const Text('Mark all as read')),
                 ]),
-              const Divider(height: 28),
+              Divider(height: compact ? 34 : 28),
               Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  spacing: compact ? 10 : 8,
+                  runSpacing: compact ? 10 : 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     ...List.generate(
