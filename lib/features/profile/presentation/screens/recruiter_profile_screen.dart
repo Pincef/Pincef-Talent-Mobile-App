@@ -43,13 +43,18 @@ class RecruiterProfileScreen extends ConsumerWidget {
         : Column(
             children: [
               _LeftColumn(user: user),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               _RightColumn(user: user),
             ],
           );
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.fromLTRB(
+        isDesktop(context) ? 20 : 18,
+        isDesktop(context) ? 20 : 22,
+        isDesktop(context) ? 20 : 18,
+        28,
+      ),
       child: content,
     );
   }
@@ -65,7 +70,7 @@ class _LeftColumn extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _ProfileCard(user: user),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         const _RecentActivityCard(),
       ],
     );
@@ -309,7 +314,7 @@ class _RightColumn extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _PerformanceCard(performance: performance),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         _Card(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -321,8 +326,8 @@ class _RightColumn extends ConsumerWidget {
                   ? const Text('No competencies added yet.',
                       style: TextStyle(color: BrandColors.muted, fontSize: 12))
                   : Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
+                      spacing: 8,
+                      runSpacing: 8,
                       children: user.competencies
                           .map((c) => Chip(
                                 label: Text(c,
@@ -337,7 +342,7 @@ class _RightColumn extends ConsumerWidget {
             ],
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         _Card(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -369,7 +374,7 @@ class _PerformanceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
           color: BrandColors.navy, borderRadius: BorderRadius.circular(10)),
       child: performance.when(
@@ -560,7 +565,7 @@ class _Card extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
