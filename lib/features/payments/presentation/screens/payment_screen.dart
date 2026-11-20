@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -22,9 +24,16 @@ String tierNameForCode(String code, String fallback) {
 }
 
 class PaymentScreen extends ConsumerStatefulWidget {
-  const PaymentScreen({super.key, this.checkoutResult});
+  const PaymentScreen({
+    super.key,
+    this.checkoutResult,
+    this.checkoutPlanId,
+    this.checkoutReference,
+  });
 
   final String? checkoutResult;
+  final String? checkoutPlanId;
+  final String? checkoutReference;
 
   @override
   ConsumerState<PaymentScreen> createState() => _PaymentScreenState();
@@ -36,28 +45,155 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
   @override
   void initState() {
     super.initState();
-    _handleCheckoutReturn(widget.checkoutResult);
+    _handleCheckoutReturn(
+      widget.checkoutResult,
+      widget.checkoutPlanId,
+      widget.checkoutReference,
+    );
   }
 
   @override
   void didUpdateWidget(covariant PaymentScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.checkoutResult != widget.checkoutResult) {
-      _handleCheckoutReturn(widget.checkoutResult);
+    if (oldWidget.checkoutResult != widget.checkoutResult ||
+        oldWidget.checkoutPlanId != widget.checkoutPlanId ||
+        oldWidget.checkoutReference != widget.checkoutReference) {
+      _handleCheckoutReturn(
+        widget.checkoutResult,
+        widget.checkoutPlanId,
+        widget.checkoutReference,
+      );
     }
   }
 
-  void _handleCheckoutReturn(String? result) {
+  void _handleCheckoutReturn(
+    String? result,
+    String? expectedPlanId,
+    String? reference,
+  ) {
     if (result == null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      ref.invalidate(currentSubscriptionProvider);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(result == 'complete'
-            ? 'Payment received. Refreshing your company plan…'
-            : 'Checkout was cancelled. Your current plan is unchanged.'),
-      ));
+      unawaited(_resolveCheckoutReturn(result, expectedPlanId, reference));
     });
+  }
+
+  Future<void> _resolveCheckoutReturn(
+    String result,
+    String? expectedPlanId,
+    String? reference,
+  ) async {
+    if (result == 'cancelled') {
+      ref.invalidate(currentSubscriptionProvider);
+      try {
+        await ref.read(authProvider.notifier).refreshSession();
+      } catch (_) {
+        // Keep the current screen usable if a session refresh is temporarily
+        // unavailable; the subscription summary can still be refreshed.
+      }
+      if (!mounted) return;
+      ref.invalidate(currentSubscriptionProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content:
+                Text('Checkout was cancelled. Your current plan is unchanged.'),
+          ),
+        );
+      }
+      return;
+    }
+    if (result != 'complete') return;
+
+    // Verify Paystack's reference on the server, then wait for its webhook to
+    // persist the matching subscription before updating the signed-in user.
+    try {
+      var confirmedPlanId = expectedPlanId;
+      var paymentStatus = 'pending';
+      for (var attempt = 0; attempt < 15; attempt++) {
+        if (reference != null && reference.isNotEmpty) {
+          final verification = await ref
+              .read(paymentRepositoryProvider)
+              .verifyCheckout(reference);
+          if (!mounted) return;
+          paymentStatus = verification.status.toLowerCase();
+          if (paymentStatus == 'failed') {
+            ref.invalidate(currentSubscriptionProvider);
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text(
+                  'Paystack could not complete the payment. No new plan was activated.'),
+              duration: Duration(seconds: 7),
+            ));
+            return;
+          }
+          if (paymentStatus == 'success') {
+            if (confirmedPlanId != null &&
+                confirmedPlanId.isNotEmpty &&
+                verification.planId != confirmedPlanId) {
+              throw const FormatException(
+                  'The payment reference does not match the selected plan.');
+            }
+            confirmedPlanId = verification.planId;
+          }
+        }
+
+        ref.invalidate(currentSubscriptionProvider);
+        final subscription =
+            await ref.read(currentSubscriptionProvider.future);
+        if (!mounted) return;
+        final planMatches = confirmedPlanId == null ||
+            confirmedPlanId.isEmpty ||
+            subscription?.planId == confirmedPlanId;
+        final periodIsCurrent = subscription?.currentPeriodEnd
+                ?.isAfter(DateTime.now()) ==
+            true;
+        if (subscription?.status.toLowerCase() == 'active' &&
+            planMatches &&
+            periodIsCurrent) {
+          await ref.read(authProvider.notifier).refreshSession();
+          if (!mounted) return;
+          ref.invalidate(currentSubscriptionProvider);
+          ref.invalidate(subscriptionPlansProvider);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(
+                  'Payment confirmed. ${subscription!.planName} is active.'),
+            ));
+          }
+          return;
+        }
+        if (attempt < 14) {
+          await Future<void>.delayed(const Duration(seconds: 2));
+          if (!mounted) return;
+        }
+      }
+      if (mounted && paymentStatus == 'success') {
+        ref.invalidate(currentSubscriptionProvider);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+            'Payment succeeded, but plan activation is still pending. Refresh billing shortly; don’t pay again.',
+          ),
+          duration: Duration(seconds: 8),
+        ));
+      } else if (mounted) {
+        ref.invalidate(currentSubscriptionProvider);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+            'Payment is still awaiting confirmation. Refresh billing shortly; don’t submit another payment yet.',
+          ),
+          duration: Duration(seconds: 7),
+        ));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+            'Could not confirm the payment status yet. Refresh billing shortly before trying again.',
+          ),
+          duration: Duration(seconds: 7),
+        ));
+      }
+    }
   }
 
   String _tierName(SubscriptionPlan plan) => tierNameForCode(plan.code, plan.name);
