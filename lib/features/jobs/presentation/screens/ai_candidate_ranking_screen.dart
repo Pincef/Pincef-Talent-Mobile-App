@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:pdf/pdf.dart' as pdf;
@@ -45,6 +47,20 @@ class AiCandidateRankingScreen extends ConsumerStatefulWidget {
 class _AiCandidateRankingScreenState
     extends ConsumerState<AiCandidateRankingScreen> {
   bool _retrying = false;
+  Timer? _rankingPollTimer;
+
+  void _pollWhileRunning(String jobId) {
+    _rankingPollTimer?.cancel();
+    _rankingPollTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) ref.invalidate(candidateRankingProvider(jobId));
+    });
+  }
+
+  @override
+  void dispose() {
+    _rankingPollTimer?.cancel();
+    super.dispose();
+  }
 
   Future<void> _exportRankings(CandidateRankingResult result) async {
     if (result.entries.isEmpty) {
@@ -182,42 +198,49 @@ class _AiCandidateRankingScreenState
                   onRetry: () =>
                       ref.invalidate(candidateRankingProvider(jobId)),
                 ),
-                data: (result) => result.isLocked
-                    ? const _AiResultsUnavailable()
-                    : (result.aiStatus == 'queued' ||
-                                result.aiStatus == 'running') &&
-                            result.entries.isEmpty
-                        ? _RankingProcessing(
-                            analyzed: result.analyzedCount,
-                            total: result.totalRanked,
-                            onRefresh: () =>
-                                ref.invalidate(candidateRankingProvider(jobId)),
-                          )
-                    : result.retryableCount > 0 &&
-                                result.entries.isEmpty
-                            ? _RankingFailed(
-                                failed: result.retryableCount,
-                                retrying: _retrying ||
-                                    result.aiStatus == 'queued' ||
-                                    result.aiStatus == 'running',
-                                onRetry: _retryFailed,
-                                onRefresh: () => ref.invalidate(
-                                    candidateRankingProvider(jobId)),
-                              )
-                            : result.entries.isEmpty
-                                ? _NoRankingsFound(
-                                    onRefresh: () => ref.invalidate(
-                                        candidateRankingProvider(jobId)),
-                                    onViewCandidates: () =>
-                                        context.go('/jobs/$jobId/candidates'),
-                                  )
-                                : _RankingBody(
-                                    jobId: jobId,
-                                    isWide: isWide,
-                                    result: result,
-                                    retrying: _retrying,
-                                    onRetryFailed: _retryFailed,
-                                  ),
+                data: (result) {
+                  final processing = result.aiStatus == 'queued' ||
+                      result.aiStatus == 'running';
+                  if (processing && result.entries.isEmpty) {
+                    _pollWhileRunning(jobId);
+                  } else {
+                    _rankingPollTimer?.cancel();
+                  }
+                  if (result.isLocked) return const _AiResultsUnavailable();
+                  if (processing && result.entries.isEmpty) {
+                    return _RankingProcessing(
+                      analyzed: result.analyzedCount,
+                      failed: result.failedCount,
+                      total: result.totalApplicants,
+                      onRefresh: () =>
+                          ref.invalidate(candidateRankingProvider(jobId)),
+                    );
+                  }
+                  if (result.retryableCount > 0 && result.entries.isEmpty) {
+                    return _RankingFailed(
+                      failed: result.retryableCount,
+                      retrying: _retrying,
+                      onRetry: _retryFailed,
+                      onRefresh: () =>
+                          ref.invalidate(candidateRankingProvider(jobId)),
+                    );
+                  }
+                  if (result.entries.isEmpty) {
+                    return _NoRankingsFound(
+                      onRefresh: () =>
+                          ref.invalidate(candidateRankingProvider(jobId)),
+                      onViewCandidates: () =>
+                          context.go('/jobs/$jobId/candidates'),
+                    );
+                  }
+                  return _RankingBody(
+                    jobId: jobId,
+                    isWide: isWide,
+                    result: result,
+                    retrying: _retrying,
+                    onRetryFailed: _retryFailed,
+                  );
+                },
               ),
             ],
           ),
@@ -275,9 +298,13 @@ class _RankingPlanLocked extends StatelessWidget {
 
 class _RankingProcessing extends StatelessWidget {
   const _RankingProcessing(
-      {required this.analyzed, required this.total, required this.onRefresh});
+      {required this.analyzed,
+      required this.failed,
+      required this.total,
+      required this.onRefresh});
 
   final int analyzed;
+  final int failed;
   final int total;
   final VoidCallback onRefresh;
 
@@ -301,7 +328,7 @@ class _RankingProcessing extends StatelessWidget {
           const SizedBox(height: 5),
           Text(
             total > 0
-                ? '$analyzed of $total candidates analyzed.'
+                ? '$analyzed of $total candidates analyzed${failed > 0 ? ' · $failed need retry' : ''}.'
                 : 'Preparing candidate analysis.',
             style: const TextStyle(color: BrandColors.muted, fontSize: 11),
           ),
