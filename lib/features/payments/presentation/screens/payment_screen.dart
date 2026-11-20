@@ -152,10 +152,14 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
     try {
       final uri =
           await ref.read(paymentRepositoryProvider).createCheckout(plan);
-      // Stripe Checkout and Paystack both provide hosted checkout pages.
-      // Use the platform's normal navigation (same tab on web, browser on
-      // native) so their success/cancel return URLs bring the user back here.
-      final opened = await launchUrl(uri, mode: LaunchMode.platformDefault);
+      // Use the current browser tab on web so the provider callback returns
+      // to this app without leaving a duplicate TalentBridge tab open.
+      // Native platforms ignore webOnlyWindowName and use their normal flow.
+      final opened = await launchUrl(
+        uri,
+        mode: LaunchMode.platformDefault,
+        webOnlyWindowName: '_self',
+      );
       if (!opened && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
