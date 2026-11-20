@@ -15,7 +15,13 @@ class PaymentRepository {
   }
 
   Future<CurrentSubscription?> getCurrentSubscription() async {
-    final response = await _dio.get('/payment/subscription');
+    // Billing state can change while this page is open (Paystack's webhook
+    // runs asynchronously). A unique read URL avoids stale browser-cache
+    // validation responses when the app returns from hosted checkout.
+    final response = await _dio.get(
+      '/payment/subscription',
+      queryParameters: {'_fresh': DateTime.now().microsecondsSinceEpoch},
+    );
     final body = Map<String, dynamic>.from(response.data as Map);
     final data = Map<String, dynamic>.from(body['data'] as Map);
     final subscription = data['subscription'];
@@ -39,6 +45,20 @@ class PaymentRepository {
     return uri;
   }
 
+  Future<CheckoutVerification> verifyCheckout(String reference) async {
+    final response = await _dio.post(
+      '/payment/verify',
+      data: {'reference': reference},
+    );
+    final body = Map<String, dynamic>.from(response.data as Map);
+    final data = Map<String, dynamic>.from(body['data'] as Map);
+    return CheckoutVerification(
+      reference: (data['reference'] ?? '').toString(),
+      status: (data['status'] ?? 'pending').toString(),
+      planId: (data['planId'] ?? '').toString(),
+    );
+  }
+
   Future<Uri> createManagementLink() async {
     final response = await _dio.post('/payment/manage');
     final body = Map<String, dynamic>.from(response.data as Map);
@@ -50,6 +70,18 @@ class PaymentRepository {
     }
     return uri;
   }
+}
+
+class CheckoutVerification {
+  const CheckoutVerification({
+    required this.reference,
+    required this.status,
+    required this.planId,
+  });
+
+  final String reference;
+  final String status;
+  final String planId;
 }
 
 class SubscriptionPlan {
@@ -109,6 +141,7 @@ class CurrentSubscription {
     required this.status,
     required this.provider,
     required this.currentPeriodEnd,
+    required this.planId,
     required this.planCode,
     required this.planName,
     required this.trialEndsAt,
@@ -117,6 +150,7 @@ class CurrentSubscription {
   final String status;
   final String provider;
   final DateTime? currentPeriodEnd;
+  final String planId;
   final String planCode;
   final String planName;
   final DateTime? trialEndsAt;
@@ -131,6 +165,7 @@ class CurrentSubscription {
       provider: (json['provider'] ?? '').toString(),
       currentPeriodEnd:
           DateTime.tryParse((json['currentPeriodEnd'] ?? '').toString()),
+      planId: (plan['id'] ?? '').toString(),
       planCode: (plan['code'] ?? '').toString(),
       planName: (plan['name'] ?? 'Free').toString(),
       trialEndsAt: DateTime.tryParse((json['trialEndsAt'] ?? '').toString()),
