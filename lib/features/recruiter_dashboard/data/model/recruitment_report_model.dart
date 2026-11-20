@@ -1,12 +1,50 @@
 class RecruitmentReport {
   final int totalApplicants;
-  final int avgDaysToFill;
-  final double pipelineHealth;
+  final int shortlisted;
+  final int rejected;
   final int totalHires;
+  final int activeJobs;
+  final List<ApplicationTrendPoint> applicationTrend;
   final List<RecruitmentSource> sources;
   final List<FunnelStage> stages;
   final List<DropOffReason> dropOffReasons;
-  const RecruitmentReport({required this.totalApplicants, required this.avgDaysToFill, required this.pipelineHealth, required this.totalHires, required this.sources, required this.stages, required this.dropOffReasons});
+  const RecruitmentReport({
+    required this.totalApplicants,
+    required this.shortlisted,
+    required this.rejected,
+    required this.totalHires,
+    required this.activeJobs,
+    required this.applicationTrend,
+    required this.sources,
+    required this.stages,
+    required this.dropOffReasons,
+  });
+}
+
+class ApplicationTrendPoint {
+  final int year;
+  final int month;
+  final int count;
+  const ApplicationTrendPoint({
+    required this.year,
+    required this.month,
+    required this.count,
+  });
+
+  String get label => const [
+        'JAN',
+        'FEB',
+        'MAR',
+        'APR',
+        'MAY',
+        'JUN',
+        'JUL',
+        'AUG',
+        'SEP',
+        'OCT',
+        'NOV',
+        'DEC',
+      ][month - 1];
 }
 
 class RecruitmentSource {
@@ -18,12 +56,8 @@ class RecruitmentSource {
 
 class FunnelStage {
   final String name;
-  final double days;
-  final int passThrough;
   final int volume;
-  final bool congested;
-  final int trend; // -1 falling, 0 stable, 1 rising
-  const FunnelStage(this.name, this.days, this.passThrough, this.volume, {this.congested = false, this.trend = 0});
+  const FunnelStage(this.name, this.volume);
 }
 
 class DropOffReason {
