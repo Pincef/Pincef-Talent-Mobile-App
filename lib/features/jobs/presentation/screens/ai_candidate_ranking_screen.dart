@@ -50,7 +50,7 @@ class _AiCandidateRankingScreenState
   Timer? _rankingPollTimer;
 
   void _pollWhileRunning(String jobId) {
-    _rankingPollTimer?.cancel();
+    if (_rankingPollTimer?.isActive ?? false) return;
     _rankingPollTimer = Timer(const Duration(seconds: 3), () {
       if (mounted) ref.invalidate(candidateRankingProvider(jobId));
     });
@@ -190,6 +190,7 @@ class _AiCandidateRankingScreenState
               ),
               const SizedBox(height: 22),
               ranking.when(
+                skipLoadingOnRefresh: true,
                 loading: () => const Padding(
                   padding: EdgeInsets.symmetric(vertical: 60),
                   child: Center(child: CircularProgressIndicator()),
@@ -201,7 +202,7 @@ class _AiCandidateRankingScreenState
                 data: (result) {
                   final processing = result.aiStatus == 'queued' ||
                       result.aiStatus == 'running';
-                  if (processing && result.entries.isEmpty) {
+                  if (processing) {
                     _pollWhileRunning(jobId);
                   } else {
                     _rankingPollTimer?.cancel();
@@ -216,7 +217,9 @@ class _AiCandidateRankingScreenState
                           ref.invalidate(candidateRankingProvider(jobId)),
                     );
                   }
-                  if (result.retryableCount > 0 && result.entries.isEmpty) {
+                  if (!processing &&
+                      result.retryableCount > 0 &&
+                      result.entries.isEmpty) {
                     return _RankingFailed(
                       failed: result.retryableCount,
                       retrying: _retrying,
@@ -294,6 +297,72 @@ class _RankingPlanLocked extends StatelessWidget {
           ),
         ]),
       );
+}
+
+class _RankingProgress extends StatelessWidget {
+  const _RankingProgress({
+    required this.analyzed,
+    required this.failed,
+    required this.total,
+  });
+
+  final int analyzed;
+  final int failed;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = total > 0
+        ? (analyzed / total).clamp(0.0, 1.0).toDouble()
+        : null;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F8FC),
+        border: Border.all(color: BrandColors.border),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Ranking in progress',
+                  style: TextStyle(
+                    color: BrandColors.navy,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  total > 0
+                      ? '$analyzed of $total candidates analyzed${failed > 0 ? ' · retrying $failed' : ''}. Partial rankings update as batches finish; order may shift until complete.'
+                      : 'Preparing candidate analysis.',
+                  style: const TextStyle(
+                    color: BrandColors.muted,
+                    fontSize: 11,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                LinearProgressIndicator(value: progress, minHeight: 4),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _RankingProcessing extends StatelessWidget {
@@ -566,10 +635,19 @@ class _RankingBodyState extends ConsumerState<_RankingBody> {
   @override
   Widget build(BuildContext context) {
     final result = widget.result;
+    final processing = result.aiStatus == 'queued' || result.aiStatus == 'running';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (result.retryableCount > 0) ...[
+        if (processing) ...[
+          _RankingProgress(
+            analyzed: result.analyzedCount,
+            failed: result.failedCount,
+            total: result.totalApplicants,
+          ),
+          const SizedBox(height: 16),
+        ],
+        if (!processing && result.retryableCount > 0) ...[
           _RankingFailed(
             failed: result.retryableCount,
             retrying: widget.retrying ||
