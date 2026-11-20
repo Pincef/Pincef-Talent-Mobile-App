@@ -106,8 +106,6 @@ const List<NavItem> kRecruiterNavItems = [
     NavItem(
         label: 'Security', icon: Icons.circle, route: '/settings?tab=security'),
     NavItem(
-        label: 'Password', icon: Icons.circle, route: '/settings?tab=security'),
-    NavItem(
         label: 'Subscription & payments',
         icon: Icons.circle,
         route: '/payments'),
