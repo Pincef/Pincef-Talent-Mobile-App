@@ -431,6 +431,9 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/payments',
             builder: (context, state) => PaymentScreen(
               checkoutResult: state.uri.queryParameters['checkout'],
+              checkoutPlanId: state.uri.queryParameters['planId'],
+              checkoutReference: state.uri.queryParameters['reference'] ??
+                  state.uri.queryParameters['trxref'],
             ),
           ),
           GoRoute(
