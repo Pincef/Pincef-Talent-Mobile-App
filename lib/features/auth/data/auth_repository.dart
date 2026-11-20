@@ -31,7 +31,10 @@ class AuthRepository {
       }
       await _storage.saveTokens(
           accessToken: accessToken, refreshToken: refreshToken);
-      final me = await _dio.get('/auth/me');
+      final me = await _dio.get(
+        '/auth/me',
+        queryParameters: {'_fresh': DateTime.now().microsecondsSinceEpoch},
+      );
       return UserModel.fromJson({...loginData, ..._sessionData(me.data)});
     } on DioException catch (e) {
       try {
@@ -161,7 +164,10 @@ class AuthRepository {
         accessToken: accessToken,
         refreshToken: nextRefreshToken,
       );
-      final me = await _dio.get('/auth/me');
+      final me = await _dio.get(
+        '/auth/me',
+        queryParameters: {'_fresh': DateTime.now().microsecondsSinceEpoch},
+      );
       final profile = _sessionData(me.data);
       return UserModel.fromJson({...session, ...profile});
     } on DioException catch (e) {
