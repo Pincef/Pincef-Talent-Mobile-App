@@ -147,10 +147,10 @@ class CandidateRankingResult {
   final int failedCount;
   final int totalApplicants;
 
-  /// Includes explicit failures and applications the worker never reached.
-  int get retryableCount => failedCount > totalApplicants - analyzedCount
-      ? failedCount
-      : (totalApplicants - analyzedCount).clamp(0, totalApplicants).toInt();
+  /// Only analyses inside the job's configured ranking limit are retryable.
+  /// `totalApplicants - analyzedCount` incorrectly treats candidates beyond
+  /// that limit as failures (for example, 42 applicants with a limit of 20).
+  int get retryableCount => failedCount.clamp(0, totalApplicants).toInt();
 
   factory CandidateRankingResult.fromApiJson(Map<String, dynamic> json) {
     final rawEntries =
