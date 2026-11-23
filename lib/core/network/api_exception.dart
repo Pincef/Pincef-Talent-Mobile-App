@@ -5,14 +5,18 @@ import 'package:dio/dio.dart';
 class ApiException implements Exception {
   final String message;
   final int? statusCode;
+  final String? code;
 
-  ApiException(this.message, {this.statusCode});
+  ApiException(this.message, {this.statusCode, this.code});
 
   factory ApiException.fromDioError(DioException error) {
     final message = _messageFrom(error.response?.data);
     return ApiException(
       message ?? _fallbackMessage(error),
       statusCode: error.response?.statusCode,
+      code: error.response?.data is Map
+          ? (error.response?.data as Map)['code'] as String?
+          : null,
     );
   }
 
