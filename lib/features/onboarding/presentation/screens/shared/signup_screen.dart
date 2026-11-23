@@ -95,19 +95,15 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
           );
 
       if (!mounted) return;
-      AppToast.success(context, 'Account created successfully.');
-      final sharedJobDestination = safeSharedJobDestination(widget.returnTo);
-      context.go(
-        role == UserRole.recruiter
-            ? '/recruiter-company-setup'
-            : sharedJobDestination ??
-                Uri(
-                  path: '/candidate-profile-setup',
-                  queryParameters: {
-                    if (widget.returnTo != null) 'returnTo': widget.returnTo!,
-                  },
-                ).toString(),
-      );
+      AppToast.success(context, 'Account created. Verify your email to continue.');
+      context.go(Uri(
+        path: '/verify-email',
+        queryParameters: {
+          'email': _emailController.text.trim(),
+          'onboarding': 'true',
+          if (widget.returnTo != null) 'returnTo': widget.returnTo!,
+        },
+      ).toString());
     } catch (e) {
       if (mounted) {
         AppToast.error(
