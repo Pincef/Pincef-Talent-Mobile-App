@@ -22,6 +22,7 @@ import 'package:talentbridge/features/recruiter_dashboard/presentation/screens/r
 import 'package:talentbridge/features/support/presentation/support_center_screen.dart';
 import 'package:talentbridge/features/messages/presentation/screens/email_templates_screen.dart';
 import '../../features/auth/application/auth_provider.dart';
+import '../../features/auth/presentation/screens/verify_email_screen.dart' as email_verification;
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/onboarding/presentation/screens/shared/signup_screen.dart';
 import '../../features/jobs/presentation/screens/job_management_screen.dart';
@@ -55,6 +56,7 @@ const _publicRoutes = {
   '/welcome',
   '/forgot-password',
   '/login',
+  '/verify-email',
   '/choose-role',
   '/signup',
   '/auth/callback',
@@ -64,6 +66,7 @@ const _authEntryRoutes = {
   '/welcome',
   '/forgot-password',
   '/login',
+  '/verify-email',
   '/choose-role',
   '/signup',
 };
@@ -190,7 +193,20 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/login',
         builder: (context, state) => LoginScreen(
+          initialEmail: state.uri.queryParameters['email'],
           returnTo: state.uri.queryParameters['returnTo'],
+          onboarding: state.uri.queryParameters['onboarding'] == 'true',
+          emailVerified: state.uri.queryParameters['verified'] == 'true',
+        ),
+      ),
+      GoRoute(
+        path: '/verify-email',
+        builder: (context, state) => email_verification.VerifyEmailScreen(
+          email: state.uri.queryParameters['email'],
+          token: state.uri.queryParameters['token'],
+          returnTo: state.uri.queryParameters['returnTo'],
+          onboarding: state.uri.queryParameters['onboarding'] == 'true',
+          verified: state.uri.queryParameters['verified'] == 'true',
         ),
       ),
       GoRoute(
