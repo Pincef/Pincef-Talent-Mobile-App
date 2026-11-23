@@ -8,6 +8,7 @@ import '../../../../core/theme/auth_form_style.dart';
 import '../../../../core/widgets/brand_header.dart';
 import '../../../../core/widgets/brand_footer.dart';
 import '../../application/auth_provider.dart';
+import '../../data/models/user_model.dart';
 import '../../../../core/widgets/app_toast.dart';
 import '../../../../core/router/return_destination.dart';
 
