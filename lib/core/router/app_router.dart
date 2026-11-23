@@ -135,6 +135,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (authState.isRestoringSession || authState.sessionRestoreFailed) {
         return null;
       }
+      if (authState.isVerifyingEmail &&
+          state.matchedLocation != '/verify-email') {
+        return Uri(
+          path: '/verify-email',
+          queryParameters: {
+            if (authState.verificationEmail != null)
+              'email': authState.verificationEmail!,
+            'onboarding': 'true',
+          },
+        ).toString();
+      }
       final isLoggedIn = authState.isAuthenticated;
       final isPublicRoute = _isPublicRoute(state.matchedLocation);
 
