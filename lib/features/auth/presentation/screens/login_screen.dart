@@ -12,9 +12,18 @@ import '../../../../core/widgets/app_toast.dart';
 import '../../../../core/router/return_destination.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key, this.returnTo});
+  const LoginScreen({
+    super.key,
+    this.initialEmail,
+    this.returnTo,
+    this.onboarding = false,
+    this.emailVerified = false,
+  });
 
+  final String? initialEmail;
   final String? returnTo;
+  final bool onboarding;
+  final bool emailVerified;
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -28,6 +37,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _obscurePassword = true;
   bool _rememberMe = false;
   bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController.text = widget.initialEmail ?? '';
+  }
 
   @override
   void dispose() {
@@ -52,13 +67,41 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             password: _passwordController.text,
           );
 
-      AppToast.success(context, 'Signed in successfully.');
       if (!mounted) return;
-      // Auth graduation, not a forward flow — replace so back doesn't
-      // return to a stale login form.
-      context.go(safeSharedJobDestination(widget.returnTo) ?? '/dashboard');
+      AppToast.success(context, 'Signed in successfully.');
+      final user = ref.read(authProvider).user;
+      if (widget.onboarding) {
+        if (user?.role == UserRole.recruiter) {
+          context.go('/recruiter-company-setup');
+        } else if (user?.role == UserRole.candidate) {
+          context.go(Uri(
+            path: '/candidate-profile-setup',
+            queryParameters: {
+              if (widget.returnTo != null) 'returnTo': widget.returnTo!,
+            },
+          ).toString());
+        } else {
+          context.go('/dashboard');
+        }
+      } else {
+        context.go(safeSharedJobDestination(widget.returnTo) ??
+            (user?.role == UserRole.admin ? '/admin' : '/dashboard'));
+      }
     } catch (_) {
-      final message = ref.read(authProvider).error;
+      final auth = ref.read(authProvider);
+      if (auth.isVerifyingEmail) {
+        context.go(Uri(
+          path: '/verify-email',
+          queryParameters: {
+            if (auth.verificationEmail != null)
+              'email': auth.verificationEmail!,
+            if (widget.returnTo != null) 'returnTo': widget.returnTo!,
+            'onboarding': 'true',
+          },
+        ).toString());
+        return;
+      }
+      final message = auth.error;
       AppToast.error(
         context,
         message == null || message.trim().isEmpty
@@ -107,6 +150,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             subtitle:
                                 'Manage your global talent funnel with ease.',
                           ),
+                          if (widget.emailVerified) ...[
+                            const SizedBox(height: 16),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.green.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Text(
+                                'Email verified. Sign in to continue setting up your profile.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.green),
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 24),
                           const Text('EMAIL ADDRESS', style: authLabelStyle),
                           const SizedBox(height: 6),
