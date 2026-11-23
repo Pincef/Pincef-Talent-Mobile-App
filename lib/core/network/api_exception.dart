@@ -6,8 +6,9 @@ class ApiException implements Exception {
   final String message;
   final int? statusCode;
   final String? code;
+  final String? email;
 
-  ApiException(this.message, {this.statusCode, this.code});
+  ApiException(this.message, {this.statusCode, this.code, this.email});
 
   factory ApiException.fromDioError(DioException error) {
     final message = _messageFrom(error.response?.data);
@@ -16,6 +17,9 @@ class ApiException implements Exception {
       statusCode: error.response?.statusCode,
       code: error.response?.data is Map
           ? (error.response?.data as Map)['code'] as String?
+          : null,
+      email: error.response?.data is Map
+          ? (error.response?.data as Map)['email'] as String?
           : null,
     );
   }
