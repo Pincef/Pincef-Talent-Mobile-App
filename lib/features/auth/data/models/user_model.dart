@@ -81,6 +81,7 @@ class UserModel {
   final UserRole role;
   final String? companyId; // set once a recruiter has created/joined a Company
   final bool isVerified;
+  final bool isEmailVerified;
   final String? accessToken;
 
   /// Plan/add-on entitlements supplied by the backend. An empty list is
@@ -113,6 +114,7 @@ class UserModel {
     required this.role,
     this.companyId,
     required this.isVerified,
+    this.isEmailVerified = true,
     this.accessToken,
     this.modules,
     this.capabilities = const {},
@@ -138,6 +140,7 @@ class UserModel {
       role: userRoleFromString(json['role'] as String),
       companyId: json['companyId'] as String?,
       isVerified: json['isVerified'] as bool? ?? false,
+      isEmailVerified: json['isEmailVerified'] as bool? ?? true,
       modules: !billingGuardsEnabled ? const ['job.pipeline','jobs.unlimited_post','jobs.boost','analytics.advanced','analytics.basic','ai.candidate_match','ai.candidate_summary','ai.candidate_interview','ai.candidate_engagement','ai.candidate_outreach','ai.candidate_outreach_templates','ai.candidate_outreach_scheduling','ai.candidate_outreach_analytics','ai.candidate_outreach_personalization','ai.candidate_outreach_a_b_testing','ai.candidate_outreach_multi_channel','ai.candidate_outreach_integrations','ai.candidate_outreach_automation','ai.candidate_outreach_customization','ai.candidate_outreach_reporting','ai.candidate_outreach_security','team.extra_seats','hiring.pipeline','ai.cv_parsing','hiring.stage.interview','hiring.stage.assessment','hiring.candidate.messaging'] : json['modules'] is List
           ? (json['modules'] as List).map((e) => e.toString()).toList()
           : null,
