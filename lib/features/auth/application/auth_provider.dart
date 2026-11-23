@@ -182,7 +182,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
       } else {
         state = AuthState(user: user);
       }
-    } catch (_) {
+    } catch (error) {
+      if (error is ApiException &&
+          error.code == 'EMAIL_VERIFICATION_REQUIRED') {
+        state = AuthState(
+          isVerifyingEmail: true,
+          verificationEmail: error.email,
+          isOnboarding: true,
+          error: error.message,
+        );
+        return;
+      }
       if (await _repository.hasStoredSession()) {
         state = const AuthState(
           sessionRestoreFailed: true,
