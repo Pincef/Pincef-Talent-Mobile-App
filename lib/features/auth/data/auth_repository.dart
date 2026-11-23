@@ -44,20 +44,9 @@ class AuthRepository {
     }
   }
 
-  /// Registers the account, then immediately logs in with the same
-  /// credentials to obtain and store real tokens.
-  ///
-  /// There's no email-verification step in the flow yet, so this treats
-  /// "registered" and "authenticated" as the same moment. Once email
-  /// verification exists, this needs to change — likely: don't
-  /// auto-login here, and instead route the user to a "check your
-  /// email" screen, then let them log in normally once verified.
-  ///
-  /// ASSUMPTION: `role.name.toUpperCase()` matches the backend's Role
-  /// enum values (CANDIDATE / RECRUITER / ADMIN). Confirm against
-  /// UserRole's actual definition and adjust if it doesn't serialize
-  /// that way.
-  Future<UserModel> signUp({
+  /// Creates the account without issuing a session. The user must verify
+  /// their email and then sign in before accessing profile setup.
+  Future<void> signUp({
     required String firstName,
     required String lastName,
     required String email,
@@ -79,7 +68,26 @@ class AuthRepository {
         if (returnTo != null) 'returnTo': returnTo,
       });
 
-      return await login(email: email, password: password);
+      return;
+    } on DioException catch (e) {
+      throw ApiException.fromDioError(e);
+    }
+  }
+
+  Future<void> requestEmailVerification({required String email}) async {
+    try {
+      await _dio.post('/auth/verify-email', data: {'email': email});
+    } on DioException catch (e) {
+      throw ApiException.fromDioError(e);
+    }
+  }
+
+  Future<String> confirmEmailVerification({required String token}) async {
+    try {
+      final response = await _dio.post('/auth/verify-email/confirm',
+          data: {'token': token});
+      final data = _sessionData(response.data);
+      return data['email'] as String? ?? '';
     } on DioException catch (e) {
       throw ApiException.fromDioError(e);
     }
