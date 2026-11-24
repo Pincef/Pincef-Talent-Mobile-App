@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:talentbridge/features/auth/data/models/user_model.dart';
 import 'package:talentbridge/features/auth/presentation/screens/forgot_password_screen.dart';
+import 'package:talentbridge/features/auth/presentation/screens/reset_password_screen.dart';
 import 'package:talentbridge/features/auth/presentation/screens/oauth_callback_screen.dart';
 import 'package:talentbridge/features/candidate_dashboard/presentation/candidate_dashboard_screen.dart';
 import 'package:talentbridge/features/onboarding/presentation/screens/candidate_profile_setup_screen.dart';
@@ -55,6 +56,7 @@ import 'return_destination.dart';
 const _publicRoutes = {
   '/welcome',
   '/forgot-password',
+  '/reset-password',
   '/login',
   '/verify-email',
   '/choose-role',
@@ -135,6 +137,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (authState.isRestoringSession || authState.sessionRestoreFailed) {
         return null;
       }
+      if (state.matchedLocation == '/reset-password') return null;
       if (authState.isVerifyingEmail &&
           state.matchedLocation != '/verify-email') {
         return Uri(
@@ -223,6 +226,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
           path: '/forgot-password',
           builder: (context, state) => const ForgotPasswordScreen()),
+      GoRoute(
+        path: '/reset-password',
+        builder: (context, state) => ResetPasswordScreen(
+          token: state.uri.queryParameters['token'] ?? '',
+        ),
+      ),
       GoRoute(
         path: '/auth/callback',
         builder: (context, state) => OAuthCallbackScreen(
