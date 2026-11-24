@@ -9,15 +9,7 @@ import '../../../../core/widgets/brand_footer.dart';
 import '../../../../core/widgets/app_toast.dart';
 import '../../application/auth_provider.dart';
 
-/// Lands here from the link in the reset-password email, e.g. a route like
-///   GoRoute(
-///     path: '/reset-password',
-///     builder: (context, state) =>
-///         ResetPasswordScreen(token: state.uri.queryParameters['token'] ?? ''),
-///   ),
-/// ASSUMPTION: the email link encodes the token as a query param
-/// (?token=...). Adjust the route + this constructor if your deep link
-/// shape differs (e.g. a path segment instead).
+/// Accepts the token from the reset-password email link.
 class ResetPasswordScreen extends ConsumerStatefulWidget {
   const ResetPasswordScreen({super.key, required this.token});
 
