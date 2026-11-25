@@ -138,8 +138,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         return null;
       }
       if (state.matchedLocation == '/reset-password') return null;
-      if (authState.isVerifyingEmail &&
-          state.matchedLocation != '/verify-email') {
+      if (authState.isVerifyingEmail) {
+        if (state.matchedLocation == '/login' ||
+            state.matchedLocation == '/verify-email') {
+          return null;
+        }
         return Uri(
           path: '/verify-email',
           queryParameters: {
@@ -325,7 +328,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/competency-assessments',
-            builder: (context, state) => const AssessmentListScreen(),
+            builder: (context, state) => AssessmentListScreen(
+              jobId: state.uri.queryParameters['jobId'],
+            ),
             routes: [
               GoRoute(
                   path: 'new',
