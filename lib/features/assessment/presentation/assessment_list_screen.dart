@@ -9,20 +9,70 @@ import '../application/assessment_provider.dart';
 import 'widgets/assessment_hero.dart';
 
 class AssessmentListScreen extends ConsumerWidget {
-  const AssessmentListScreen({super.key});
+  const AssessmentListScreen({super.key, this.jobId});
+
+  final String? jobId;
+
+  Future<void> _remove(
+    BuildContext context,
+    WidgetRef ref,
+    Map<String, dynamic> item,
+    bool isDraft,
+  ) async {
+    final action = isDraft ? 'Delete' : 'Archive';
+    final repository = ref.read(assessmentRepositoryProvider);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('$action assessment?'),
+        content: Text(isDraft
+            ? 'Unused drafts can be deleted. Drafts with candidate activity are archived.'
+            : 'The assessment will be archived and candidate history will be kept.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(action),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await repository.remove('${item['_id'] ?? item['id']}');
+      if (context.mounted) {
+        ref.invalidate(recruiterAssessmentsProvider);
+        final id = jobId;
+        if (id != null) ref.invalidate(jobAssessmentsProvider(id));
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not remove this assessment.')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authProvider).user;
     final canAssess = user?.hasModule(ModuleCodes.hiringStageAssessment) == true;
-    final state = ref.watch(recruiterAssessmentsProvider);
+    final id = jobId;
+    final provider = id == null
+        ? recruiterAssessmentsProvider
+        : jobAssessmentsProvider(id);
+    final state = ref.watch(provider);
     return Padding(
       padding: const EdgeInsets.all(24),
       child: state.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => _ErrorState(
             error: error.toString(),
-            onRetry: () => ref.invalidate(recruiterAssessmentsProvider)),
+            onRetry: () => ref.invalidate(provider)),
         data: (items) {
           final submitted = items.fold<int>(0, (total, item) {
             final analytics = item['analytics'] is Map
@@ -72,6 +122,10 @@ class AssessmentListScreen extends ConsumerWidget {
                         pageSize: 8,
                         itemBuilder: (context, item, index) => _AssessmentCard(
                           item: item,
+                          onRemove: canAssess && item['status'] != 'archived'
+                              ? () => _remove(
+                                  context, ref, item, item['status'] == 'draft')
+                              : null,
                           onTap: () => context.go(
                               '/competency-assessments/${item['_id'] ?? item['id']}'),
                         ),
@@ -109,6 +163,15 @@ class AssessmentDetailsScreen extends ConsumerWidget {
         final candidates = (test['candidates'] as List? ?? const [])
             .map((e) => Map<String, dynamic>.from(e as Map))
             .toList();
+        final emailRecipients = candidates.where((candidate) =>
+            candidate['deliveryChannel'] == 'email' ||
+            candidate['deliveryChannel'] == 'both');
+        final emailSent = emailRecipients
+            .where((candidate) => candidate['emailSentAt'] != null)
+            .length;
+        final emailFailed = emailRecipients.where((candidate) =>
+            candidate['emailSentAt'] == null &&
+            candidate['invitationError'] != null).length;
         final questions = (test['questions'] as List? ?? const [])
             .whereType<Map>()
             .map((e) => Map<String, dynamic>.from(e))
@@ -130,8 +193,9 @@ class AssessmentDetailsScreen extends ConsumerWidget {
                     color: BrandColors.navy),
               );
               final edit = OutlinedButton.icon(
-                onPressed: () =>
-                    context.go('/competency-assessments/$testId/edit'),
+                onPressed: test['status'] == 'archived'
+                    ? null
+                    : () => context.go('/competency-assessments/$testId/edit'),
                 icon: const Icon(Icons.edit_outlined, size: 18),
                 label: const Text('Edit assessment'),
               );
@@ -151,6 +215,13 @@ class AssessmentDetailsScreen extends ConsumerWidget {
               _MetricTile(
                   label: 'Invited',
                   value: '${analytics['candidateCount'] ?? 0}'),
+              if (emailRecipients.isNotEmpty) ...[
+                _MetricTile(label: 'Emails sent', value: '$emailSent'),
+                _MetricTile(
+                    label: 'Email pending',
+                    value: '${emailRecipients.length - emailSent - emailFailed}'),
+                _MetricTile(label: 'Email failed', value: '$emailFailed'),
+              ],
               _MetricTile(
                   label: 'Started', value: '${analytics['startedCount'] ?? 0}'),
               _MetricTile(
@@ -985,9 +1056,10 @@ String _formatResultDate(dynamic value) {
 }
 
 class _AssessmentCard extends StatelessWidget {
-  const _AssessmentCard({required this.item, required this.onTap});
+  const _AssessmentCard({required this.item, required this.onTap, this.onRemove});
   final Map<String, dynamic> item;
   final VoidCallback onTap;
+  final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) {
@@ -1013,7 +1085,16 @@ class _AssessmentCard extends StatelessWidget {
         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
           Chip(
               label: Text(item['status']?.toString().toUpperCase() ?? 'DRAFT')),
-          const Icon(Icons.chevron_right),
+          if (onRemove != null)
+            IconButton(
+              tooltip: item['status'] == 'draft' ? 'Delete draft' : 'Archive',
+              icon: Icon(item['status'] == 'draft'
+                  ? Icons.delete_outline
+                  : Icons.archive_outlined),
+              onPressed: onRemove,
+            )
+          else
+            const Icon(Icons.chevron_right),
         ]),
         onTap: onTap,
       ),
