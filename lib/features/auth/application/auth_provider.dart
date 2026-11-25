@@ -140,11 +140,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<String> verifyEmailToken(String token) async {
     final email = await _repository.confirmEmailVerification(token: token);
-    state = AuthState(
-      isVerifyingEmail: true,
-      verificationEmail: email,
-      isOnboarding: true,
-    );
+    state = const AuthState();
     return email;
   }
 
