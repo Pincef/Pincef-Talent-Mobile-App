@@ -15,8 +15,15 @@ class AssessmentRepository {
   Future<List<Map<String, dynamic>>> listRecruiterAssessments() async =>
       _list(await _dio.get('/competency-tests'));
 
+  Future<List<Map<String, dynamic>>> listJobAssessments(String jobId) async =>
+      _list(await _dio.get('/competency-tests/job/$jobId'));
+
   Future<Map<String, dynamic>> getAssessment(String id) async =>
       _map(_data(await _dio.get('/competency-tests/$id')));
+
+  Future<void> remove(String id) async {
+    await _dio.delete('/competency-tests/$id');
+  }
 
   Future<Map<String, dynamic>> reviewAssessment(
     String testId,
