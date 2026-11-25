@@ -1249,6 +1249,7 @@ class _RankingListState extends ConsumerState<_RankingList> {
           );
       if (!mounted) return;
       ref.invalidate(candidateRankingProvider(widget.jobId));
+      ref.invalidate(nextWorkflowActivationProvider(widget.jobId));
       setState(() {
         _draftOrder = null;
         _reordering = false;
@@ -1917,15 +1918,18 @@ class _AutomateWorkflowCard extends ConsumerWidget {
                     color: Color(0xFF34D399), size: 18),
                 const SizedBox(width: 8),
                 Text(
-                    'Workflow activated ${workflow['activationSource'] == 'automatic' ? 'automatically' : 'manually'}',
+                    workflow['assessmentId'] != null
+                        ? 'Assessment published'
+                        : 'Workflow activated ${workflow['activationSource'] == 'automatic' ? 'automatically' : 'manually'}',
                     style: const TextStyle(
                         color: Colors.white, fontWeight: FontWeight.w700)),
               ])
             else ...[
               Text(
                   workflow['status'] == 'failed'
-                      ? 'Automatic activation needs attention. You can retry it now.'
-                      : 'If you do nothing, this step activates in 5 days. A reminder is sent one day before.',
+                      ? (workflow['failureReason']?.toString() ??
+                          'Activation needs attention. You can retry it now.')
+                      : 'This stage activates within 48 hours. A reminder is sent one day before.',
                   style: const TextStyle(
                       fontSize: 11.5, color: Colors.white70, height: 1.4)),
               const SizedBox(height: 10),
@@ -1947,7 +1951,7 @@ class _AutomateWorkflowCard extends ConsumerWidget {
                             if (assessmentId != null &&
                                 assessmentId.isNotEmpty) {
                               router.go(
-                                  '/competency-assessments/$assessmentId/edit');
+                                  '/competency-assessments/$assessmentId');
                             } else {
                               final query = <String, String>{
                                 'jobId': jobId,
@@ -1965,6 +1969,7 @@ class _AutomateWorkflowCard extends ConsumerWidget {
                           }
                         } catch (error) {
                           if (context.mounted) {
+                            ref.invalidate(nextWorkflowActivationProvider(jobId));
                             AppToast.error(context,
                                 'Could not activate the workflow: $error');
                           }
@@ -1980,6 +1985,15 @@ class _AutomateWorkflowCard extends ConsumerWidget {
               ),
             ],
           ],
+          TextButton.icon(
+            onPressed: () => context.go(Uri(
+              path: '/competency-assessments',
+              queryParameters: {'jobId': jobId},
+            ).toString()),
+            icon: const Icon(Icons.fact_check_outlined),
+            label: const Text('Manage job assessments'),
+            style: TextButton.styleFrom(foregroundColor: Colors.white),
+          ),
           const SizedBox(height: 16),
         ],
       ),
