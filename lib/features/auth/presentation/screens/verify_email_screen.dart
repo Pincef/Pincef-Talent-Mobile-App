@@ -49,7 +49,9 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
 
   Future<void> _confirmToken() async {
     final token = widget.token;
-    if (token == null || token.isEmpty || _verifying || _verified) return;
+    if (!mounted || token == null || token.isEmpty || _verifying || _verified) {
+      return;
+    }
     setState(() {
       _verifying = true;
       _error = null;
@@ -75,7 +77,7 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
   }
 
   Future<void> _resend() async {
-    if (_email.isEmpty || _resending || _resendSeconds > 0) return;
+    if (_verifying || _email.isEmpty || _resending || _resendSeconds > 0) return;
     setState(() {
       _resending = true;
       _error = null;
@@ -197,7 +199,10 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
                         )
                       else ...[
                         OutlinedButton.icon(
-                          onPressed: _resendSeconds > 0 || _resending || _email.isEmpty
+                          onPressed: _verifying ||
+                                  _resendSeconds > 0 ||
+                                  _resending ||
+                                  _email.isEmpty
                               ? null
                               : _resend,
                           icon: _resending
