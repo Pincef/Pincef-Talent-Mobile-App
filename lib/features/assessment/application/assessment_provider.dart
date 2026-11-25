@@ -9,6 +9,11 @@ final recruiterAssessmentsProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) =>
         ref.watch(assessmentRepositoryProvider).listRecruiterAssessments());
 
+final jobAssessmentsProvider =
+    FutureProvider.autoDispose.family<List<Map<String, dynamic>>, String>(
+  (ref, jobId) => ref.watch(assessmentRepositoryProvider).listJobAssessments(jobId),
+);
+
 final candidateAssessmentsProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>(
         (ref) => ref.watch(assessmentRepositoryProvider).listMine());
