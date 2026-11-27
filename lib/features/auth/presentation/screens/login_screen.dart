@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -53,7 +54,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_isSubmitting || !_formKey.currentState!.validate()) return;
 
     setState(() {
       _isSubmitting = true;
@@ -68,6 +69,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             password: _passwordController.text,
           );
 
+      TextInput.finishAutofillContext();
       if (!mounted) return;
       AppToast.success(context, 'Signed in successfully.');
       final user = ref.read(authProvider).user;
@@ -143,179 +145,52 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     child: Form(
                       key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          const BrandHeader(
-                            title: 'Welcome Back',
-                            subtitle:
-                                'Manage your global talent funnel with ease.',
-                          ),
-                          if (widget.emailVerified) ...[
-                            const SizedBox(height: 16),
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.green.withValues(alpha: 0.08),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Text(
-                                'Email verified. Sign in to continue setting up your profile.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: Colors.green),
-                              ),
+                      child: AutofillGroup(
+                        onDisposeAction: AutofillContextAction.cancel,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const BrandHeader(
+                              title: 'Welcome Back',
+                              subtitle:
+                                  'Manage your global talent funnel with ease.',
                             ),
-                          ],
-                          const SizedBox(height: 24),
-                          const Text('EMAIL ADDRESS', style: authLabelStyle),
-                          const SizedBox(height: 6),
-                          TextFormField(
-                              controller: _emailController,
-                              keyboardType: TextInputType.emailAddress,
-                              decoration: authInputDecoration(
-                                  hint: 'you@company.com',
-                                  icon: Icons.mail_outline),
-                              validator: emailValidator,
-                              style: const TextStyle(color: BrandColors.navy)),
-                          const SizedBox(height: 16),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text('PASSWORD', style: authLabelStyle),
-                              TextButton(
-                                onPressed: () =>
-                                    context.push('/forgot-password'),
-                                style: TextButton.styleFrom(
-                                  padding: EdgeInsets.zero,
-                                  minimumSize: const Size(0, 0),
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
+                            if (widget.emailVerified) ...[
+                              const SizedBox(height: 16),
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: const Text(
-                                  'Forgot password?',
-                                  style: TextStyle(
-                                      fontSize: 11.5,
-                                      color: BrandColors.orange,
-                                      fontWeight: FontWeight.w600),
+                                  'Email verified. Sign in to continue setting up your profile.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: Colors.green),
                                 ),
                               ),
                             ],
-                          ),
-                          const SizedBox(height: 6),
-                          TextFormField(
-                            controller: _passwordController,
-                            obscureText: _obscurePassword,
-                            decoration: authInputDecoration(
-                              hint: '••••••••',
-                              icon: Icons.lock_outline,
-                              suffix: IconButton(
-                                icon: Icon(
-                                  _obscurePassword
-                                      ? Icons.visibility_off_outlined
-                                      : Icons.visibility_outlined,
-                                  size: 18,
-                                  color: BrandColors.navy,
-                                ),
-                                onPressed: () => setState(
-                                    () => _obscurePassword = !_obscurePassword),
-                              ),
-                            ),
-                            validator: (value) {
-                              if (value == null || value.isEmpty)
-                                return 'Password is required';
-                              return null;
-                            },
-                            style: const TextStyle(color: BrandColors.navy),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: Checkbox(
-                                  value: _rememberMe,
-                                  onChanged: (value) => setState(
-                                      () => _rememberMe = value ?? false),
-                                  activeColor: BrandColors.orange,
-                                  materialTapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              const Text(
-                                'Remember me for 30 days',
-                                style: TextStyle(
-                                    fontSize: 12.5, color: BrandColors.muted),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-                          ElevatedButton(
-                            onPressed: _isSubmitting ? null : _submit,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: BrandColors.orange,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8)),
-                            ),
-                            child: _isSubmitting
-                                ? const SizedBox(
-                                    height: 18,
-                                    width: 18,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2, color: Colors.white),
-                                  )
-                                : const Text('Sign In',
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.w600)),
-                          ),
-                          const SizedBox(height: 18),
-                          const Row(
-                            children: [
-                              Expanded(
-                                  child: Divider(color: BrandColors.border)),
-                              Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 10),
-                                child: Text(
-                                  'OR CONTINUE WITH',
-                                  style: TextStyle(
-                                      color: BrandColors.muted,
-                                      fontSize: 11,
-                                      letterSpacing: 0.3),
-                                ),
-                              ),
-                              Expanded(
-                                  child: Divider(color: BrandColors.border)),
-                            ],
-                          ),
-                          const SizedBox(height: 18),
-                          OutlinedButton.icon(
-                            onPressed: _continueWithGoogle,
-                            icon: const Icon(Icons.g_mobiledata, size: 22),
-                            label: const Text('Google'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: BrandColors.navy,
-                              side: const BorderSide(color: BrandColors.border),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8)),
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          Center(
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
+                            const SizedBox(height: 24),
+                            const Text('EMAIL ADDRESS', style: authLabelStyle),
+                            const SizedBox(height: 6),
+                            TextFormField(
+                                controller: _emailController,
+                                keyboardType: TextInputType.emailAddress,
+                                autofillHints: const [AutofillHints.username],
+                                textInputAction: TextInputAction.next,
+                                decoration: authInputDecoration(
+                                    hint: 'you@company.com',
+                                    icon: Icons.mail_outline),
+                                validator: emailValidator,
+                                style: const TextStyle(color: BrandColors.navy)),
+                            const SizedBox(height: 16),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text(
-                                  "Don't have an account? ",
-                                  style: TextStyle(
-                                      fontSize: 13, color: BrandColors.muted),
-                                ),
+                                const Text('PASSWORD', style: authLabelStyle),
                                 TextButton(
-                                  onPressed: () => context.push('/welcome'),
+                                  onPressed: () =>
+                                      context.push('/forgot-password'),
                                   style: TextButton.styleFrom(
                                     padding: EdgeInsets.zero,
                                     minimumSize: const Size(0, 0),
@@ -323,17 +198,152 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                         MaterialTapTargetSize.shrinkWrap,
                                   ),
                                   child: const Text(
-                                    'Create Account',
+                                    'Forgot password?',
                                     style: TextStyle(
-                                        fontSize: 13,
+                                        fontSize: 11.5,
                                         color: BrandColors.orange,
                                         fontWeight: FontWeight.w600),
                                   ),
                                 ),
                               ],
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 6),
+                            TextFormField(
+                              controller: _passwordController,
+                              obscureText: _obscurePassword,
+                              autofillHints: const [AutofillHints.password],
+                              textInputAction: TextInputAction.done,
+                              onFieldSubmitted: (_) => _submit(),
+                              decoration: authInputDecoration(
+                                hint: '••••••••',
+                                icon: Icons.lock_outline,
+                                suffix: IconButton(
+                                  icon: Icon(
+                                    _obscurePassword
+                                        ? Icons.visibility_off_outlined
+                                        : Icons.visibility_outlined,
+                                    size: 18,
+                                    color: BrandColors.navy,
+                                  ),
+                                  onPressed: () => setState(
+                                      () => _obscurePassword = !_obscurePassword),
+                                ),
+                              ),
+                              validator: (value) {
+                                if (value == null || value.isEmpty)
+                                  return 'Password is required';
+                                return null;
+                              },
+                              style: const TextStyle(color: BrandColors.navy),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: Checkbox(
+                                    value: _rememberMe,
+                                    onChanged: (value) => setState(
+                                        () => _rememberMe = value ?? false),
+                                    activeColor: BrandColors.orange,
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  'Remember me for 30 days',
+                                  style: TextStyle(
+                                      fontSize: 12.5, color: BrandColors.muted),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+                            ElevatedButton(
+                              onPressed: _isSubmitting ? null : _submit,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: BrandColors.orange,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8)),
+                              ),
+                              child: _isSubmitting
+                                  ? const SizedBox(
+                                      height: 18,
+                                      width: 18,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2, color: Colors.white),
+                                    )
+                                  : const Text('Sign In',
+                                      style:
+                                          TextStyle(fontWeight: FontWeight.w600)),
+                            ),
+                            const SizedBox(height: 18),
+                            const Row(
+                              children: [
+                                Expanded(
+                                    child: Divider(color: BrandColors.border)),
+                                Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 10),
+                                  child: Text(
+                                    'OR CONTINUE WITH',
+                                    style: TextStyle(
+                                        color: BrandColors.muted,
+                                        fontSize: 11,
+                                        letterSpacing: 0.3),
+                                  ),
+                                ),
+                                Expanded(
+                                    child: Divider(color: BrandColors.border)),
+                              ],
+                            ),
+                            const SizedBox(height: 18),
+                            OutlinedButton.icon(
+                              onPressed: _continueWithGoogle,
+                              icon: const Icon(Icons.g_mobiledata, size: 22),
+                              label: const Text('Google'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: BrandColors.navy,
+                                side: const BorderSide(color: BrandColors.border),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8)),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            Center(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text(
+                                    "Don't have an account? ",
+                                    style: TextStyle(
+                                        fontSize: 13, color: BrandColors.muted),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => context.push('/welcome'),
+                                    style: TextButton.styleFrom(
+                                      padding: EdgeInsets.zero,
+                                      minimumSize: const Size(0, 0),
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    child: const Text(
+                                      'Create Account',
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          color: BrandColors.orange,
+                                          fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
