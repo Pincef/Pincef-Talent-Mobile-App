@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // Adjust if dio_provider.dart lives elsewhere in your tree.
 import '../../../core/network/dio_provider.dart';
+import '../../auth/application/auth_provider.dart';
 import '../data/models/hiring_pipeline_model.dart';
 import '../data/hiring_pipline_repository.dart';
 
@@ -13,6 +14,7 @@ final hiringPipelineRepositoryProvider =
 /// What the company's plan allows (stage types, custom pipeline limits).
 final pipelineCapabilitiesProvider =
     FutureProvider<PipelineCapabilities>((ref) {
+  ref.watch(authProvider.select((auth) => auth.user));
   return ref.watch(hiringPipelineRepositoryProvider).capabilities();
 });
 
@@ -25,7 +27,10 @@ class PipelinesNotifier extends AsyncNotifier<List<HiringPipeline>> {
       ref.read(hiringPipelineRepositoryProvider);
 
   @override
-  Future<List<HiringPipeline>> build() => _repo.list();
+  Future<List<HiringPipeline>> build() {
+    ref.watch(authProvider.select((auth) => auth.user));
+    return _repo.list();
+  }
 
   /// Pull-to-refresh. Keeps the current list on screen if the refresh fails.
   Future<void> refresh() async {
