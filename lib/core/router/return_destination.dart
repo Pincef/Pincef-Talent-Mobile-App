@@ -31,6 +31,21 @@ String? legacySharedJobDestination(Uri browserUri) {
   return '/shared/jobs/${match.group(1)}';
 }
 
+/// Adapts the payment provider's path-based return to Flutter's hash router.
+String? paymentCheckoutDestination(Uri browserUri) {
+  if (browserUri.path != '/payments' || browserUri.fragment.isNotEmpty) {
+    return null;
+  }
+  final query = browserUri.queryParameters;
+  final outcome = query['checkout'];
+  if (outcome != 'complete' && outcome != 'cancelled') return null;
+  return Uri(path: '/payments', queryParameters: {
+    'checkout': outcome!,
+    for (final key in ['planId', 'reference', 'trxref'])
+      if (query[key]?.isNotEmpty == true) key: query[key]!,
+  }).toString();
+}
+
 /// Builds an external URL using Flutter's default hash based web routing.
 Uri sharedJobUrl(Uri currentUri, String jobId) => Uri(
       scheme: currentUri.scheme,
