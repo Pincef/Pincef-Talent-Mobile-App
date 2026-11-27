@@ -274,9 +274,7 @@ class _HiringPipelineScreenState extends ConsumerState<HiringPipelineScreen> {
               onEdit: () => p.isLocked
                   ? showSnack(
                       context,
-                      (p.isSystemStandard || p.isSystemPremium)
-                          ? 'Built-in pipelines cannot be edited. Duplicate one to customise.'
-                          : 'This workflow is locked while candidates are active in it.')
+                      'Built-in pipelines cannot be edited. Duplicate one to customise.')
                   : canManage
                       ? _openEditor(pipeline: p)
                       : context.go('/payments'),
@@ -321,7 +319,7 @@ class _HiringPipelineScreenState extends ConsumerState<HiringPipelineScreen> {
       _Metric('DRAFT TEMPLATES', '$draft', 'in construction', Icons.circle,
           const Color(0xFF8791A4),
           dot: true),
-      _Metric('LOCKED STAGES', '$locked', 'active candidates',
+      _Metric('LOCKED PIPELINES', '$locked', 'built-in templates',
           Icons.lock_outline, PT.muted),
       _Metric('TOTAL LINKED JOBS', '$jobs', 'requisitions mapped',
           Icons.work_outline, PT.orange),
