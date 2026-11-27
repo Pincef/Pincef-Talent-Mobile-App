@@ -110,11 +110,22 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
     try {
       var confirmedPlanId = expectedPlanId;
       var paymentStatus = 'pending';
+      var activationSeen = false;
       for (var attempt = 0; attempt < 15; attempt++) {
-        if (reference != null && reference.isNotEmpty) {
-          final verification = await ref
-              .read(paymentRepositoryProvider)
-              .verifyCheckout(reference);
+        CheckoutVerification? verification;
+        if (paymentStatus != 'success' &&
+            reference != null &&
+            reference.isNotEmpty) {
+          try {
+            verification = await ref
+                .read(paymentRepositoryProvider)
+                .verifyCheckout(reference);
+          } on DioException catch (error) {
+            final code = error.response?.statusCode;
+            if (code != null && code < 500 && code != 429) rethrow;
+          }
+        }
+        if (verification != null) {
           if (!mounted) return;
           paymentStatus = verification.status.toLowerCase();
           if (paymentStatus == 'failed') {
@@ -138,8 +149,13 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
         }
 
         ref.invalidate(currentSubscriptionProvider);
-        final subscription =
-            await ref.read(currentSubscriptionProvider.future);
+        CurrentSubscription? subscription;
+        try {
+          subscription = await ref.read(currentSubscriptionProvider.future);
+        } on DioException catch (error) {
+          final code = error.response?.statusCode;
+          if (code != null && code < 500 && code != 429) rethrow;
+        }
         if (!mounted) return;
         final planMatches = confirmedPlanId == null ||
             confirmedPlanId.isEmpty ||
@@ -150,24 +166,33 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
         if (subscription?.status.toLowerCase() == 'active' &&
             planMatches &&
             periodIsCurrent) {
-          await ref.read(authProvider.notifier).refreshSession();
-          if (!mounted) return;
-          ref.invalidate(currentSubscriptionProvider);
-          ref.invalidate(subscriptionPlansProvider);
-          if (mounted) {
+          activationSeen = true;
+          try {
+            await ref.read(authProvider.notifier).refreshSession();
+            if (!mounted) return;
+            ref.invalidate(currentSubscriptionProvider);
+            ref.invalidate(subscriptionPlansProvider);
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: Text(
                   'Payment confirmed. ${subscription!.planName} is active.'),
             ));
+            return;
+          } catch (_) {
+            if (!mounted) return;
           }
-          return;
         }
         if (attempt < 14) {
           await Future<void>.delayed(const Duration(seconds: 2));
           if (!mounted) return;
         }
       }
-      if (mounted && paymentStatus == 'success') {
+      if (mounted && activationSeen) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Your plan is active. Refresh subscription status to reload access.'),
+          duration: Duration(seconds: 8),
+        ));
+      } else if (mounted && paymentStatus == 'success') {
         ref.invalidate(currentSubscriptionProvider);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text(
