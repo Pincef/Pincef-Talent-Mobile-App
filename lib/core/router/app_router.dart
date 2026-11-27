@@ -122,6 +122,8 @@ class GoRouterRefreshStream extends ChangeNotifier {
 /// and `refreshListenable` tells GoRouter to re-run `redirect` on auth
 /// changes without touching the router object itself.
 final routerProvider = Provider<GoRouter>((ref) {
+  final checkoutReturn = paymentCheckoutDestination(Uri.base);
+  var handledCheckoutReturn = false;
   return GoRouter(
     initialLocation: '/login',
     refreshListenable:
@@ -153,6 +155,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         ).toString();
       }
       final isLoggedIn = authState.isAuthenticated;
+      if (isLoggedIn && checkoutReturn != null && !handledCheckoutReturn) {
+        handledCheckoutReturn = true;
+        if (state.uri.toString() != checkoutReturn) return checkoutReturn;
+      }
       final isPublicRoute = _isPublicRoute(state.matchedLocation);
 
       // The logout-success dialog intentionally remains over the current
