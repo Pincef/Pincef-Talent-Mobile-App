@@ -67,7 +67,7 @@ List<String> hiringPipelineFlowFor(
     case 'none':
       return ['Applicants', 'Shortlist', 'Offer', 'Reject', 'Hire'];
     case 'premium':
-      return [...aiStages, 'Assess', 'Compare', 'Hire'];
+      return [...aiStages, 'Assess', 'Hire'];
     case 'custom':
       final configured = customStages
           .where((stage) => stage.type.toUpperCase() != 'APPLIED')
@@ -183,14 +183,11 @@ class HiringPipeline {
   final int jobCount;
   final int candidateCount;
 
-  /// ACTIVE | DRAFT | LOCKED. The system-standard pipeline can't be edited
-  /// or deleted server-side, so it is presented as locked.
+  /// Built-in workflows are locked. Custom workflows remain editable.
   String get state {
-    if (isSystemStandard || isSystemPremium || candidateCount > 0) {
-      return 'LOCKED';
-    }
+    if (isSystemStandard || isSystemPremium) return 'LOCKED';
     final s = (status ?? 'active').toUpperCase();
-    return s == 'DRAFT' ? 'DRAFT' : (s == 'LOCKED' ? 'LOCKED' : 'ACTIVE');
+    return s == 'DRAFT' ? 'DRAFT' : 'ACTIVE';
   }
 
   bool get isLocked => state == 'LOCKED';
