@@ -2134,7 +2134,7 @@ class _HiringPipelinePickerDialogState
                       level: 'BUILT-IN • FULL SUITE',
                       title: 'PREMIUM PIPELINE',
                       description:
-                          'A more detailed hiring workflow with candidate assessments and comparative analytics.',
+                          'A more detailed hiring workflow with candidate assessments.',
                       steps: const [
                         'Post',
                         'Parse',
@@ -2142,7 +2142,6 @@ class _HiringPipelinePickerDialogState
                         'Rank',
                         'Summary',
                         'Assess',
-                        'Compare',
                         'Hire',
                       ],
                       recommended:
